@@ -1,0 +1,331 @@
+/* ====================================================================
+   THE APIARIST — game.js
+   The spine: game state, save/load, the weekly controller, the mentor.
+   Loaded last. init() runs on DOMContentLoaded.
+   ==================================================================== */
+
+var Game = null;
+var SAVE_KEY = 'apiarist-save-v2';
+var _presentQueue = [];
+
+/* --- small global helpers (used by every module) -------------------- */
+
+function gameYear(){ return Game ? Math.floor((Game.week - 1) / 52) + 1 : 1; }
+function diff(){ return DIFFICULTY[(Game && Game.difficulty)] || DIFFICULTY.beekeeper; }
+function weather(){ return WEATHER[(Game && Game.weatherType)] || WEATHER.mixed; }
+function currentApiary(){
+  if (!Game || !Game.apiaries.length) return null;
+  return Game.apiaries.find(a => a.id === Game.ui.selectedApiary) || Game.apiaries[0];
+}
+function coloniesIn(apiaryId){ return Game ? Game.colonies.filter(c => c.apiaryId === apiaryId) : []; }
+function aliveColonies(){ return Game ? Game.colonies.filter(c => c.alive) : []; }
+function hiveCount(){ return aliveColonies().length; }
+function colonyById(id){ return Game ? Game.colonies.find(c => c.id === id) || null : null; }
+
+function logEvent(icon, text, tone){
+  if (!Game) return;
+  Game.log.unshift({ week: Game.week, icon: icon || '•', text: text, tone: tone || 'plain' });
+  if (Game.log.length > 240) Game.log.length = 240;
+}
+
+function spend(amount, desc){
+  if (!Game) return false;
+  amount = Math.round(amount);
+  if (Game.cash < amount){
+    if (typeof toast === 'function') toast('Not enough money for that', 'bad');
+    return false;
+  }
+  Game.cash -= amount;
+  Game.ledger.unshift({ week: Game.week, desc: desc || 'Purchase', amount: -amount });
+  if (Game.ledger.length > 400) Game.ledger.length = 400;
+  return true;
+}
+
+function earn(amount, desc){
+  if (!Game) return false;
+  amount = Math.round(amount);
+  Game.cash += amount;
+  Game.ledger.unshift({ week: Game.week, desc: desc || 'Income', amount: amount });
+  if (Game.ledger.length > 400) Game.ledger.length = 400;
+  return true;
+}
+
+function addXp(n){
+  if (!Game || !n) return;
+  var before = skillLevel(Game.skillXp);
+  Game.skillXp += n;
+  var after = skillLevel(Game.skillXp);
+  if (after > before){
+    logEvent('🎓', 'Your beekeeping skill rose to level ' + after + '.', 'good');
+    if (typeof toast === 'function') toast('Beekeeping skill — level ' + after, 'good');
+    if (SKILL_UNLOCKS[after]) notable({ kind:'toast', text: SKILL_UNLOCKS[after], tone:'good' });
+  }
+}
+
+function notable(p){ if (p) _presentQueue.push(p); }
+
+/* --- new game -------------------------------------------------------- */
+
+function startNewGame(name, difficulty){
+  if (!DIFFICULTY[difficulty]) difficulty = 'beekeeper';
+  name = (name || '').trim() || 'Beekeeper';
+  var d = DIFFICULTY[difficulty];
+
+  Game = {
+    version: 2,
+    difficulty: difficulty,
+    beekeeperName: name,
+    week: SIM.startWeek,
+    cash: d.startCash,
+    apiaries: [],
+    colonies: [],
+    nextColonyId: 1,
+    nextApiaryId: 1,
+    inventory: {
+      spareHives: 1,            // one hive ready and waiting for your first bees
+      nucBoxes: 0,
+      baitHives: 0,
+      tools: { suit:true, smoker:true, hiveTool:true, gloves:false, clearerBoard:false,
+               extractor:false, settlingTank:false, refractometer:false, uncappingKit:false },
+      honey: {}, jars: {}, cutComb: 0, wax: 0, rearedQueens: 0,
+      sugar: 10,
+      emptyJars: 0,
+      treatStock: {},
+    },
+    skillXp: 0,
+    reputation: 0,
+    yearQuality: 0.5 + Math.random() * 0.25,   // a kind-ish first year
+    weatherType: 'mixed',
+    log: [],
+    ledger: [],
+    advisor: [],
+    flags: {
+      beeBase: false, foodHygiene: false, tutorialStep: 0,
+      seenExplainers: {}, swarmSeasonWarned: false,
+      salesChannels: { gate: true }, lastWinterYear: 0,
+    },
+    stats: { honeyHarvested:0, coloniesLost:0, swarmsLost:0, swarmsCaught:0,
+             wintersSurvived:0, splitsMade:0, queensReared:0, jarsSold:0 },
+    ui: { view:'apiary', selectedApiary: 1, selectedColony: null },
+  };
+
+  Game.apiaries.push({ id: Game.nextApiaryId++, name: APIARY_NAMES[0],
+                       siteType: 'rural', founded: Game.week });
+  Game.ui.selectedApiary = Game.apiaries[0].id;
+
+  logEvent('🌼', 'You set up as a beekeeper. ' + APIARY_NAMES[0] + ' is ready for its first colony.', 'good');
+
+  if (typeof generateWeather === 'function') generateWeather();
+  if (typeof buildAdvisor === 'function') buildAdvisor();
+
+  saveGame();
+  render();
+
+  if (typeof showExplainer === 'function'){
+    showExplainer('welcome', 'Welcome to beekeeping',
+      '<p>It is <b>' + dateLabel(Game.week) + '</b>, and you have an empty hive, a suit and a ' +
+      'smoker. Time to get some bees.</p>' +
+      '<div class="explain lesson"><b>Your first job.</b> Open the <b>Market</b> and buy a ' +
+      '<b>nucleus</b> — a "nuc" is five frames of bees, brood and a laying queen. It is the ' +
+      'gentlest way to start.</div>' +
+      '<p>Then watch the seasons turn. Inspect when the weather is kind, keep them fed, stay ' +
+      'ahead of the varroa mite, and get them safely through to spring. The mentor in the ' +
+      'sidebar will guide you, and the <b>Handbook</b> explains everything.</p>' +
+      '<p class="muted tiny">Good luck. Bees reward attention and punish neglect, just like the real thing.</p>');
+  }
+}
+
+/* --- save / load ----------------------------------------------------- */
+
+function saveGame(){
+  if (!Game) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(Game)); }
+  catch(e){ /* storage full or unavailable — game still playable this session */ }
+}
+
+function hasSave(){
+  try { return !!localStorage.getItem(SAVE_KEY); } catch(e){ return false; }
+}
+
+function loadGame(){
+  try {
+    var raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    var g = JSON.parse(raw);
+    if (!g || g.version !== 2) return false;
+    Game = g;
+    if (!Game.ui) Game.ui = { view:'apiary', selectedApiary: Game.apiaries[0].id, selectedColony:null };
+    if (typeof buildAdvisor === 'function') buildAdvisor();
+    render();
+    return true;
+  } catch(e){ return false; }
+}
+
+function deleteSave(){
+  try { localStorage.removeItem(SAVE_KEY); } catch(e){}
+}
+
+/* --- the weekly controller ------------------------------------------ */
+
+function advanceWeek(){
+  if (!Game) return;
+  _presentQueue = [];
+
+  var presentables = [];
+  if (typeof runWeek === 'function') presentables = runWeek() || [];
+  presentables = presentables.concat(_presentQueue);
+  _presentQueue = [];
+
+  _yearMaintenance();
+  _checkWinterSurvival();
+  saveGame();
+  render();
+  _present(presentables);
+}
+
+/* run several weeks quietly, stopping when something wants attention */
+function advanceToEvent(){
+  if (!Game) return;
+  for (var i = 0; i < 8; i++){
+    advanceWeek();
+    var urgent = (Game.advisor || []).some(function(a){ return a.tone === 'bad'; });
+    if (urgent) break;
+    if (document.querySelector('#modal-root .modal-overlay')) break;
+  }
+}
+
+function _yearMaintenance(){
+  /* clear out long-dead colonies; the hive kit comes back to you */
+  var kept = [];
+  for (var i = 0; i < Game.colonies.length; i++){
+    var c = Game.colonies[i];
+    if (!c.alive && (Game.week - (c.deadWeek || Game.week)) >= 6){
+      Game.inventory.spareHives += 1;
+      logEvent('🧹', 'You cleared out the empty ' + c.name + ' hive. The kit is ready to reuse.', 'plain');
+    } else {
+      kept.push(c);
+    }
+  }
+  Game.colonies = kept;
+  if (Game.ui.selectedColony && !colonyById(Game.ui.selectedColony)) Game.ui.selectedColony = null;
+}
+
+function _checkWinterSurvival(){
+  /* count a winter survived once the colonies reach mid-spring alive */
+  var wk = ((Game.week - 1) % 52) + 1;
+  if (wk >= 18 && wk <= 20 && Game.flags.lastWinterYear !== gameYear()){
+    Game.flags.lastWinterYear = gameYear();
+    if (gameYear() > 1 && aliveColonies().length > 0){
+      Game.stats.wintersSurvived += 1;
+      logEvent('🌷', 'Your bees came through the winter. That is the hardest part of the year.', 'good');
+      if (typeof showExplainer === 'function'){
+        notable({ kind:'explainer', id:'first-winter',
+          title:'Through the winter',
+          body:'<p>A colony that reaches spring alive has passed ' +
+               'the real test of beekeeping. Most winter losses are starvation or varroa damage ' +
+               'to the winter bees — both avoidable with autumn feeding and timely mite ' +
+               'treatment.</p><p>Now the year begins again: build-up, then swarm season.</p>' });
+      }
+    }
+  }
+}
+
+function _present(list){
+  var shownBig = false;
+  for (var i = 0; i < list.length; i++){
+    var p = list[i];
+    if (!p) continue;
+    if (p.kind === 'toast'){
+      if (typeof toast === 'function') toast(p.text, p.tone || 'plain');
+    } else if (!shownBig && (p.kind === 'explainer' || p.kind === 'modal')){
+      shownBig = true;
+      if (p.kind === 'explainer' && typeof showExplainer === 'function'){
+        showExplainer(p.id, p.title, p.body);
+      } else if (typeof openModal === 'function'){
+        openModal({ title: p.title, body: p.body,
+          buttons: [{ label:'Noted', cls:'btn-primary', act: closeModal }] });
+      }
+    } else {
+      if (typeof toast === 'function') toast(p.text || p.title || 'News from the apiary', p.tone || 'plain');
+    }
+  }
+}
+
+/* --- the mentor ------------------------------------------------------ */
+/* Returns one short, contextual line of advice, or null. Loud early on,
+   then quietens as the beekeeper finds their feet. */
+
+function mentorLine(){
+  if (!Game) return null;
+  var wk = ((Game.week - 1) % 52) + 1;
+  var alive = aliveColonies();
+  var experienced = skillLevel(Game.skillXp) >= 5 && gameYear() > 2;
+
+  if (alive.length === 0){
+    if (Game.inventory.spareHives > 0)
+      return 'You have a hive ready and waiting. Head to the Market and buy a nucleus — five ' +
+             'frames of bees with a laying queen, the kindest way to start.';
+    return 'You will need a hive before you can house any bees. Complete National hives are in the Market.';
+  }
+
+  /* a never-inspected colony */
+  var fresh = alive.find(function(c){ return !c.lastInspected; });
+  if (fresh){
+    if (weather().inspect)
+      return fresh.name + ' has not been looked at yet. A calm, mild day like this is just ' +
+             'right — open it up and meet your bees.';
+    return 'Hold off opening the hive until it warms up. Cold, wet days chill the brood.';
+  }
+
+  /* known queen cells */
+  var celled = alive.find(function(c){ return c.known && c.known.queenCells && c.known.queenCells !== 'none'; });
+  if (celled && celled.known.queenCells === 'swarm')
+    return 'You saw swarm cells in ' + celled.name + '. That colony means to leave. Act now — ' +
+           'an artificial swarm is the textbook answer.';
+
+  /* known low stores */
+  var hungry = alive.find(function(c){ return c.known && (c.known.stores === 'critical' || c.known.stores === 'low'); });
+  if (hungry)
+    return hungry.name + ' looked light on stores. Bees starve faster than anything else kills ' +
+           'them. Feed them before you do anything else.';
+
+  /* known disease */
+  var sick = alive.find(function(c){ return c.known && c.known.disease; });
+  if (sick)
+    return 'You spotted disease in ' + sick.name + '. Check the Handbook — foul brood is ' +
+           'notifiable and serious.';
+
+  /* overdue inspections in swarm season */
+  if (wk >= 14 && wk <= 30){
+    var overdue = alive.find(function(c){ return c.lastInspected && (Game.week - c.lastInspected) >= 2; });
+    if (overdue)
+      return 'It is swarm season. A colony can build queen cells in a week — do not let nine ' +
+             'days pass between inspections.';
+  }
+
+  if (experienced) return null;   /* a seasoned beekeeper needs less hand-holding */
+
+  /* seasonal nudges for the still-learning */
+  if (wk >= 31 && wk <= 38)
+    return 'The main flow is ending. Take your honey crop, then treat for varroa straight away.';
+  if (wk >= 39 && wk <= 44)
+    return 'Autumn now. Feed them heavy 2:1 syrup until each hive is heavy to lift, and fit mouse guards.';
+  if (wk >= 45 || wk <= 8)
+    return 'Leave the hives shut for winter. Just heft them on a dry day to feel the weight of their stores.';
+  if (wk >= 9 && wk <= 13)
+    return 'Spring is stirring. On the first warm, calm day, check each colony is queenright and has stores.';
+
+  return null;
+}
+
+/* --- init ------------------------------------------------------------ */
+
+function init(){
+  if (typeof render === 'function') render();
+}
+
+if (document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
