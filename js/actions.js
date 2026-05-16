@@ -455,76 +455,86 @@ function inspectColony(colony) {
 /* Derive frame cells for display — realistic layout */
 function _act_frameDist(i, totalFrames, colony, queenFrame,
                         qcellsVisible, diseaseVisible, miteVisible, SCALE) {
-  const mid = Math.floor(totalFrames / 2); // frame 5
-  const distFromMid = Math.abs(i - mid);
-  /* 0 = centre; 5 = outermost */
+  const mid  = (totalFrames - 1) / 2;
+  const dist = Math.abs(i - mid);
 
   let cells = { empty:0, found:0, eggs:0, larva:0, capbrood:0, dronebr:0,
                 nectar:0, honey:0, pollen:0, qcell:0, disease:0, mite:0 };
-  let note = '';
 
-  /* Total comb area this frame */
-  let remaining = SCALE;
+  /* --- Brood: a nest centred on the box. It spreads as wide, and packs as
+         densely, as the colony's actual brood — so the comb genuinely
+         changes week to week as the queen's laying rises and falls. --- */
+  const totalBrood = colony.eggs + colony.larvae + colony.capped;
+  const broodEquiv = totalBrood / 6500;                     // packed-frame equivalents
+  const broodReach = Math.max(0.8, (broodEquiv + 2) / 2);   // half-width of the nest
 
-  if (distFromMid <= 1) {
-    /* Centre frames: eggs in the very middle, larvae flanking, some capped */
-    const eggFrac = (i === mid) ? 0.45 : 0.20;
-    const larvaFrac = 0.30;
-    const capFrac = (i === mid) ? 0.15 : 0.30;
-    cells.eggs     = Math.round(remaining * eggFrac * (colony.eggs > 0 ? 1 : 0));
-    cells.larva    = Math.round(remaining * larvaFrac * (colony.larvae > 0 ? 1 : 0));
-    cells.capbrood = Math.round(remaining * capFrac * (colony.capped > 0 ? 1 : 0));
-    remaining -= cells.eggs + cells.larva + cells.capbrood;
-    if (i === mid) note = 'Central brood nest.';
-    else note = 'Young brood.';
-  } else if (distFromMid === 2) {
-    /* Frames 3 & 7: capped brood, some pollen, a little drone brood */
-    cells.capbrood = Math.round(remaining * 0.50 * (colony.capped > 0 ? 1 : 0));
-    cells.larva    = Math.round(remaining * 0.10 * (colony.larvae > 0 ? 1 : 0));
-    cells.pollen   = Math.round(remaining * 0.20);
-    cells.dronebr  = Math.round(remaining * 0.08 * (colony.drones > 0 ? 1 : 0));
-    remaining -= cells.capbrood + cells.larva + cells.pollen + cells.dronebr;
-    note = 'Capped brood and pollen.';
-  } else if (distFromMid === 3) {
-    /* Frames 2 & 8: mostly pollen, some capped, some stores */
-    cells.pollen   = Math.round(remaining * 0.40);
-    cells.capbrood = Math.round(remaining * 0.20 * (colony.capped > 0 ? 1 : 0));
-    cells.nectar   = Math.round(remaining * 0.20);
-    remaining -= cells.pollen + cells.capbrood + cells.nectar;
-    note = 'Pollen and stores.';
-  } else {
-    /* Frames 0-1 & 9-10: honey and nectar stores */
-    cells.honey  = Math.round(remaining * 0.65 * Math.min(1, colony.honey / 8));
-    cells.nectar = Math.round(remaining * 0.15);
-    remaining -= cells.honey + cells.nectar;
-    note = 'Honey stores.';
+  function broodWeight(d) { return Math.max(0, 1 - d / (broodReach + 0.35)); }
+  let broodSum = 0;
+  for (let f = 0; f < totalFrames; f++) broodSum += broodWeight(Math.abs(f - mid));
+  if (broodSum <= 0) broodSum = 1;
+
+  const broodFrac = (totalBrood > 30)
+    ? Math.min(0.85, broodWeight(dist) / broodSum * broodEquiv)
+    : 0;
+
+  if (broodFrac > 0.01) {
+    cells.eggs     = Math.round(SCALE * broodFrac * (colony.eggs   / totalBrood));
+    cells.larva    = Math.round(SCALE * broodFrac * (colony.larvae / totalBrood));
+    cells.capbrood = Math.round(SCALE * broodFrac * (colony.capped / totalBrood));
+    if (colony.drones > 2000 && dist > broodReach - 1.5 && dist < broodReach + 0.7) {
+      cells.dronebr = Math.round(SCALE * 0.05);
+    }
   }
+  const broodUsed = cells.eggs + cells.larva + cells.capbrood + cells.dronebr;
+  let free = Math.max(0, SCALE - broodUsed);
 
-  /* Fill remaining as empty */
-  cells.empty = Math.max(0, remaining);
+  /* --- Honey: scaled to what the colony is actually holding, drawn to the
+         outer frames and arching over the brood. --- */
+  const honeyEquiv = (colony.honey || 0) / 2.3;             // ~2.3 kg per full frame
+  function honeyWeight(d) { return 0.25 + d / (mid + 1); }  // edge-biased
+  let honeySum = 0;
+  for (let g = 0; g < totalFrames; g++) honeySum += honeyWeight(Math.abs(g - mid));
+  const honeyFrac = Math.min(0.9, honeyWeight(dist) / honeySum * honeyEquiv);
+  cells.honey = Math.round(free * honeyFrac);
+  free = Math.max(0, free - cells.honey);
 
-  /* Disease markers: spread across brood frames */
-  if (diseaseVisible && distFromMid <= 2) {
-    const dis = colony.diseases[diseaseVisible] || 0;
+  /* --- Pollen: a band hugging the brood nest. --- */
+  const nearNest = (dist > broodReach - 1.4 && dist < broodReach + 1.3);
+  const pollenFrac = (nearNest ? 0.20 : 0.05) *
+                     Math.min(1.4, 0.45 + (colony.pollen || 0) / 700);
+  cells.pollen = Math.round(free * pollenFrac);
+  free = Math.max(0, free - cells.pollen);
+
+  /* --- Fresh nectar — a little. --- */
+  cells.nectar = Math.round(free * 0.12);
+
+  let note = broodFrac > 0.4 ? 'Heavy brood.'
+    : broodFrac > 0.1 ? 'Brood and stores.'
+    : cells.honey > SCALE * 0.35 ? 'Honey stores.' : 'Drawn comb.';
+
+  /* Disease markers across the brood frames */
+  if (diseaseVisible && broodFrac > 0.05) {
+    const dis = (colony.diseases && colony.diseases[diseaseVisible]) || 0;
     cells.disease = Math.round(SCALE * dis * 0.15);
-    cells.empty   = Math.max(0, cells.empty - cells.disease);
-    note += ` ${DISEASES[diseaseVisible].short} signs.`;
+    if (DISEASES[diseaseVisible]) note += ` ${DISEASES[diseaseVisible].short} signs.`;
   }
 
-  /* Mite markers: on capped brood */
-  if (miteVisible && distFromMid <= 2 && cells.capbrood > 0) {
-    const miteRate = varroaInfestation({ varroa: 999, population: 1 }); // placeholder
-    cells.mite  = Math.max(1, Math.round(cells.capbrood * 0.06));
-    cells.empty = Math.max(0, cells.empty - cells.mite);
+  /* Mite markers on capped brood */
+  if (miteVisible && cells.capbrood > 0) {
+    cells.mite = Math.max(1, Math.round(cells.capbrood * 0.06));
   }
 
-  /* Queen cells: concentrate the visible cells on the central brood frame
-     so they read clearly when the comb is drawn. */
+  /* Queen cells concentrated on the central brood frame */
   if (qcellsVisible && i === queenFrame && colony.queenCells.count > 0) {
-    cells.qcell  = Math.min(colony.queenCells.count, 4);
-    cells.empty  = Math.max(0, cells.empty - cells.qcell);
+    cells.qcell = Math.min(colony.queenCells.count, 4);
     note += ' Queen cells present.';
   }
+
+  /* Whatever is left is empty drawn comb */
+  const used = cells.eggs + cells.larva + cells.capbrood + cells.dronebr +
+               cells.honey + cells.pollen + cells.nectar +
+               cells.disease + cells.mite + cells.qcell;
+  cells.empty = Math.max(0, SCALE - used);
 
   return { cells, note };
 }

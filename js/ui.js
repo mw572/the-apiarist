@@ -1973,6 +1973,10 @@ function openInspection(colony) {
   var answers = {};     // frame index -> { chosen, correct }
   seen[0] = true;
 
+  /* The teaching Q&A runs only until the player has completed one full
+     inspection — after that, lifting a frame just shows its reading. */
+  var teaching = !(Game.flags && Game.flags.inspectionTaught);
+
   var modalBody = h('div', { class: 'inspect' });
 
   function build() {
@@ -1985,9 +1989,12 @@ function openInspection(colony) {
     var done = seenCount >= frames.length;
 
     modalBody.appendChild(h('div', { class: 'inspect-intro', html:
-      'Work through every frame in ' + colony.name + '\'s box. Lift each one, read the comb ' +
-      'and answer what you are looking at — your full summary appears once you have been right ' +
-      'through the box.' }));
+      teaching
+        ? ('Work through every frame in ' + colony.name + '\'s box. Lift each one, read the comb ' +
+           'and answer what you are looking at — your full summary appears once you have been ' +
+           'right through the box.')
+        : ('Work through every frame in ' + colony.name + '\'s box. Lift each one and read the ' +
+           'comb. Your summary appears once you have been right through them all.') }));
 
     modalBody.appendChild(h('div', { class: 'inspect-progress' + (done ? ' done' : '') },
       done
@@ -2034,7 +2041,7 @@ function openInspection(colony) {
     ]));
 
     /* the teaching question for the frame in hand */
-    modalBody.appendChild(_ui_buildFrameQA(fr, selected, colony, answers, build));
+    modalBody.appendChild(_ui_buildFrameQA(fr, selected, colony, answers, build, teaching));
 
     /* findings and summary stay locked until every frame has been examined */
     if (!done) {
@@ -2044,6 +2051,9 @@ function openInspection(colony) {
           'Your summary and next steps will appear once you have been through the whole box.')
       ]));
     } else {
+      /* a first full inspection has done its teaching — drop the quiz next time */
+      if (!Game.flags) Game.flags = {};
+      Game.flags.inspectionTaught = true;
       modalBody.appendChild(h('div', { class: 'inspect-findings' }, [
         h('h4', {}, 'What you found'),
         (report.findings || []).map(function(f) {
@@ -2184,10 +2194,23 @@ function _ui_frameQuestion(frame, colony) {
 }
 
 /* Render the question for the lifted frame, grade the answer, and teach. */
-function _ui_buildFrameQA(frame, idx, colony, answers, rebuild) {
+function _ui_buildFrameQA(frame, idx, colony, answers, rebuild, teaching) {
   var qa = _ui_frameQuestion(frame, colony);
-  var answered = answers[idx];
 
+  /* once the player has completed a full inspection, drop the quiz and
+     just show the reading of the frame directly */
+  if (!teaching) {
+    var ans = null;
+    for (var ci = 0; ci < qa.options.length; ci++) {
+      if (qa.options[ci].correct) { ans = qa.options[ci]; break; }
+    }
+    return h('div', { class: 'frame-reading' }, [
+      h('b', {}, 'What you are looking at: '),
+      h('span', { text: ans ? ans.feedback : '' })
+    ]);
+  }
+
+  var answered = answers[idx];
   var wrap = h('div', { class: 'qa-block' });
   wrap.appendChild(h('div', { class: 'qa-q' }, qa.question));
 

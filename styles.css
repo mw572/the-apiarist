@@ -639,6 +639,14 @@ button { font-family: var(--sans); cursor: pointer; }
 .qa-feedback.right { background: var(--ok-bg); color: var(--leaf-dk); }
 .qa-feedback.wrong { background: var(--warn-bg); color: var(--ink); border: 1px solid var(--honey); }
 .qa-feedback b { font-weight: 800; }
+
+/* the plain frame reading shown once the teaching Q&A is done with */
+.frame-reading {
+  background: var(--info-bg); border-left: 4px solid var(--info);
+  border-radius: 0 8px 8px 0; padding: 10px 13px; margin-top: 14px;
+  font-size: 13px; line-height: 1.6;
+}
+.frame-reading b { color: var(--info); }
 .find-result {
   padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; margin-top: 8px;
 }
