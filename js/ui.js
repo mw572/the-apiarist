@@ -1995,16 +1995,22 @@ function openInspection(colony) {
         : 'Examined ' + seenCount + ' of ' + frames.length + ' frames.'));
 
     var boxFrames = frames.map(function(fr, idx) {
-      var cls = 'box-frame' + (idx === selected ? ' lifted' : '') + (seen[idx] ? ' seen' : '');
+      var isSeen = !!seen[idx];
+      var cls = 'box-frame' + (idx === selected ? ' lifted' : '') + (isSeen ? ' seen' : ' unseen');
       var bf = h('div', {
         class: cls,
-        title: 'Frame ' + (idx + 1) + (fr.label ? ' — ' + fr.label : ''),
+        title: isSeen
+          ? ('Frame ' + (idx + 1) + (fr.label ? ' — ' + fr.label : ''))
+          : ('Frame ' + (idx + 1) + ' — not yet examined'),
         onclick: function() { selected = idx; seen[idx] = true; build(); }
       });
-      _ui_fillThumb(bf, fr);
-      if (fr.hasQueen) bf.appendChild(h('div', { class: 'box-frame-q' }, '👑'));
-      if ((fr.cells && fr.cells.qcell) > 0) {
-        bf.appendChild(h('div', { class: 'box-frame-qc', title: 'Queen cells' }, '◗'));
+      /* a frame only reveals what it holds once you have lifted it out */
+      if (isSeen) {
+        _ui_fillThumb(bf, fr);
+        if (fr.hasQueen) bf.appendChild(h('div', { class: 'box-frame-q', title: 'The queen' }));
+        if ((fr.cells && fr.cells.qcell) > 0) {
+          bf.appendChild(h('div', { class: 'box-frame-qc', title: 'Queen cells' }));
+        }
       }
       bf.appendChild(h('div', { class: 'box-frame-n' }, String(idx + 1)));
       return bf;
@@ -2020,7 +2026,9 @@ function openInspection(colony) {
       _ui_buildComb(fr),
       h('div', { class: 'inspect-detail-read' }, [
         h('div', { class: 'card-title' }, 'Frame ' + (selected + 1) + (fr.label ? ' — ' + fr.label : '')),
-        fr.hasQueen ? h('div', { class: 'find-result found' }, '👑 The queen is on this frame') : null,
+        fr.hasQueen ? h('div', { class: 'find-result found' }, [
+          h('span', { class: 'queen-mini' }), ' The queen is on this frame'
+        ]) : null,
         _ui_buildCombLegend()
       ])
     ]));
@@ -2340,7 +2348,7 @@ function _ui_buildComb(frame) {
 
   /* the queen, on the brood in the centre of the frame */
   if (frame.hasQueen) {
-    comb.appendChild(h('div', { class: 'comb-queen', title: 'The queen' }, '👑'));
+    comb.appendChild(h('div', { class: 'comb-queen', title: 'The queen' }));
   }
 
   /* queen cells — peanut shapes. Swarm cells hang from the bottom bar;
