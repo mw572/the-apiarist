@@ -877,10 +877,10 @@ function colonyCongestion(colony){
 
 /* Human-readable population band */
 function populationBand(n){
-  if (n < 2000)  return 'a handful';
-  if (n < 8000)  return 'small';
-  if (n < 22000) return 'building';
-  if (n < 40000) return 'strong';
+  if (n < 1500)  return 'a handful';
+  if (n < 6000)  return 'small';
+  if (n < 13000) return 'building';
+  if (n < 22000) return 'strong';
   return 'huge';
 }
 

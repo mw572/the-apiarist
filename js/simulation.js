@@ -661,18 +661,19 @@ function buildAdvisor() {
       warnCount++;
     }
 
-    /* Known disease */
+    /* Known disease — notifiable foulbrood is a crisis; the milder,
+       curable diseases are a watch-and-manage item, not a red alert. */
     if (k.disease) {
       var dis = DISEASES[k.disease] || { name: k.disease, notifiable: false };
       var diseaseText = col.name + ': ' + dis.name + ' observed at last inspection.';
       if (dis.notifiable) diseaseText += ' This is notifiable -- contact your bee inspector.';
-      else diseaseText += ' Monitor closely and take appropriate action.';
+      else diseaseText += ' Keep the apiary clean and the colony strong; a comb change or requeening clears it.';
       items.push({
-        tone: 'bad',
+        tone: dis.notifiable ? 'bad' : 'warn',
         icon: '🦠',
         text: diseaseText,
       });
-      badCount++;
+      if (dis.notifiable) badCount++; else warnCount++;
     }
 
     /* Known varroa status */
@@ -692,8 +693,10 @@ function buildAdvisor() {
       warnCount++;
     }
 
-    /* Known pests */
-    if (k.pests && k.pests.indexOf('wasps') !== -1) {
+    /* Known pests — wasps rob in late summer and autumn; they are gone
+       by winter, so a stale sighting must not nag through the cold months. */
+    if (k.pests && k.pests.indexOf('wasps') !== -1 &&
+        (season === 'summer' || season === 'autumn')) {
       items.push({
         tone: 'warn',
         icon: '🐝',
