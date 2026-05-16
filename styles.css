@@ -916,7 +916,24 @@ button { font-family: var(--sans); cursor: pointer; }
   .apiary-head h2 { font-size: 16px; }
   .apiary-head .forage-note { width: 100%; }
   .yard { padding: 12px; }
-  .yard-row { padding: 16px 6px 34px; gap: 16px 14px; }
+  .yard-row { padding: 16px 6px 34px; gap: 14px 12px; }
+
+  /* smaller hives so several colonies fit a phone-sized yard */
+  .hive { width: 100px; }
+  .hive-roof { width: 88px; height: 13px; }
+  .hive-box { width: 79px; }
+  .hive-box.brood { height: 33px; }
+  .hive-box.super { height: 18px; }
+  .hive-box::before { width: 30px; }
+  .hive-floor { width: 88px; height: 10px; }
+  .hive-floor::after { width: 56px; }
+  .hive-stand { width: 72px; height: 13px; }
+  .hive-plaque { min-width: 86px; padding: 3px 7px; margin-top: 6px; }
+  .hive-plaque .nm { font-size: 11px; }
+  .hive-plaque .st { font-size: 10px; }
+  .hive-badge { font-size: 15px; }
+  .add-hive-slot { width: 100px; min-height: 104px; font-size: 12px; }
+  .add-hive-slot .plus { font-size: 24px; }
 
   /* --- panels: tighter gutters --- */
   .panel-view { padding: 14px 13px; }
