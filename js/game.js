@@ -165,6 +165,41 @@ function deleteSave(){
   try { localStorage.removeItem(SAVE_KEY); } catch(e){}
 }
 
+/* ---- file-based save / load — a portable backup the player owns ----- */
+function exportSaveFile(){
+  if (!Game) return false;
+  try {
+    var blob = new Blob([JSON.stringify(Game)], { type: 'application/json' });
+    var url  = URL.createObjectURL(blob);
+    var yr   = (typeof gameYear === 'function') ? gameYear() : 1;
+    var wk   = ((Game.week - 1) % 52) + 1;
+    var who  = String(Game.beekeeperName || 'beekeeper').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'the-apiarist-' + who + '-yr' + yr + 'wk' + wk + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+    return true;
+  } catch(e){ return false; }
+}
+
+function loadSaveObject(obj){
+  if (!obj || obj.version !== 2 ||
+      !Array.isArray(obj.colonies) || !Array.isArray(obj.apiaries) || !obj.apiaries.length){
+    return { ok: false, msg: 'That file is not a valid Apiarist save.' };
+  }
+  Game = obj;
+  if (!Game.ui) Game.ui = { view: 'apiary', selectedApiary: Game.apiaries[0].id, selectedColony: null };
+  if (!Game.flags) Game.flags = {};
+  saveGame();
+  if (typeof buildAdvisor === 'function') buildAdvisor();
+  if (typeof render === 'function') render();
+  return { ok: true, msg: 'Loaded ' + (Game.beekeeperName || 'your apiary') +
+    ' — year ' + ((typeof gameYear === 'function') ? gameYear() : '?') + '.' };
+}
+
 /* --- the weekly controller ------------------------------------------ */
 
 function advanceWeek(){

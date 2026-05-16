@@ -367,9 +367,81 @@ function renderTitleScreen() {
     children.push(continueBtn);
   }
 
+  children.push(h('button', {
+    class: 'btn btn-block', style: { marginTop: '8px' },
+    text: 'Load a save file',
+    onclick: function() { _ui_pickSaveFile(); }
+  }));
+
   var titleCard = h('div', { class: 'title-card' }, children);
   var screen = h('div', { class: 'title-screen' }, titleCard);
   app.appendChild(screen);
+}
+
+/* ====================================================================
+   SAVE & LOAD — portable save files
+   ==================================================================== */
+
+function _ui_openSaveLoad() {
+  var info = '';
+  if (Game) {
+    var n = (typeof aliveColonies === 'function') ? aliveColonies().length : 0;
+    info = (Game.beekeeperName || 'Your apiary') + ' — year ' +
+      ((typeof gameYear === 'function') ? gameYear() : '?') + ', ' +
+      n + ' ' + (n === 1 ? 'colony' : 'colonies');
+  }
+  var body = h('div', {}, [
+    h('p', { class: 'sl-note' },
+      'The game saves itself in this browser as you play. To keep a backup — or to ' +
+      'carry your apiary to another device — save it to a file, then load that file ' +
+      'back in here whenever you like.'),
+    info ? h('div', { class: 'sl-current' }, 'Current game: ' + info) : null,
+    h('div', { class: 'sl-actions' }, [
+      h('button', {
+        class: 'btn btn-primary',
+        onclick: function() {
+          if (typeof exportSaveFile === 'function' && exportSaveFile()) {
+            toast('Save file downloaded.', 'good');
+          } else {
+            toast('Could not save the file.', 'bad');
+          }
+        }
+      }, '↓ Save to file'),
+      h('button', {
+        class: 'btn',
+        onclick: function() { _ui_pickSaveFile(); }
+      }, '↑ Load from file')
+    ])
+  ]);
+  openModal({ title: 'Save & Load', body: body });
+}
+
+/* Open the OS file picker and load the chosen save. */
+function _ui_pickSaveFile() {
+  var input = h('input', {
+    type: 'file', accept: '.json,application/json',
+    style: { position: 'fixed', left: '-9999px' }
+  });
+  input.addEventListener('change', function() {
+    var file = input.files && input.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function() {
+      var obj;
+      try { obj = JSON.parse(reader.result); }
+      catch (e) { toast('That file could not be read as a save.', 'bad'); return; }
+      var r = (typeof loadSaveObject === 'function')
+        ? loadSaveObject(obj)
+        : { ok: false, msg: 'Loading is unavailable.' };
+      toast(r.msg, r.ok ? 'good' : 'bad');
+      if (r.ok) closeModal();
+    };
+    reader.onerror = function() { toast('That file could not be read.', 'bad'); };
+    reader.readAsText(file);
+  });
+  document.body.appendChild(input);
+  input.click();
+  setTimeout(function() { if (input.parentNode) input.parentNode.removeChild(input); }, 60000);
 }
 
 /* ====================================================================
@@ -442,7 +514,10 @@ function _ui_buildTopbar() {
     h('div', { class: 'topbar-stat' }, [
       h('b', { text: titleName }),
       h('small', { text: 'Skill level ' + sl })
-    ])
+    ]),
+    h('button', {
+      class: 'topbar-btn', title: 'Save & Load', onclick: _ui_openSaveLoad
+    }, '💾')
   ]);
 }
 

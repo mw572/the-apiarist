@@ -104,6 +104,23 @@ button { font-family: var(--sans); cursor: pointer; }
 .topbar-stat b { font-size: 16px; color: #fff; font-family: var(--serif); }
 .topbar-stat small { font-size: 10px; color: var(--honey); display: block; text-transform: uppercase; letter-spacing: .8px; }
 .topbar-stat.cash b { color: #f4d77a; }
+.topbar-btn {
+  flex: none; width: 34px; height: 34px; border-radius: 8px;
+  background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.20);
+  color: var(--wax); font-size: 16px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.topbar-btn:hover { background: rgba(255,255,255,0.22); }
+
+/* save & load modal */
+.sl-note { font-size: 13.5px; line-height: 1.62; color: var(--ink); margin-bottom: 12px; }
+.sl-current {
+  font-size: 13px; font-weight: 600; color: var(--honey-dk);
+  background: var(--warn-bg); border: 1px solid var(--honey);
+  border-radius: 8px; padding: 9px 12px; margin-bottom: 14px;
+}
+.sl-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.sl-actions .btn { flex: 1; min-width: 140px; justify-content: center; }
 
 /* nav */
 .navbar {
@@ -895,6 +912,7 @@ button { font-family: var(--sans); cursor: pointer; }
   .topbar-clock .when small { font-size: 8px; letter-spacing: .3px; }
   .topbar-stat b { font-size: 13px; }
   .topbar-stat small { font-size: 8px; letter-spacing: .3px; }
+  .topbar-btn { width: 30px; height: 30px; font-size: 14px; }
 
   /* --- nav: icon above a small label, five tabs share the width --- */
   .navbar { gap: 2px; padding: 4px 4px 0; }
