@@ -188,6 +188,11 @@ function inspectColony(colony) {
     /* Per-frame note */
     frame.note = dist.note;
 
+    /* Queen-cell type carried onto the frame so the comb can draw them
+       in the right place — swarm cells on the bottom bar, supersedure
+       and emergency cells on the face of the comb. */
+    frame.queenCellType = (frame.cells.qcell > 0) ? colony.queenCells.type : 'none';
+
     report.frames.push(frame);
   }
 
@@ -513,12 +518,12 @@ function _act_frameDist(i, totalFrames, colony, queenFrame,
     cells.empty = Math.max(0, cells.empty - cells.mite);
   }
 
-  /* Queen cells: bottom-bar representation on frames 4-6 */
-  if (qcellsVisible && Math.abs(i - queenFrame) <= 1) {
-    const share = Math.floor(3 / 3); // up to 1 cell per adjacent frame for display
-    cells.qcell  = share;
+  /* Queen cells: concentrate the visible cells on the central brood frame
+     so they read clearly when the comb is drawn. */
+  if (qcellsVisible && i === queenFrame && colony.queenCells.count > 0) {
+    cells.qcell  = Math.min(colony.queenCells.count, 4);
     cells.empty  = Math.max(0, cells.empty - cells.qcell);
-    note += ' Queen cell present.';
+    note += ' Queen cells present.';
   }
 
   return { cells, note };

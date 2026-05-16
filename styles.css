@@ -517,8 +517,9 @@ button { font-family: var(--sans); cursor: pointer; }
 .comb {
   --c: 13px;
   flex: none; padding: 10px; background: #9a7b44; border-radius: 6px;
-  border: 3px solid #7d6033;
+  border: 3px solid #7d6033; position: relative;
 }
+.comb.has-bottom-qc { margin-bottom: 26px; }
 .comb-grid { display: flex; flex-direction: column; gap: 1px; }
 .comb-line { display: flex; gap: 1px; }
 .comb-line:nth-child(even) { margin-left: 7px; }
@@ -546,6 +547,79 @@ button { font-family: var(--sans); cursor: pointer; }
 .frame-read { flex: 1; }
 .read-line { display: flex; gap: 7px; font-size: 13px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
 .read-line .ico { flex: none; }
+
+/* the queen and queen cells drawn on the comb */
+.comb-queen {
+  position: absolute; left: 50%; top: 52%; transform: translate(-50%,-50%);
+  font-size: 18px; line-height: 1; z-index: 4;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.55));
+}
+.comb-qcells { position: absolute; display: flex; gap: 7px; z-index: 5; }
+.comb-qcells.at-bottom { left: 0; right: 0; bottom: -20px; justify-content: center; }
+.comb-qcells.on-face { left: 50%; top: 38%; transform: translateX(-50%); }
+.queen-cell {
+  width: 13px; height: 27px; position: relative;
+  background: linear-gradient(180deg, #8a6536 0%, #5e4222 72%, #463017 100%);
+  border: 1px solid #38270f;
+  border-radius: 6px 6px 7px 7px / 8px 8px 17px 17px;
+  box-shadow: inset 0 2px 3px rgba(255,255,255,0.16), 0 2px 4px rgba(0,0,0,0.35);
+}
+.queen-cell::after {
+  content: ''; position: absolute; inset: 4px 2px 7px;
+  background:
+    radial-gradient(circle at 36% 22%, rgba(0,0,0,0.30) 0.8px, transparent 1.8px),
+    radial-gradient(circle at 66% 50%, rgba(0,0,0,0.30) 0.8px, transparent 1.8px),
+    radial-gradient(circle at 40% 78%, rgba(0,0,0,0.24) 0.8px, transparent 1.8px);
+}
+.box-frame-qc {
+  position: absolute; bottom: 1px; left: 2px; font-size: 11px;
+  color: #f1ddab; z-index: 3; text-shadow: 0 0 3px #000;
+}
+
+/* inspection — progress, locked summary, score */
+.inspect-progress {
+  font-size: 13px; font-weight: 600; color: var(--honey-dk);
+  background: var(--warn-bg); border: 1px solid var(--honey);
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;
+}
+.inspect-progress.done { background: var(--ok-bg); border-color: var(--ok); color: var(--leaf-dk); }
+.inspect-locked {
+  display: flex; gap: 11px; align-items: center;
+  background: var(--paper-2); border: 1px dashed var(--line-dk);
+  border-radius: 9px; padding: 14px 16px; margin-top: 14px;
+  font-size: 13px; color: var(--ink-soft); line-height: 1.5;
+}
+.inspect-locked .lock-ico { font-size: 22px; flex: none; }
+.inspect-score {
+  font-size: 13px; font-weight: 600; color: var(--ink);
+  background: var(--info-bg); border-left: 4px solid var(--info);
+  border-radius: 0 8px 8px 0; padding: 9px 12px; margin: 12px 0;
+}
+
+/* inspection — the per-frame teaching question */
+.qa-block {
+  background: var(--paper-2); border: 1px solid var(--line-dk);
+  border-radius: 10px; padding: 12px 14px; margin-top: 14px;
+}
+.qa-q { font-weight: 700; font-size: 14px; color: var(--ink); margin-bottom: 9px; line-height: 1.4; }
+.qa-options { display: flex; flex-direction: column; gap: 7px; }
+.qa-option {
+  border: 1px solid var(--line-dk); background: var(--paper);
+  border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.4;
+}
+.qa-option.live { cursor: pointer; transition: background .12s, border-color .12s; }
+.qa-option.live:hover { border-color: var(--honey); background: var(--warn-bg); }
+.qa-option.chosen-correct { background: var(--ok-bg); border-color: var(--ok); color: var(--leaf-dk); font-weight: 700; }
+.qa-option.chosen-wrong { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); font-weight: 700; }
+.qa-option.is-answer { background: var(--ok-bg); border-color: var(--ok); }
+.qa-option.dim { opacity: .5; }
+.qa-feedback {
+  margin-top: 10px; font-size: 13px; line-height: 1.6;
+  border-radius: 8px; padding: 9px 12px;
+}
+.qa-feedback.right { background: var(--ok-bg); color: var(--leaf-dk); }
+.qa-feedback.wrong { background: var(--warn-bg); color: var(--ink); border: 1px solid var(--honey); }
+.qa-feedback b { font-weight: 800; }
 .find-result {
   padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; margin-top: 8px;
 }

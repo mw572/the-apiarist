@@ -1969,21 +1969,30 @@ function openInspection(colony) {
 
   var frames = report.frames || [];
   var selected = 0;
-  for (var qi = 0; qi < frames.length; qi++) { if (frames[qi].hasQueen) { selected = qi; break; } }
-  var seen = {};
-  seen[selected] = true;
+  var seen = {};        // frame index -> true once it has been lifted
+  var answers = {};     // frame index -> { chosen, correct }
+  seen[0] = true;
 
   var modalBody = h('div', { class: 'inspect' });
 
   function build() {
+    var host = modalBody.parentNode;          // .modal-body — preserve scroll
+    var keepScroll = host ? host.scrollTop : 0;
     modalBody.innerHTML = '';
 
+    var seenCount = 0;
+    for (var s = 0; s < frames.length; s++) { if (seen[s]) seenCount++; }
+    var done = seenCount >= frames.length;
+
     modalBody.appendChild(h('div', { class: 'inspect-intro', html:
-      'This is an <b>inspection</b> — going through ' + colony.name + '\'s frames one at a time. ' +
-      'Click a frame to lift it from the box and read its comb: the centre frames carry the ' +
-      'brood (eggs, larvae, sealed brood), the outer frames carry honey and pollen. You are ' +
-      'answering five questions — is the queen laying, is there room, are they about to swarm, ' +
-      'are they healthy, do they have enough stores?' }));
+      'Work through every frame in ' + colony.name + '\'s box. Lift each one, read the comb ' +
+      'and answer what you are looking at — your full summary appears once you have been right ' +
+      'through the box.' }));
+
+    modalBody.appendChild(h('div', { class: 'inspect-progress' + (done ? ' done' : '') },
+      done
+        ? 'All ' + frames.length + ' frames examined — inspection complete.'
+        : 'Examined ' + seenCount + ' of ' + frames.length + ' frames.'));
 
     var boxFrames = frames.map(function(fr, idx) {
       var cls = 'box-frame' + (idx === selected ? ' lifted' : '') + (seen[idx] ? ' seen' : '');
@@ -1994,69 +2003,95 @@ function openInspection(colony) {
       });
       _ui_fillThumb(bf, fr);
       if (fr.hasQueen) bf.appendChild(h('div', { class: 'box-frame-q' }, '👑'));
+      if ((fr.cells && fr.cells.qcell) > 0) {
+        bf.appendChild(h('div', { class: 'box-frame-qc', title: 'Queen cells' }, '◗'));
+      }
       bf.appendChild(h('div', { class: 'box-frame-n' }, String(idx + 1)));
       return bf;
     });
 
     modalBody.appendChild(h('div', { class: 'inspect-box' }, [
-      h('div', { class: 'inspect-box-label' }, 'The open brood box — click a frame to lift it out and read it'),
+      h('div', { class: 'inspect-box-label' }, 'The open brood box — tap a frame to lift it out and read it'),
       h('div', { class: 'inspect-box-inner' }, boxFrames)
     ]));
 
-    var fr = frames[selected] || { cells: {}, label: '', note: '', hasQueen: false };
+    var fr = frames[selected] || { cells: {}, label: '', hasQueen: false };
     modalBody.appendChild(h('div', { class: 'inspect-detail' }, [
       _ui_buildComb(fr),
       h('div', { class: 'inspect-detail-read' }, [
         h('div', { class: 'card-title' }, 'Frame ' + (selected + 1) + (fr.label ? ' — ' + fr.label : '')),
         fr.hasQueen ? h('div', { class: 'find-result found' }, '👑 The queen is on this frame') : null,
-        fr.note ? h('div', { class: 'frame-note', text: fr.note }) : null,
         _ui_buildCombLegend()
       ])
     ]));
 
-    modalBody.appendChild(h('div', { class: 'inspect-findings' }, [
-      h('h4', {}, 'What you found'),
-      (report.findings || []).map(function(f) {
-        return h('div', { class: 'read-line' }, [
-          h('span', { class: 'ico' }, f.icon || ''),
-          h('span', { text: f.text || '' })
-        ]);
-      })
-    ]));
+    /* the teaching question for the frame in hand */
+    modalBody.appendChild(_ui_buildFrameQA(fr, selected, colony, answers, build));
 
-    var summaryNode = h('div', { class: 'inspect-summary' }, [
-      h('h4', {}, 'The five questions'),
-      h('ul', {}, (report.summary || []).map(function(s) {
-        return h('li', { class: (/^Urgent:/.test(s) ? 'sum-urgent' : null), text: s });
-      }))
-    ]);
-    if (report.lesson) {
-      summaryNode.appendChild(h('div', { class: 'explain lesson', style: { marginTop: '10px' } }, [
-        h('b', { text: 'To learn: ' }), report.lesson
+    /* findings and summary stay locked until every frame has been examined */
+    if (!done) {
+      modalBody.appendChild(h('div', { class: 'inspect-locked' }, [
+        h('div', { class: 'lock-ico' }, '🔒'),
+        h('div', {}, 'Examine all ' + frames.length + ' frames to finish the inspection. ' +
+          'Your summary and next steps will appear once you have been through the whole box.')
       ]));
-    }
-    modalBody.appendChild(summaryNode);
+    } else {
+      modalBody.appendChild(h('div', { class: 'inspect-findings' }, [
+        h('h4', {}, 'What you found'),
+        (report.findings || []).map(function(f) {
+          return h('div', { class: 'read-line' }, [
+            h('span', { class: 'ico' }, f.icon || ''),
+            h('span', { text: f.text || '' })
+          ]);
+        })
+      ]));
 
-    var advice = _ui_inspectionAdvice(colony, report);
-    if (advice.length) {
-      var recRows = advice.map(function(a) {
-        var kids = [
-          h('span', { class: 'ico' }, a.action ? '➡️' : '✓'),
-          h('span', { class: 'rec-text', text: a.text })
-        ];
-        if (a.action) {
-          kids.push(h('button', {
-            class: 'btn btn-sm btn-primary', text: 'Do this',
-            onclick: function() { closeModal(); render(); _ui_actionDialog(a.action, colony); }
-          }));
-        }
-        return h('div', { class: 'inspect-rec' }, kids);
-      });
-      modalBody.appendChild(h('div', { class: 'inspect-next' }, [
-        h('h4', {}, 'What to do next'),
-        h('div', {}, recRows)
-      ]));
+      var asked = 0, correct = 0;
+      for (var a in answers) { if (answers.hasOwnProperty(a)) { asked++; if (answers[a].correct) correct++; } }
+      if (asked > 0) {
+        modalBody.appendChild(h('div', { class: 'inspect-score' },
+          'You read ' + correct + ' of ' + asked + ' frame' + (asked === 1 ? '' : 's') +
+          ' correctly' + (correct === asked
+            ? ' — a clean read of the colony.'
+            : '. Look again at the ones you misjudged; that is how your eye sharpens.')));
+      }
+
+      var summaryNode = h('div', { class: 'inspect-summary' }, [
+        h('h4', {}, 'The five questions'),
+        h('ul', {}, (report.summary || []).map(function(s) {
+          return h('li', { class: (/^Urgent:/.test(s) ? 'sum-urgent' : null), text: s });
+        }))
+      ]);
+      if (report.lesson) {
+        summaryNode.appendChild(h('div', { class: 'explain lesson', style: { marginTop: '10px' } }, [
+          h('b', { text: 'To learn: ' }), report.lesson
+        ]));
+      }
+      modalBody.appendChild(summaryNode);
+
+      var advice = _ui_inspectionAdvice(colony, report);
+      if (advice.length) {
+        var recRows = advice.map(function(a2) {
+          var kids = [
+            h('span', { class: 'ico' }, a2.action ? '➡️' : '✓'),
+            h('span', { class: 'rec-text', text: a2.text })
+          ];
+          if (a2.action) {
+            kids.push(h('button', {
+              class: 'btn btn-sm btn-primary', text: 'Do this',
+              onclick: function() { closeModal(); render(); _ui_actionDialog(a2.action, colony); }
+            }));
+          }
+          return h('div', { class: 'inspect-rec' }, kids);
+        });
+        modalBody.appendChild(h('div', { class: 'inspect-next' }, [
+          h('h4', {}, 'What to do next'),
+          h('div', {}, recRows)
+        ]));
+      }
     }
+
+    if (host) host.scrollTop = keepScroll;
   }
 
   build();
@@ -2067,6 +2102,116 @@ function openInspection(colony) {
     xwide: true,
     buttons: [{ label: 'Done', cls: 'btn-primary', act: function() { closeModal(); render(); } }]
   });
+}
+
+/* The teaching question for a single frame — what is the player looking at? */
+function _ui_frameQuestion(frame, colony) {
+  var c = frame.cells || {};
+
+  /* A frame with queen cells — read where they sit and what they mean */
+  if ((c.qcell || 0) > 0) {
+    var qt = frame.queenCellType || 'swarm';
+    var swarmFb = 'Swarm cells hang from the bottom bars of the comb. The colony has decided to ' +
+      'split — the old queen will leave with half the bees. Carry out swarm control now, today.';
+    var superFb = 'Supersedure cells sit on the face of the comb, usually just one or two. The ' +
+      'colony is quietly replacing a queen it judges to be failing — it is best left to get on with it.';
+    var emergFb = 'Emergency cells are worker cells re-drawn into queen cells on the face of the comb. ' +
+      'The colony has suddenly lost its queen and is racing to raise one from a young larva.';
+    var truth = qt === 'swarm' ? swarmFb : qt === 'supersedure' ? superFb : emergFb;
+    return {
+      question: 'There are queen cells on this frame. Reading where they sit, what kind are they?',
+      options: [
+        { label: 'Swarm cells — hanging from the bottom edge of the comb',
+          correct: qt === 'swarm',
+          feedback: qt === 'swarm' ? swarmFb
+            : 'Look again — these are on the face of the comb, not the bottom bars. ' + truth },
+        { label: 'Supersedure cells — a few, on the face of the comb',
+          correct: qt === 'supersedure',
+          feedback: qt === 'supersedure' ? superFb
+            : 'Look again at where they sit. ' + truth },
+        { label: 'Emergency cells — worker cells re-built into queen cells',
+          correct: qt === 'emergency',
+          feedback: qt === 'emergency' ? emergFb
+            : 'Not these. ' + truth },
+        { label: 'Nothing to worry about — just oversized drone cells',
+          correct: false,
+          feedback: 'These are queen cells, not drone brood. Drone cells are domed and bullet-shaped ' +
+            'but sit flush in the comb; a queen cell is large and pitted and hangs like a peanut. ' + truth }
+      ]
+    };
+  }
+
+  /* An ordinary frame — what is it mostly? */
+  var brood = (c.eggs || 0) + (c.larva || 0) + (c.capbrood || 0) + (c.dronebr || 0);
+  var stores = (c.honey || 0) + (c.nectar || 0);
+  var pollen = (c.pollen || 0);
+  var empty = (c.empty || 0);
+  var top = Math.max(brood, stores, pollen, empty);
+  var kind = top === brood ? 'brood' : top === stores ? 'stores' : top === pollen ? 'pollen' : 'empty';
+
+  var tell = {
+    brood: 'A brood frame. Pearly grains standing up in the cell bottoms are eggs; glistening ' +
+      'white curls are larvae; the domed, biscuit-brown caps are sealed brood about to emerge.',
+    stores: 'A stores frame. Ripe honey is sealed under flat, pale, airtight cappings. Unripe ' +
+      'nectar is open and wet, and glistens when you tilt the frame to the light.',
+    pollen: 'A pollen frame. Pollen is packed into cells in dense, matt blocks — every shade ' +
+      'from bright yellow to orange to grey-green, depending on which flowers are out.',
+    empty: 'Empty drawn comb. Not wasted — it is room for the queen to lay into, or for the ' +
+      'bees to fill when a honey flow comes on.'
+  };
+  var kindWord = { brood: 'brood', stores: 'honey and nectar', pollen: 'pollen', empty: 'empty comb' };
+  function fb(picked) {
+    return picked === kind ? tell[kind]
+      : 'Not quite — this frame is mostly ' + kindWord[kind] + '. ' + tell[kind];
+  }
+  return {
+    question: 'Look at the comb in your hands. What is this frame mostly?',
+    options: [
+      { label: 'Mostly brood — eggs, larvae and sealed cells', correct: kind === 'brood', feedback: fb('brood') },
+      { label: 'Mostly honey and nectar', correct: kind === 'stores', feedback: fb('stores') },
+      { label: 'Mostly pollen', correct: kind === 'pollen', feedback: fb('pollen') },
+      { label: 'Mostly empty drawn comb', correct: kind === 'empty', feedback: fb('empty') }
+    ]
+  };
+}
+
+/* Render the question for the lifted frame, grade the answer, and teach. */
+function _ui_buildFrameQA(frame, idx, colony, answers, rebuild) {
+  var qa = _ui_frameQuestion(frame, colony);
+  var answered = answers[idx];
+
+  var wrap = h('div', { class: 'qa-block' });
+  wrap.appendChild(h('div', { class: 'qa-q' }, qa.question));
+
+  var opts = h('div', { class: 'qa-options' });
+  qa.options.forEach(function(opt, oi) {
+    var cls = 'qa-option';
+    if (answered) {
+      if (oi === answered.chosen) cls += answered.correct ? ' chosen-correct' : ' chosen-wrong';
+      else if (opt.correct) cls += ' is-answer';
+      else cls += ' dim';
+    } else {
+      cls += ' live';
+    }
+    var btn = h('div', { class: cls }, opt.label);
+    if (!answered) {
+      btn.onclick = function() {
+        answers[idx] = { chosen: oi, correct: !!opt.correct };
+        rebuild();
+      };
+    }
+    opts.appendChild(btn);
+  });
+  wrap.appendChild(opts);
+
+  if (answered) {
+    var chosen = qa.options[answered.chosen];
+    wrap.appendChild(h('div', { class: 'qa-feedback ' + (answered.correct ? 'right' : 'wrong') }, [
+      h('b', {}, answered.correct ? 'Correct. ' : 'Not quite. '),
+      h('span', { text: chosen.feedback })
+    ]));
+  }
+  return wrap;
 }
 
 /* Recommended next actions drawn from what the inspection found */
@@ -2133,60 +2278,83 @@ function _ui_fillThumb(el, frame) {
   });
 }
 
-/* Build the big hex comb grid */
+/* Build the big hex comb grid — cells laid out the way bees actually build
+   a frame: brood in the centre, a pollen band hugging it, honey and nectar
+   arcing over the top and down the outer edges. Queen cells and the queen
+   herself are drawn as overlays on top of the comb. */
 function _ui_buildComb(frame) {
   var cells = frame.cells || {};
-  var COLS = 11;
-  var ROWS = 9;
-  var total = COLS * ROWS;
+  var COLS = 11, ROWS = 9, total = COLS * ROWS;
 
-  // Build distribution array
-  var order = ['capbrood','larva','eggs','dronebr','honey','pollen','nectar','qcell','disease','mite','empty'];
+  /* grid cell types — queen cells and the queen are overlays, not grid cells */
+  var order = ['eggs','larva','capbrood','dronebr','disease','mite','pollen','nectar','honey','empty'];
   var totalCount = order.reduce(function(s, k) { return s + (cells[k] || 0); }, 0) || 1;
 
-  var cellTypes = [];
+  /* how central each type sits: brood innermost, a pollen band, then stores */
+  var rank = { eggs: 0, disease: 1, larva: 1, capbrood: 2, dronebr: 2, mite: 2,
+               pollen: 3, nectar: 4, honey: 5, empty: 6 };
+
+  var list = [];
   var remaining = total;
   order.forEach(function(cls, i) {
-    var count = cells[cls] || 0;
-    var n = (i === order.length - 1)
-      ? remaining
-      : Math.min(remaining, Math.round(count / totalCount * total));
-    for (var j = 0; j < n; j++) cellTypes.push(cls);
-    remaining -= n;
-    if (remaining < 0) remaining = 0;
+    var n = (i === order.length - 1) ? remaining
+      : Math.min(remaining, Math.round((cells[cls] || 0) / totalCount * total));
+    for (var j = 0; j < n; j++) list.push(cls);
+    remaining -= n; if (remaining < 0) remaining = 0;
   });
+  list.sort(function(a, b) { return rank[a] - rank[b]; });
 
-  // Shuffle for a more natural look
-  for (var i = cellTypes.length - 1; i > 0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
-    var tmp = cellTypes[i]; cellTypes[i] = cellTypes[j]; cellTypes[j] = tmp;
+  /* grid positions sorted by distance from the brood centre. The centre sits
+     a little low so honey fills the arch across the top; a small fixed jitter
+     keeps the bands organic rather than perfect rings. */
+  var cx = (COLS - 1) / 2, cy = (ROWS - 1) / 2 + 0.5;
+  var pos = [];
+  for (var r = 0; r < ROWS; r++) {
+    for (var c = 0; c < COLS; c++) {
+      var dx = (c - cx) / (COLS / 2);
+      var dy = (r - cy) / (ROWS / 2);
+      var jit = (((c * 7 + r * 13) % 7) - 3) * 0.05;
+      pos.push({ r: r, c: c, d: Math.sqrt(dx * dx + dy * dy) + jit });
+    }
   }
+  pos.sort(function(a, b) { return a.d - b.d; });
 
-  // Mark queen cell position
-  var queenCellIdx = -1;
-  if (frame.hasQueen) {
-    queenCellIdx = Math.floor(total / 2);
+  var typeAt = {};
+  for (var k = 0; k < pos.length; k++) {
+    typeAt[pos[k].r + '_' + pos[k].c] = list[k] || 'empty';
   }
 
   var grid = h('div', { class: 'comb-grid' });
-  var typeIdx = 0;
   for (var row = 0; row < ROWS; row++) {
     var line = h('div', { class: 'comb-line' });
     for (var col = 0; col < COLS; col++) {
-      var globalIdx = row * COLS + col;
-      var cellCls;
-      if (globalIdx === queenCellIdx && frame.hasQueen) {
-        cellCls = 'found';
-      } else {
-        cellCls = cellTypes[typeIdx] || 'empty';
-      }
-      typeIdx++;
-      line.appendChild(h('div', { class: 'cell ' + cellCls, title: cellCls }));
+      var cls = typeAt[row + '_' + col] || 'empty';
+      line.appendChild(h('div', { class: 'cell ' + cls, title: cls }));
     }
     grid.appendChild(line);
   }
 
-  return h('div', { class: 'comb' }, grid);
+  var qn = cells.qcell || 0;
+  var onBottom = qn > 0 && (frame.queenCellType === 'swarm');
+  var comb = h('div', { class: 'comb' + (onBottom ? ' has-bottom-qc' : '') }, grid);
+
+  /* the queen, on the brood in the centre of the frame */
+  if (frame.hasQueen) {
+    comb.appendChild(h('div', { class: 'comb-queen', title: 'The queen' }, '👑'));
+  }
+
+  /* queen cells — peanut shapes. Swarm cells hang from the bottom bar;
+     supersedure and emergency cells sit on the face of the comb. */
+  if (qn > 0) {
+    var qWrap = h('div', { class: 'comb-qcells ' + (onBottom ? 'at-bottom' : 'on-face') });
+    for (var qi = 0; qi < Math.min(qn, 4); qi++) {
+      qWrap.appendChild(h('div', { class: 'queen-cell',
+        title: (frame.queenCellType || 'queen') + ' cell' }));
+    }
+    comb.appendChild(qWrap);
+  }
+
+  return comb;
 }
 
 function _ui_buildCombLegend() {
