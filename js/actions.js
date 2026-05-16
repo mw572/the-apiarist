@@ -1122,7 +1122,7 @@ function requeen(colony, source) {
   colony.swarmPressure = 0;
 
   addXp(8);
-  const sourceLabel = { bought: 'bought mated queen', reared: 'own reared queen', own: 'queen raised within the colony' }[source] || source;
+  const sourceLabel = { bought: 'bought mated queen', reared: 'queen of your own rearing', own: 'queen raised within the colony' }[source] || source;
   const msg = `${colony.name} requeened with a ${sourceLabel}. She has been accepted and should begin laying within a few days.`;
   logEvent('👑', msg, 'good');
   render();
