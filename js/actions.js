@@ -608,18 +608,18 @@ function _act_knownNote(colony, queenFound, storesBand, disease, qcellsVisible) 
 function addSuper(colony) {
   if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
   let totalCost = COSTS.superAdd;
-  let msg = '';
-  if (!colony.queenExcluder) {
+  const needQx = !colony.queenExcluder;
+  if (needQx) {
     totalCost += COSTS.queenExcluder;
-    msg += 'Queen excluder added too. ';
   }
   if (!spend(totalCost, `Super added to ${colony.name}`)) {
     return { ok: false, msg: `Not enough funds — this would cost £${totalCost.toFixed(2)}.` };
   }
   colony.supers++;
-  if (!colony.queenExcluder) {
+  let msg;
+  if (needQx) {
     colony.queenExcluder = true;
-    msg += `Super added and queen excluder fitted (£${totalCost.toFixed(2)}).`;
+    msg = `Super added and queen excluder fitted on ${colony.name} (£${totalCost.toFixed(2)}).`;
   } else {
     msg = `Super added to ${colony.name} (£${COSTS.superAdd.toFixed(2)}).`;
   }
@@ -1024,6 +1024,17 @@ function artificialSwarm(colony) {
   if (!colony.queen || !colony.queen.present) {
     return { ok: false, msg: 'The colony is queenless — artificial swarm requires a queen.' };
   }
+  /* An artificial swarm is a swarm-control technique. It makes no sense (and would
+     harm the colony) if there is no swarming intent — no swarm cells and no pressure.
+     Require either swarm cells OR meaningful swarm pressure. */
+  const hasSwarmCells = colony.queenCells && colony.queenCells.type === 'swarm' && colony.queenCells.count > 0;
+  const hasSwarmPressure = (colony.swarmPressure || 0) >= 0.5;
+  if (!hasSwarmCells && !hasSwarmPressure) {
+    return {
+      ok: false,
+      msg: `${colony.name} is not showing signs of swarming yet — no swarm cells and swarm pressure is low. An artificial swarm disrupts a healthy colony unnecessarily. Inspect regularly and use this technique when you find sealed or capped swarm cells.`
+    };
+  }
   if (Game.inventory.spareHives < 1) {
     return { ok: false, msg: 'You need a spare complete hive to do an artificial swarm. Buy one first.' };
   }
@@ -1181,6 +1192,18 @@ function removeQueenCells(colony) {
     return { ok: false, msg: 'No queen cells found to remove.' };
   }
 
+  /* Hard block: emergency cells in a queenless colony are the colony's only
+     route to a new queen. Destroying them condemns the colony.
+     The player must either introduce a bought/reared queen first, or leave
+     the emergency cells to develop. */
+  const isQueenless = !colony.queen || !colony.queen.present || colony.queen.state === 'absent';
+  if (isQueenless && colony.queenCells.type === 'emergency') {
+    return {
+      ok: false,
+      msg: `${colony.name} is queenless and these are emergency cells — the colony is trying to raise its own replacement queen. Removing them now leaves it permanently queenless. If you want to change the queen, introduce a bought or reared queen first, then remove the cells.`
+    };
+  }
+
   const hadType = colony.queenCells.type;
   colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
   /* Swarm pressure is UNCHANGED — the colony will rebuild cells within days */
@@ -1335,6 +1358,17 @@ function uniteColonies(weak, strong) {
   strong.pollen     = strong.pollen + weak.pollen * 0.7;
   strong.varroa     = strong.varroa + Math.round(weak.varroa * 0.85);
 
+  /* Return the weak colony's super boxes to the equipment pool. The supers
+     cannot be transferred to the strong colony during uniting — the newspaper
+     sheet sits across both hive bodies. They are treated as empty boxes. */
+  if ((weak.supers || 0) > 0) {
+    if (!Game.inventory.spareHives) Game.inventory.spareHives = 0;
+    Game.inventory.spareHives += weak.supers;
+    weak.supers = 0;
+    weak.superHoney = 0;
+    if (weak.hiveLayout) weak.hiveLayout.supers = [];
+  }
+
   /* Mark weak colony as dead */
   weak.alive = false;
   weak.deadReason = `United into ${strong.name} via newspaper method`;
@@ -1411,6 +1445,123 @@ function rearQueens(colony) {
 /* ------------------------------------------------------------------ */
 /* Private utilities                                                    */
 /* ------------------------------------------------------------------ */
+
+/**
+ * heftColony(colony) -> {ok, msg, storesBand}
+ *
+ * Lift the hive from behind to feel the weight of its stores — no opening
+ * required. The only safe way to check stores in deep winter. Gives a rough
+ * estimate ('light', 'ok', 'heavy') but not a precise kg reading.
+ * Awards a small amount of XP; updates colony.known.stores if a colony.known exists.
+ */
+function heftColony(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+
+  const totalStores = (colony.honey || 0) + (colony.superHoney || 0);
+
+  /* Simulate the imprecision of hefting — you get a band, not a number.
+     A skilled beekeeper (skill 6+) can distinguish ok from heavy;
+     everyone can tell the difference between light and heavy. */
+  const skill = skillLevel(Game.skillXp);
+  let storesBand;
+  if (totalStores < 3) {
+    storesBand = 'critical';
+  } else if (totalStores < 8) {
+    storesBand = 'low';
+  } else if (totalStores < 18) {
+    storesBand = 'ok';
+  } else {
+    storesBand = 'heavy';
+  }
+
+  /* Hefting noise: at low skill you may confuse 'ok' and 'heavy', but never
+     mistake 'critical' for anything safe. */
+  let perceivedBand = storesBand;
+  if (skill < 4 && storesBand === 'ok' && Math.random() < 0.3) {
+    perceivedBand = 'heavy'; /* felt heavier than it is — false reassurance */
+  } else if (skill < 4 && storesBand === 'low' && Math.random() < 0.25) {
+    perceivedBand = 'ok'; /* felt ok when actually a bit light */
+  }
+
+  const bandLabel = {
+    critical: 'very light — dangerously low stores. Feed fondant now.',
+    low:      'light — stores are running low. Consider fondant on the top bars.',
+    ok:       'a comfortable weight — stores seem adequate for now.',
+    heavy:    'reassuringly heavy — plenty in reserve.',
+  }[perceivedBand];
+
+  /* Update known.stores only if a known snapshot already exists. Hefting
+     gives a rough read but does not count as a full inspection. */
+  if (colony.known) {
+    colony.known.stores = perceivedBand;
+  }
+
+  addXp(2);
+  const msg = `${colony.name} hefted: feels ${bandLabel}`;
+  logEvent('⚖️', msg, perceivedBand === 'critical' ? 'bad' : 'plain');
+  render();
+  return { ok: true, msg, storesBand: perceivedBand };
+}
+
+/**
+ * moveHive(colony, targetApiaryId) -> {ok, msg}
+ *
+ * Move a colony to a different apiary. UK best practice: move at least
+ * 3 miles (to prevent foragers returning to the old site) or less than
+ * 3 feet (so foragers adjust gradually). This game models the 3-mile rule —
+ * moving within the same apiary cluster is not permitted.
+ *
+ * Cost: COSTS.movehive (transport, strapping, etc.).
+ * Penalty: the colony loses ~15% of its foragers (they return to the old site).
+ */
+function moveHive(colony, targetApiaryId) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+
+  /* Cannot move to the same apiary */
+  if (colony.apiaryId === targetApiaryId) {
+    return { ok: false, msg: 'The colony is already at that apiary.' };
+  }
+
+  /* Validate target apiary exists */
+  const targetApiary = Game.apiaries.find(function(a) { return a.id === targetApiaryId; });
+  if (!targetApiary) {
+    return { ok: false, msg: 'Target apiary not found.' };
+  }
+
+  /* Cannot move a notifiable disease colony — bee inspector must be notified first */
+  if (colony.diseases) {
+    const notifiable = Object.keys(colony.diseases).find(function(d) {
+      return DISEASES[d] && DISEASES[d].notifiable && colony.diseases[d] > 0.1;
+    });
+    if (notifiable) {
+      return {
+        ok: false,
+        msg: `${colony.name} has signs of ${DISEASES[notifiable].name} — a notifiable disease. You cannot move this colony until the National Bee Unit inspector has cleared it.`
+      };
+    }
+  }
+
+  if (!spend(COSTS.movehive, `Move ${colony.name} to ${targetApiary.name}`)) {
+    return { ok: false, msg: `Moving a hive costs £${COSTS.movehive} (transport and strapping). You only have £${Game.cash}.` };
+  }
+
+  const oldApiaryId = colony.apiaryId;
+  colony.apiaryId = targetApiaryId;
+
+  /* Forager penalty: ~15% of adult bees return to the old site */
+  const foragerLoss = Math.round(colony.population * 0.15);
+  colony.population = Math.max(500, colony.population - foragerLoss);
+
+  /* Moving resets the known snapshot — the colony is in a new environment */
+  colony.known = null;
+  colony.lastInspected = null;
+
+  addXp(4);
+  const msg = `${colony.name} moved to ${targetApiary.name} (£${COSTS.movehive}). About ${foragerLoss.toLocaleString()} foragers returned to the old site — the colony will rebuild its foraging force over the next few weeks.`;
+  logEvent('🚚', msg, 'plain');
+  render();
+  return { ok: true, msg };
+}
 
 /* Pick the next hive name from the pool, cycling if exhausted */
 function _act_nextHiveName() {

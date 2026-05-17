@@ -709,6 +709,16 @@ function _ui_buildApiaryView() {
     return _ui_buildHiveCard(col);
   });
 
+  // Bait hive slots — one visible card per bait hive in inventory
+  var baitCount = (Game.inventory && Game.inventory.baitHives) || 0;
+  for (var bi = 0; bi < baitCount; bi++) {
+    hiveNodes.push(h('div', { class: 'bait-hive-slot' }, [
+      h('div', { class: 'bait-hive-icon' }, '🪤'),
+      h('span', { class: 'bait-hive-label' }, 'Bait hive'),
+      h('span', { class: 'bait-hive-sub' }, 'Waiting for a swarm')
+    ]));
+  }
+
   var addSlot = h('div', {
     class: 'add-hive-slot',
     onclick: function() {
@@ -1063,6 +1073,7 @@ function _ui_marketKitStrip() {
   var items = [
     ['Cash', fmtMoney(Game.cash)],
     ['Spare hives', String(inv.spareHives || 0)],
+    ['Bait hives', String(inv.baitHives || 0)],
     ['Sugar', (inv.sugar || 0) + ' kg'],
     ['Empty jars', String(inv.emptyJars || 0)],
     ['Treatments', String(treatTotal)],

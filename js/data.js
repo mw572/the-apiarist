@@ -65,7 +65,7 @@ const SIM = {
   framesPerBrood: 11,
   peakLayPerWeek: 13000,        // a good queen at full tilt
   workerLifeSummer: 6,          // weeks
-  honeyPerSuper: 13,            // kg a National super holds full (~30 lb)
+  honeyPerSuper: 18,            // kg extractable from a full National super (11 drawn frames ~20-25 kg capped, ~18 kg extracted)
   broodBoxStoreCap: 22,         // kg the brood box can physically hold
   broodNestComfort: 7,          // kg of stores the colony likes to keep by the nest
   winterStoresNeed: 18,         // kg needed to be safe through winter

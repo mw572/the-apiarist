@@ -642,6 +642,15 @@ function colonyWeeklyUpdate(colony, ctx){
   }
 
   // --- 6. ADULT MORTALITY ------------------------------------------
+  // Autumn mortality is graduated by calendar week, not a single flat value.
+  // Old code used 5.5% for all of autumn — this caused a population SPIKE in
+  // September/October because summer brood was still emerging while mortality
+  // dropped sharply. Real UK colonies contract fast in autumn:
+  //   Sep (wkIdx 35-38): old summer foragers still dying at near-summer rates
+  //   Oct (wkIdx 39-43): winter bee cohort taking over, rate drops significantly
+  //   Nov (wkIdx 44-47): mostly winter bees, slow die-off
+  // These graduated rates produce realistic winter populations of 10,000-20,000
+  // for a healthy full colony (benchmark: 8,000-15,000 average, up to 20,000 strong).
   let baseMort;
   if (season === 'winter'){
     baseMort = 0.028 + (1 - colony.winterBeeHealth) * 0.20;  // unhealthy winter bees die fast
@@ -650,7 +659,14 @@ function colonyWeeklyUpdate(colony, ctx){
   } else if (season === 'summer'){
     baseMort = 0.13;  // high summer turnover is normal
   } else {
-    baseMort = 0.055;  // autumn bees are increasingly long-lived winter bees
+    // Autumn: graduated mortality by week index (wkIdx 35=Sep through 47=Nov)
+    if (wkIdx <= 38) {
+      baseMort = 0.115;  // Sep: summer foragers still dominant, dying fast
+    } else if (wkIdx <= 43) {
+      baseMort = 0.080;  // Oct: transition — winter bees increasing, summer bees dying off
+    } else {
+      baseMort = 0.040;  // Nov: mostly long-lived winter bees, much slower turnover
+    }
   }
 
   const extraMort = colony.dwv    * 0.12
@@ -662,6 +678,11 @@ function colonyWeeklyUpdate(colony, ctx){
   const totalMort = _colony_clamp(baseMort + extraMort, 0, 0.6);
   const deaths    = Math.round(colony.population * totalMort);
   colony.population = Math.max(0, colony.population - deaths);
+
+  // Hard cap: a standard National hive cannot house more than ~80,000 bees.
+  // Above this, swarming pressure is extreme and physical space runs out.
+  // Bees beyond this level are assumed lost (clustered outside, starved, left).
+  colony.population = Math.min(colony.population, 80000);
 
   // --- 7. FORAGING & STORES ----------------------------------------
   let foragerFraction;
@@ -1342,6 +1363,28 @@ function colonyWeeklyUpdate(colony, ctx){
   }
 
   // --- 14. DEATH CHECKS --------------------------------------------
+  // Winter minimum viable population: below ~3,000 bees a cluster cannot
+  // maintain the 20°C minimum needed to prevent brood chilling or
+  // sustain the winter cluster temperature. A colony this small in winter
+  // is effectively doomed even with adequate stores and no disease.
+  // This is separate from the general dwindling threshold below.
+  if (season === 'winter' && colony.population < 3000 && colony.population > 0 && colony.alive) {
+    // Give it one week of grace: very small clusters occasionally survive brief spells
+    colony._tinyWinterWeeks = (colony._tinyWinterWeeks || 0) + 1;
+    if (colony._tinyWinterWeeks >= 2) {
+      const reason = colony.winterBeeHealth < 0.5
+        ? 'varroa and virus damage to the winter bees'
+        : 'colony too small to maintain winter cluster temperature';
+      colony.alive      = false;
+      colony.deadReason = reason;
+      colony.deadWeek   = week;
+      events.push({ type: 'died', colony: colony, reason: reason });
+      return events;
+    }
+  } else {
+    colony._tinyWinterWeeks = 0;
+  }
+
   // Dwindling — too few bees to survive (threshold higher in spring when they can recover)
   const minPop = (season === 'spring') ? 400 : 700;
   if (colony.population < minPop && colony.alive){

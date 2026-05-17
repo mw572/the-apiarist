@@ -317,6 +317,17 @@ button { font-family: var(--sans); cursor: pointer; }
 .add-hive-slot:hover { background: rgba(255,255,255,0.34); }
 .add-hive-slot .plus { font-size: 30px; line-height: 1; }
 
+/* Bait hive slot — empty box waiting to catch a swarm */
+.bait-hive-slot {
+  width: 132px; min-height: 120px; border: 2px dashed rgba(180,140,60,0.7);
+  border-radius: 10px; display: flex; flex-direction: column; gap: 5px;
+  align-items: center; justify-content: center;
+  color: #5a4820; background: rgba(240,210,130,0.22); font-size: 12px;
+}
+.bait-hive-icon { font-size: 32px; line-height: 1; }
+.bait-hive-label { font-weight: 700; font-size: 13px; color: #5a4820; }
+.bait-hive-sub { font-size: 11px; color: #7a6030; text-align: center; padding: 0 6px; }
+
 /* advisor sidebar */
 .apiary-side {
   width: 326px; flex: none; background: var(--paper);
@@ -538,14 +549,14 @@ button { font-family: var(--sans); cursor: pointer; }
 .cross-frame.cf-has-qcell { border-color: #c02020; border-width: 1.5px; }
 
 /* Frame band colours — match cell type palette */
-.cf-band.cf-honey    { background: #e8a020; }
-.cf-band.cf-nectar   { background: #f0c33c; }
-.cf-band.cf-pollen   { background: #c87828; }
-.cf-band.cf-capped   { background: #c07a3a; }
-.cf-band.cf-larva    { background: #e8c87a; }
-.cf-band.cf-eggs     { background: #f3e7c2; }
-.cf-band.cf-drone    { background: #a87f44; }
-.cf-band.cf-empty    { background: #ead8a8; }
+.cf-band.cf-honey    { background: #d07010; }
+.cf-band.cf-nectar   { background: #f0c010; }
+.cf-band.cf-pollen   { background: #d04818; }
+.cf-band.cf-capped   { background: #b87840; }
+.cf-band.cf-larva    { background: #c8e8b0; }
+.cf-band.cf-eggs     { background: #f0ece0; }
+.cf-band.cf-drone    { background: #704828; }
+.cf-band.cf-empty    { background: #cfc4a4; }
 
 /* Queen / queen-cell marker dots on frame strip */
 .cf-queen-dot {
@@ -898,18 +909,36 @@ button { font-family: var(--sans); cursor: pointer; }
   clip-path: polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
   background: var(--wax);
 }
-.cell.empty   { background: #e9d5a3; }
+/* Cell type palette — maximally distinct.
+   Problem solved: separate hue for every category, patterns for lookalike pairs. */
+.cell.empty   { background: #cfc4a4; }
 .cell.found   { background: #c9aa6a; }
-.cell.eggs    { background: #f3e7c2; }
-.cell.larva   { background: #f6f0d8; }
-.cell.capbrood{ background: #c79a5c; }
-.cell.dronebr { background: #a87f44; }
-.cell.nectar  { background: #f0c33c; }
-.cell.honey   { background: #f6e2a0; }
-.cell.pollen  { background: #d98f3c; }
-.cell.qcell   { background: #d4ad62; }
-.cell.disease { background: #8a8a5a; }
-.cell.mite    { background: #b03f24; }
+/* Eggs: pale cream + fine dot grid (tiny eggs standing upright) */
+.cell.eggs    { background: #f0ece0;
+                background-image: radial-gradient(circle, #b8a880 1px, transparent 1px);
+                background-size: 4px 4px; }
+/* Larva: sage green — larvae float in pearlescent royal jelly, greenish tint */
+.cell.larva   { background: #c8e8b0; }
+/* Capped brood: warm brown cappings */
+.cell.capbrood{ background: #b87840; }
+/* Drone brood: darker brown + diagonal hatch to distinguish from capped worker */
+.cell.dronebr { background: #704828;
+                background-image: repeating-linear-gradient(45deg, transparent, transparent 2px,
+                                  rgba(255,255,255,0.18) 2px, rgba(255,255,255,0.18) 4px); }
+/* Nectar: bright yellow — fresh, watery */
+.cell.nectar  { background: #f0c010; }
+/* Honey: deep amber — fully ripened, darker and richer than nectar */
+.cell.honey   { background: #d07010; }
+/* Pollen: vivid orange-red — protein stores are distinctly coloured in the hive */
+.cell.pollen  { background: #d04818; }
+/* Queen cell: royal purple — unmistakable peanut, treat it as unmistakable in legend too */
+.cell.qcell   { background: #7850a0; }
+/* Disease: dark grey-olive + diagonal warning stripe */
+.cell.disease { background: #585848;
+                background-image: repeating-linear-gradient(-45deg, transparent, transparent 3px,
+                                  rgba(255,255,255,0.2) 3px, rgba(255,255,255,0.2) 4px); }
+/* Mite: bright scarlet */
+.cell.mite    { background: #c01828; }
 .comb-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 11px; }
 .comb-legend span { display: flex; align-items: center; gap: 4px; }
 .comb-legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }

@@ -310,6 +310,10 @@ function harvestColony(colony) {
   // show honey-filled supers after a harvest (the weekly sync would fix this
   // next tick, but we render() right after the harvest action).
   if (colony.hiveLayout) colony.hiveLayout.supers = [];
+  // QX serves no purpose with no supers — clear it.
+  colony.queenExcluder = false;
+  // Clearer board is consumed by the harvest — reset for the next cycle.
+  colony.clearerFitted = false;
 
   // Stats.
   Game.stats.honeyHarvested = _econ_roundPrice((Game.stats.honeyHarvested || 0) + kg);
