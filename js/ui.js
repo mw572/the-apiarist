@@ -1933,9 +1933,11 @@ function _ui_buildCrossFrames(frames, type, queenFrame, qcellFrame, colony) {
 /* Single frame strip — a narrow vertical slice coloured by content */
 function _ui_buildFrameStrip(frame, type, isQueenFrame, isQCellFrame) {
   var content = frame.content || { empty: 1 };
+  var isFoundation = (type === 'super' && frame.drawn === false);
   var cls = 'cross-frame'
     + (isQueenFrame ? ' cf-has-queen' : '')
-    + (isQCellFrame ? ' cf-has-qcell' : '');
+    + (isQCellFrame ? ' cf-has-qcell' : '')
+    + (isFoundation ? ' cf-foundation' : '');
   var strip = h('div', { class: cls });
 
   /* Bands rendered top→bottom in the strip */

@@ -592,6 +592,13 @@ button { font-family: var(--sans); cursor: pointer; }
 .cross-frame:hover { outline: 1.5px solid #7a5a28; z-index: 2; }
 .cross-frame.cf-has-queen { border-color: #b8880a; border-width: 1.5px; }
 .cross-frame.cf-has-qcell { border-color: #c02020; border-width: 1.5px; }
+.cross-frame.cf-foundation {
+  background: repeating-linear-gradient(
+    45deg, #f2ede0 0px, #f2ede0 2px, #e0d8c4 2px, #e0d8c4 4px
+  );
+  border-color: rgba(160,140,100,0.3);
+  opacity: 0.75;
+}
 
 /* Frame band colours — match cell type palette */
 .cf-band.cf-honey    { background: #d07010; }

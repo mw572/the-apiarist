@@ -255,6 +255,15 @@ function colonyWeeklyLayoutSync(colony) {
       sup.drawnFrames = Math.min(11, sup.drawnFrames + drawRate);
     }
 
+    /* Mark individual frames as drawn, working outward from centre.
+       Centre frames are warmest and drawn first — matches real bee behaviour. */
+    if (sup.frames && sup.frames.length === 11) {
+      var _drawOrder = [5,4,6,3,7,2,8,1,9,0,10];
+      for (var _di = 0; _di < 11; _di++) {
+        sup.frames[_drawOrder[_di]].drawn = (_di < Math.floor(sup.drawnFrames));
+      }
+    }
+
     /* Bottom super fills first; upper supers only start receiving once the
        lower one is >75% full. This matches how bees actually work upward. */
     var prevSuperFull = true;
@@ -1234,10 +1243,12 @@ function colonyWeeklyUpdate(colony, ctx){
     // cells may already be capped by the time the player discovers them.
     const weeksSinceInspect = week - (colony.lastInspected || 0);
     // startAge accounts for same-tick increment in section 11d:
-    //   Fresh (< 2 weeks): age -1 → tick makes 0 → larvae visible to player
-    //   Overdue (2 weeks): age 0  → tick makes 1 → capped, SWARM IMMINENT
-    //   Very overdue (3+): age 1  → tick makes 2 → swarm fires this tick (neglected)
-    const startAge = (weeksSinceInspect >= 3) ? 1 : (weeksSinceInspect >= 2 ? 0 : -1);
+    //   Fresh (< 1 week): age -1 → tick makes 0 → larvae visible, 2 weeks to act
+    //   Overdue (1 week): age 0  → tick makes 1 → cells capped on discovery, 1 week to act
+    //   Very overdue (2+): age 1  → tick makes 2 → swarm fires this tick
+    // The 7-day window has real teeth: miss one weekly inspection and cells are
+    // already capped when you find them — one week left before the swarm issues.
+    const startAge = (weeksSinceInspect >= 2) ? 1 : (weeksSinceInspect >= 1 ? 0 : -1);
     colony.queenCells = {
       type:  'swarm',
       count: 5 + _colony_randInt(0, 15),   // 5-20 cells (realistic range)
