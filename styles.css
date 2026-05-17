@@ -781,6 +781,13 @@ button { font-family: var(--sans); cursor: pointer; }
   border-color: #7a5a10;
 }
 
+/* Post-swarm cells: muted orange-grey — old queen gone, virgin present */
+.cross-qcell-peanut.qc-post-swarm {
+  background: radial-gradient(ellipse 60% 100% at 50% 80%, #c09050 60%, #806030 100%);
+  border-color: #604818;
+  opacity: 0.8;
+}
+
 /* ====================================================================
    BUG H FIX — Dead colony cross-section state
    ==================================================================== */

@@ -814,22 +814,24 @@ function _ui_buildHiveCard(colony) {
   var badgeGlyph = '';
   var badgeCls = '';
   if (colony.alive) {
-    /* Priority 1: swarm cells or disease warning */
+    /* Single priority chain — first match wins */
     if (known && known.queenCells && known.queenCells !== 'none') {
+      /* P1a: fog-of-war: player saw queen cells last inspection */
       showBadge = true; badgeGlyph = '⚠️'; badgeCls = 'badge-warn';
     } else if (known && known.disease) {
+      /* P1b: disease observed */
       showBadge = true; badgeGlyph = '🔴'; badgeCls = 'badge-bad';
-    }
-    /* Priority 2: cells capped = swarm IMMINENT */
-    if (colony.queenCells && colony.queenCells.type === 'swarm' && colony.queenCells.state === 'capped') {
+    } else if (colony.queenCells && colony.queenCells.type === 'swarm' && colony.queenCells.state === 'capped') {
+      /* P2: swarm cells capped — IMMINENT */
       showBadge = true; badgeGlyph = '🚨'; badgeCls = 'badge-imminent';
-    }
-    /* Priority 3: demaree active — needs check */
-    if (colony.demaree && !colony.demaree.checked && colony.demaree.age >= 1) {
+    } else if (colony.queenCells && colony.queenCells.type === 'postSwarm' && colony.queenCells.state !== 'emerged') {
+      /* P2b: post-swarm — old queen gone, virgin in hive */
+      showBadge = true; badgeGlyph = '🐝'; badgeCls = 'badge-warn';
+    } else if (colony.demaree && !colony.demaree.checked && colony.demaree.age >= 1) {
+      /* P3: demaree needs checking */
       showBadge = true; badgeGlyph = '🔄'; badgeCls = 'badge-warn';
-    }
-    /* Priority 4: OSR crystallisation risk */
-    if (colony.osrCrystallised) {
+    } else if (colony.osrCrystallised) {
+      /* P4: OSR crystallisation risk */
       showBadge = true; badgeGlyph = '🍯'; badgeCls = 'badge-bad';
     }
   }
@@ -1801,6 +1803,7 @@ function _ui_buildHiveCross(colony) {
         var pCls = 'cross-qcell-peanut'
           + (qcState === 'capped'   ? ' qc-capped' : '')
           + (qcType  === 'swarm'    ? ' qc-swarm'  : '')
+          + (qcType  === 'postSwarm' ? ' qc-post-swarm' : '')
           + (qcType  === 'supersedure' || qcType === 'emergency' ? ' qc-super' : '');
         var pCount = Math.min(qcCount, 5);
         for (var pi = 0; pi < pCount; pi++) {
@@ -1875,9 +1878,11 @@ function _ui_buildHiveCross(colony) {
   /* --- Queen cells meta line ---------------------------------------- */
   var qcMeta = null;
   if (hasQCells) {
-    var qcDesc = qcCount + ' ' + qcType + ' cell' + (qcCount !== 1 ? 's' : '') + ' — ' + qcState;
+    var qcTypeLabel = { swarm: 'swarm', postSwarm: 'post-swarm', emergency: 'emergency', supersedure: 'supersedure' }[qcType] || qcType;
+    var qcDesc = qcCount + ' ' + qcTypeLabel + ' cell' + (qcCount !== 1 ? 's' : '') + ' — ' + qcState;
     if (isImminent) qcDesc += ' — SWARM IMMINENT';
-    var qcMetaCls = 'cross-qc-meta' + (isImminent ? ' qc-urgent' : '');
+    if (qcType === 'postSwarm') qcDesc += ' — old queen departed; virgin present';
+    var qcMetaCls = 'cross-qc-meta' + (isImminent ? ' qc-urgent' : '') + (qcType === 'postSwarm' ? ' qc-urgent' : '');
     qcMeta = h('div', { class: qcMetaCls }, qcDesc);
   }
 
@@ -2081,11 +2086,11 @@ function _ui_openBoxDetail(colony, boxType, boxIdx) {
       var synFrame = {
         cells:         _ui_contentToCells(fr.content),
         hasQueen:      isQFr,
-        queenCellType: colony.queenCells.type,
+        queenCellType: (colony.queenCells && colony.queenCells.type) || 'none',
         label:         frLbl
       };
       if (!isQCFr) synFrame.cells.qcell = 0;
-      else synFrame.cells.qcell = Math.min(colony.queenCells.count || 0, 4);
+      else synFrame.cells.qcell = Math.min((colony.queenCells && colony.queenCells.count) || 0, 4);
       detailLeft = h('div', { class: 'fm-comb-col' }, [
         _ui_buildComb(synFrame)
       ]);
@@ -2225,10 +2230,12 @@ function _ui_buildKnownSummary(known) {
   rows.push(row('Queen', qv, qt, qe));
 
   var qc = known.queenCells || 'none';
-  rows.push(row('Queen cells', qc === 'none' ? 'None' : cap(qc),
-    qc === 'swarm' ? 'bad' : qc === 'none' ? 'good' : 'warn',
+  var qcLabel = { swarm: 'Swarm cells', postSwarm: 'Post-swarm cells', emergency: 'Emergency cells', supersedure: 'Supersedure cells' }[qc] || (qc === 'none' ? 'None' : cap(qc));
+  rows.push(row('Queen cells', qcLabel,
+    qc === 'swarm' || qc === 'postSwarm' ? 'bad' : qc === 'none' ? 'good' : 'warn',
     qc === 'none' ? 'No swarm preparations under way.'
       : qc === 'swarm' ? 'The colony means to swarm — take swarm-control action now.'
+      : qc === 'postSwarm' ? 'The old queen has left with the swarm. A virgin is present and should mate within a week or two — leave well alone unless she fails.'
       : qc === 'supersedure' ? 'The colony is quietly replacing its own queen — usually best left to it.'
       : 'Emergency cells — the colony lost its queen and is raising a new one.'));
 
@@ -2370,7 +2377,9 @@ function _ui_buildActionButtons(colony) {
       abtn('Artificial swarm', '', 'artificialSwarm', dead, 'This colony has died'),
       abtn('Nucleus method', '', 'nucleusMethod', dead, 'This colony has died'),
       abtn('Split colony', '', 'split', dead, 'This colony has died'),
-      abtn('Remove queen cells', '', 'removeQueenCells', dead, 'This colony has died'),
+      abtn('Remove queen cells', '', 'removeQueenCells',
+        dead || (!!(colony.queenCells && colony.queenCells.type === 'emergency' && (!colony.queen || !colony.queen.present))),
+        dead ? 'This colony has died' : 'Cannot remove emergency cells — they are raising the only queen this colony has'),
       abtn('Clip queen', '', 'clipQueen', dead || !(colony.queen && colony.queen.present),
         'No queen present to clip'),
       abtn('Demaree method', '', 'demareeMethod',
@@ -3211,10 +3220,17 @@ function _ui_inspectionAdvice(colony, report) {
     out.push({ action: 'artificialSwarm',
       text: 'Swarm cells are present — carry out swarm control now, before the colony leaves with half its bees.' });
   }
-  if (!colony.queen || !colony.queen.present ||
-      (colony.queen && colony.queen.state === 'dronelayer') || colony.layingWorkers) {
+  var virgInSitu = colony.queenCells &&
+    (colony.queenCells.type === 'postSwarm' || colony.queenCells.type === 'emergency') &&
+    colony.queenCells.state !== 'emerged';
+  if (!virgInSitu && (!colony.queen || !colony.queen.present ||
+      (colony.queen && colony.queen.state === 'dronelayer') || colony.layingWorkers)) {
     out.push({ action: 'requeen',
       text: 'The colony has a serious queen problem — requeen it, or unite it with a strong colony.' });
+  }
+  if (virgInSitu && (!colony.queen || !colony.queen.present)) {
+    out.push({ action: null,
+      text: 'No mated queen yet, but virgin cells are present — give her time to emerge and mate before intervening.' });
   }
   if (k.stores === 'critical' || k.stores === 'low') {
     out.push({ action: 'feed',
