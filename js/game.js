@@ -423,6 +423,65 @@ function mentorLine(){
   return null;
 }
 
+/* --- Enterprise Value ----------------------------------------------- */
+/* Total business value: cash + honey + colonies + equipment at 50% book. */
+
+function enterpriseValue(){
+  if (!Game) return 0;
+  var KG_PER_JAR = 0.34;
+  var ev = Game.cash;
+
+  // Bottled honey jars in stock (at market price 1.18×)
+  var jars = Game.inventory.jars || {};
+  Object.keys(jars).forEach(function(type){
+    var n = jars[type] || 0;
+    var ht = HONEY_TYPES[type];
+    if (n > 0 && ht) ev += n * ht.value * 1.18;
+  });
+
+  // Bulk honey in inventory (at gate price — not yet bottled)
+  var honey = Game.inventory.honey || {};
+  Object.keys(honey).forEach(function(type){
+    var kg = honey[type] || 0;
+    var ht = HONEY_TYPES[type];
+    if (kg > 0 && ht) {
+      var yieldFactor = type === 'heather' ? 0.70 : 1.0;
+      ev += Math.floor(kg * yieldFactor / KG_PER_JAR) * ht.value;
+    }
+  });
+
+  // Honey still in supers on hive (extractable value)
+  var alive = Game.colonies.filter(function(c){ return c.alive; });
+  alive.forEach(function(c){
+    if ((c.superHoney || 0) > 0 && c.superHoneyType) {
+      var ht = HONEY_TYPES[c.superHoneyType];
+      if (ht) {
+        var yf = c.superHoneyType === 'heather' ? 0.70 : 1.0;
+        ev += Math.floor(c.superHoney * yf / KG_PER_JAR) * ht.value * 0.8; // 80% — not yet harvested
+      }
+    }
+  });
+
+  // Colony value (each alive colony ~ nuc purchase price, scaled by population)
+  alive.forEach(function(c){
+    var nucVal = 130; // current nuc price
+    var sizeFactor = Math.min(1.5, Math.max(0.4, (c.population || 5000) / 15000));
+    ev += Math.round(nucVal * sizeFactor);
+  });
+
+  // Equipment at 50% second-hand value
+  ev += (Game.inventory.spareHives || 0) * 55;          // hives @ 50% of £110
+  ev += (Game.inventory.supers || 0) * 22;              // supers @ 50% of £44
+  ev += (Game.inventory.broodBoxes || 0) * 26;          // brood boxes @ 50%
+  ev += (Game.inventory.queenExcluders || 0) * 4;       // QXs @ 50% of £9
+  var tools = Game.inventory.tools || {};
+  if (tools.extractor)    ev += 40;  // extractor @ 50% of £80
+  if (tools.settlingTank) ev += 22;  // settling tank @ 50%
+  if (tools.refractometer) ev += 11;
+
+  return Math.round(ev);
+}
+
 /* --- init ------------------------------------------------------------ */
 
 function init(){

@@ -545,6 +545,10 @@ function _ui_buildTopbar() {
       h('b', { text: fmtMoney(Game.cash) }),
       h('small', { text: 'Cash' })
     ]),
+    h('div', { class: 'topbar-stat ev', title: 'Cash + honey + colonies + equipment at book value' }, [
+      h('b', { text: fmtMoney(typeof enterpriseValue === 'function' ? enterpriseValue() : 0) }),
+      h('small', { text: 'Business value' })
+    ]),
     h('div', { class: 'topbar-stat' }, [
       h('b', { text: titleName }),
       h('small', { text: 'Skill level ' + sl })
