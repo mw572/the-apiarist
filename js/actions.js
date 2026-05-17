@@ -744,9 +744,10 @@ function removeSuper(colony) {
 function addBroodBox(colony) {
   if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
   if (colony.broodBoxes >= 2) return { ok: false, msg: 'Two brood boxes is the maximum.' };
-  if (!spend(COSTS.broodBoxAdd, `Second brood box for ${colony.name}`)) {
-    return { ok: false, msg: `Not enough funds — a brood box costs £${COSTS.broodBoxAdd.toFixed(2)}.` };
+  if ((Game.inventory.broodBoxes || 0) < 1) {
+    return { ok: false, msg: 'No brood boxes in stock — buy one from the Market (Supplies tab) first. They cost £' + COSTS.broodBoxAdd + ' each.' };
   }
+  Game.inventory.broodBoxes--;
   colony.broodBoxes = 2;
   if (colony.hiveLayout) {
     if (!colony.hiveLayout.broodBoxes) colony.hiveLayout.broodBoxes = [];
@@ -760,7 +761,7 @@ function addBroodBox(colony) {
     }
     colony.stack.splice(_lastBBIdx2 >= 0 ? _lastBBIdx2 + 1 : colony.stack.length, 0, { type: 'broodBox', id: 'bb' + Date.now() });
   }
-  const msg = `Second brood box added to ${colony.name} (£${COSTS.broodBoxAdd.toFixed(2)}). The queen now has more room to lay.`;
+  const msg = `Second brood box fitted to ${colony.name}. The queen now has more room to lay.`;
   logEvent('🪵', msg, 'good');
   render();
   return { ok: true, msg };
@@ -894,10 +895,10 @@ function demareeMethod(colony) {
     return { ok: false, msg: 'You need to confirm the queen is present before a Demaree — inspect the hive and find her (or see fresh eggs proving she is laying).' };
   }
 
-  const boxCost = 35;
-  if (!spend(boxCost, `Spare brood box for Demaree on ${colony.name}`)) {
-    return { ok: false, msg: `Not enough funds — a spare brood box costs £${boxCost}.` };
+  if ((Game.inventory.broodBoxes || 0) < 1) {
+    return { ok: false, msg: 'No brood boxes in stock — buy one from the Market (Supplies tab) first. They cost £' + COSTS.broodBoxAdd + ' each.' };
   }
+  Game.inventory.broodBoxes--;
 
   /* Set up the Demaree state */
   colony.demaree = { age: 0, checked: false, topBroodFrames: 8 };
@@ -1712,11 +1713,12 @@ function uniteColonies(weak, strong) {
   if ((weak.supers || 0) > 0) {
     const rescuedHoney = weak.superHoney || 0;
     if (rescuedHoney > 0) {
-      Game.inventory.honey = (Game.inventory.honey || 0) + rescuedHoney;
+      if (!Game.inventory.honey || typeof Game.inventory.honey !== 'object') Game.inventory.honey = {};
+      var _honeyType = weak.superHoneyType || 'summer';
+      Game.inventory.honey[_honeyType] = (Game.inventory.honey[_honeyType] || 0) + rescuedHoney;
       Game.stats.honeyHarvested = (Game.stats.honeyHarvested || 0) + rescuedHoney;
     }
-    if (!Game.inventory.spareHives) Game.inventory.spareHives = 0;
-    Game.inventory.spareHives += weak.supers;
+    Game.inventory.supers = (Game.inventory.supers || 0) + weak.supers;
     weak.supers = 0;
     weak.superHoney = 0;
     if (weak.hiveLayout) weak.hiveLayout.supers = [];

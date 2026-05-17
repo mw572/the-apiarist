@@ -91,6 +91,7 @@ function startNewGame(name, difficulty){
       sugar: 10,
       emptyJars: 0,
       treatStock: {},
+      broodBoxes: 0,       // extra brood boxes in stock (bought from Market → Supplies)
       supers: 0,           // super boxes in stock (bought from Market → Supplies)
       queenExcluders: 0,   // physical QX items in stock (bought from Market → Supplies)
       newspaper: 0,        // sheets of newspaper for the uniting method
@@ -190,6 +191,7 @@ function _migrateSave(g) {
 
   /* Inventory fields added with hive assembly mechanic */
   if (g.inventory) {
+    if (typeof g.inventory.broodBoxes !== 'number')    g.inventory.broodBoxes = 0;
     if (typeof g.inventory.supers !== 'number')        g.inventory.supers = 0;
     if (typeof g.inventory.queenExcluders !== 'number') g.inventory.queenExcluders = 0;
     if (typeof g.inventory.newspaper !== 'number')      g.inventory.newspaper = 0;

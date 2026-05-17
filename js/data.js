@@ -377,6 +377,8 @@ CATALOG.supplies = [
   { id:'jarpack', name:'Jars — pack of 24', icon:'🪧',
     price: Math.round(24 * COSTS.jar * 100) / 100, count: 24,
     desc:'Empty jars with lids and labels, ready for bottling your honey crop.' },
+  { id:'broodBox', name:'Brood box (with frames)', icon:'🪵', price: 52,
+    desc:'A full-depth National brood box fitted with 11 frames of foundation. Required to add a second brood box or run a Demaree. Buy before use.' },
   { id:'super', name:'Super (honey box)', icon:'📦', price: 44,
     desc:'A shallower box of frames that sits above the queen excluder for the bees to store surplus honey. Buy one before adding it to a hive.' },
   { id:'queenExcluder', name:'Queen excluder', icon:'🔲', price: 9,

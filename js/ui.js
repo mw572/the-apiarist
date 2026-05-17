@@ -2587,8 +2587,11 @@ function _ui_buildActionButtons(colony) {
       abtn('Take box off', '', 'removeSuper',
         dead || (colony.supers || 0) === 0 || _ui_topSuperHoney(colony) >= 0.5,
         dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers to remove' : 'Top super still has honey — harvest it first'),
-      abtn('Add brood box', '', 'addBroodBox', dead || colony.broodBoxes >= 2,
-        dead ? 'This colony has died' : 'Already on double brood'),
+      abtn('Add brood box', '', 'addBroodBox',
+        dead || colony.broodBoxes >= 2 || (Game.inventory.broodBoxes || 0) < 1,
+        dead ? 'This colony has died'
+             : colony.broodBoxes >= 2 ? 'Already on double brood'
+             : 'No brood boxes in stock — buy from Market → Supplies'),
       abtn('Entrance', '', 'entrance', dead, 'This colony has died'),
       abtn('Monitor varroa', '', 'monitorVarroa', dead, 'This colony has died'),
       abtn('Heft colony', '', 'heftColony', dead, 'This colony has died'),
@@ -2611,8 +2614,10 @@ function _ui_buildActionButtons(colony) {
       abtn('Clip queen', '', 'clipQueen', dead || !(colony.queen && colony.queen.present),
         'No queen present to clip'),
       abtn('Demaree method', '', 'demareeMethod',
-        dead || !!colony.demaree,
-        dead ? 'This colony has died' : 'Demaree already in progress'),
+        dead || !!colony.demaree || (Game.inventory.broodBoxes || 0) < 1,
+        dead ? 'This colony has died'
+             : colony.demaree ? 'Demaree already in progress'
+             : 'No brood boxes in stock — buy from Market → Supplies'),
       colony.demaree && !colony.demaree.checked
         ? abtn('Demaree check', colony.demaree.age >= 1 ? 'btn-danger' : '', 'demareeCheck', dead, 'This colony has died')
         : null
@@ -2859,7 +2864,13 @@ function _ui_actionCost(key, colony) {
       note: npOwned ? 'Using newspaper from your stock.'
                     : '£1 for a sheet of newspaper. Placed between the two brood boxes for a slow unite.' };
   }
-  if (key === 'addBroodBox') return { amount: COSTS.broodBoxAdd, note: 'A second brood box with a full set of frames.' };
+  if (key === 'addBroodBox') {
+    var _bbOwned = (Game.inventory && Game.inventory.broodBoxes) || 0;
+    if (_bbOwned > 0) {
+      return { amount: 0, note: 'Using a brood box from your stock (' + _bbOwned + ' available). Gives the queen more laying space.' };
+    }
+    return { amount: null, note: 'No brood boxes in stock — buy one from the Market (Supplies tab) first. They cost £' + COSTS.broodBoxAdd + ' each.' };
+  }
   if (key === 'requeen') {
     var qp = (CATALOG.bees.filter(function(b) { return b.id === 'matedqueen'; })[0] || {}).price || 42;
     return { amount: qp, note: 'A mated queen of known stock, posted to you in a cage.' };
@@ -2904,7 +2915,13 @@ function _ui_actionCost(key, colony) {
     var cbCost = !(Game.inventory && Game.inventory.tools && Game.inventory.tools.clearerBoard) ? 8 : 0;
     return { amount: cbCost, note: cbCost ? 'Hire a clearer board for one night (£8). Fit it this evening and harvest tomorrow morning.' : 'You own a clearer board — fit it tonight and harvest tomorrow.' };
   }
-  if (key === 'demareeMethod') return { amount: 35, note: 'Uses a spare brood box (£35). The colony stays intact and no hive is used for a new colony.' };
+  if (key === 'demareeMethod') {
+    var _demareebbOwned = (Game.inventory && Game.inventory.broodBoxes) || 0;
+    if (_demareebbOwned > 0) {
+      return { amount: 0, note: 'Uses a brood box from your stock (' + _demareebbOwned + ' available). The colony stays intact — no hive used for a new colony.' };
+    }
+    return { amount: null, note: 'No brood boxes in stock — buy one from the Market (Supplies tab) first. They cost £' + COSTS.broodBoxAdd + ' each.' };
+  }
   if (key === 'demareeCheck') return { amount: 0, note: 'Free — just open the top box and destroy the emergency cells.' };
   if (key === 'moveHive') return { amount: typeof COSTS !== 'undefined' ? COSTS.movehive : 25, note: 'Transport and strapping. Foragers may return to the old site — expect a short-term drop in numbers.' };
   if (key === 'rearQueens') return { amount: 0, note: 'Free, but needs a strong colony (18,000+ bees) and skill level 5 or above.' };

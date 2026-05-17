@@ -102,6 +102,17 @@ function buySupply(id, qty) {
     return { ok: true, msg: 'You have ' + Game.inventory.supers + ' super' + (Game.inventory.supers !== 1 ? 's' : '') + ' in stock.' };
   }
 
+  if (id === 'broodBox') {
+    var cost = COSTS.broodBoxAdd * qty;
+    if (!spend(cost, qty + ' brood box' + (qty > 1 ? 'es' : '') + ' (with frames)')) {
+      return { ok: false, msg: 'Not enough funds. A brood box costs £' + COSTS.broodBoxAdd + ' each.' };
+    }
+    Game.inventory.broodBoxes = (Game.inventory.broodBoxes || 0) + qty;
+    logEvent('🪵', 'Bought ' + qty + ' brood box' + (qty > 1 ? 'es' : '') + ' for £' + cost + '.', 'plain');
+    toast(qty + ' brood box' + (qty > 1 ? 'es' : '') + ' added to stock.', 'good');
+    return { ok: true, msg: 'You have ' + Game.inventory.broodBoxes + ' brood box' + (Game.inventory.broodBoxes !== 1 ? 'es' : '') + ' in stock.' };
+  }
+
   if (id === 'queenExcluder') {
     var cost = COSTS.queenExcluder * qty;
     if (!spend(cost, qty + ' queen excluder' + (qty > 1 ? 's' : ''))) {
