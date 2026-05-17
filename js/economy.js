@@ -276,6 +276,18 @@ function harvestColony(colony) {
     msgs.push('Some frames may have unripe honey at the height of the flow — check moisture before bottling.');
   }
 
+  // OSR crystallisation: FIX (Issue C) — harvestColony had no crystallisation
+  // check at all. If the beekeeper bulk-harvests after OSR honey has set in
+  // the comb, most of it is lost. The per-super harvestSuperAt() already had
+  // this check; harvestColony() now mirrors it.
+  if (colony.osrCrystallised && type === 'oilseed') {
+    var crystalLoss = _econ_roundPrice(kg * 0.70);
+    kg = _econ_roundPrice(kg - crystalLoss);
+    msgs.push('The OSR honey had crystallised in the comb — most could not be extracted by centrifuge (' + crystalLoss.toFixed(1) + ' kg lost). Extract OSR honey within two weeks of the flow ending, before it sets.');
+    colony.osrCrystallised = false;
+    colony.osrRisk = 0;
+  }
+
   // No clearer board: messier harvest, lose ~8%.
   if (!Game.inventory.tools.clearerBoard) {
     var loss = _econ_roundPrice(kg * 0.08);
@@ -294,6 +306,10 @@ function harvestColony(colony) {
   // Reset the colony — all supers come off together for extraction.
   colony.superHoney = 0;
   colony.supers = 0;
+  // Keep hiveLayout in sync immediately so the frame cross-section does not
+  // show honey-filled supers after a harvest (the weekly sync would fix this
+  // next tick, but we render() right after the harvest action).
+  if (colony.hiveLayout) colony.hiveLayout.supers = [];
 
   // Stats.
   Game.stats.honeyHarvested = _econ_roundPrice((Game.stats.honeyHarvested || 0) + kg);
@@ -310,14 +326,15 @@ function harvestColony(colony) {
 
 /* ---- harvestSuperAt(colony, superIdx) -------------------------------- */
 /*
- * Harvests a single super by index. Removes it from the colony and layout.
+ * Harvests honey from a single super by index. The super BOX stays on the
+ * hive with empty drawn comb — bees can refill it next flow.
+ * To physically remove the box, use removeEmptySuper() afterwards.
  * Returns {ok, msg, kg, type}
  */
 function harvestSuperAt(colony, superIdx) {
   if (!colony || !colony.alive) return { ok: false, msg: 'Colony is not alive.', kg: 0 };
   if (colony.supers < 1) return { ok: false, msg: 'No supers on this hive.', kg: 0 };
 
-  /* Get per-super honey from layout if available, else divide evenly */
   var layout = colony.hiveLayout;
   var superKg = 0;
   var type = colony.superHoneyType || 'summer';
@@ -332,9 +349,9 @@ function harvestSuperAt(colony, superIdx) {
   var msgs = [];
 
   if (superKg < 0.5) {
-    /* Nearly empty — just take it off, nothing worth extracting */
-    _colony_removeSuperAt(colony, superIdx);
-    var emptyMsg = 'Super removed from ' + colony.name + ' — barely anything in it, left for the bees.';
+    /* Nearly empty — nothing worth extracting, but box stays on hive */
+    _colony_emptySuperAt(colony, superIdx);
+    var emptyMsg = 'Super ' + (superIdx + 1) + ' on ' + colony.name + ' had barely anything in it — left for the bees to clean up. The box stays on the hive.';
     logEvent('📦', emptyMsg, 'plain');
     return { ok: true, msg: emptyMsg, kg: 0, type: null };
   }
@@ -347,7 +364,7 @@ function harvestSuperAt(colony, superIdx) {
   if (isHeightOfFlow) msgs.push('Some frames may have unripe honey — check moisture before bottling.');
 
   /* OSR crystallisation: frames mostly ruined if left too long */
-  if (colony.osrCrystallised && type === 'osr') {
+  if (colony.osrCrystallised && type === 'oilseed') {
     var crystalLoss = _econ_roundPrice(kg * 0.70);
     kg = _econ_roundPrice(kg - crystalLoss);
     msgs.push('The OSR honey had partially crystallised in the comb — most could not be extracted (' + crystalLoss.toFixed(1) + ' kg lost).');
@@ -355,15 +372,14 @@ function harvestSuperAt(colony, superIdx) {
     colony.osrRisk = 0;
   }
 
-  /* Clearer board: use colony.clearerFitted flag (set by fitClearerBoard action)
-     OR the global tool. If neither, pay the brushing loss. */
+  /* Clearer board */
   var hasClearer = colony.clearerFitted || (Game.inventory.tools && Game.inventory.tools.clearerBoard);
   if (!hasClearer) {
     var loss = _econ_roundPrice(kg * 0.08);
     kg = _econ_roundPrice(kg - loss);
     msgs.push('Without a clearer board you had to brush bees off, losing ' + loss.toFixed(2) + ' kg.');
   }
-  colony.clearerFitted = false;  /* Reset — one-shot per harvest */
+  colony.clearerFitted = false;
 
   /* Cappings wax */
   Game.inventory.wax = _econ_roundPrice((Game.inventory.wax || 0) + _econ_roundPrice(kg * 0.013));
@@ -376,11 +392,11 @@ function harvestSuperAt(colony, superIdx) {
   Game.stats.honeyHarvested = _econ_roundPrice((Game.stats.honeyHarvested || 0) + kg);
   colony.productionThisYear = _econ_roundPrice((colony.productionThisYear || 0) + kg);
 
-  /* Remove this super */
-  _colony_removeSuperAt(colony, superIdx);
+  /* Empty the super frames but KEEP the box on the hive */
+  _colony_emptySuperAt(colony, superIdx);
 
   var honeyName = (HONEY_TYPES[type] && HONEY_TYPES[type].name) ? HONEY_TYPES[type].name : type;
-  var baseMsg = 'Harvested ' + kg.toFixed(1) + ' kg of ' + honeyName + ' from ' + colony.name + '.';
+  var baseMsg = 'Harvested ' + kg.toFixed(1) + ' kg of ' + honeyName + ' from super ' + (superIdx + 1) + ' on ' + colony.name + '. The empty box is left on the hive — remove it when ready or leave for the next flow.';
   if (msgs.length) baseMsg += ' ' + msgs.join(' ');
 
   logEvent('🍯', baseMsg, 'good');
@@ -388,9 +404,39 @@ function harvestSuperAt(colony, superIdx) {
   return { ok: true, msg: baseMsg, kg: kg, type: type };
 }
 
+/* ---- _colony_emptySuperAt(colony, idx) ------------------------------- */
+/* Zeroes the honey in a super's frames without removing the box.
+   The drawn comb stays — bees can refill it next flow. */
+function _colony_emptySuperAt(colony, idx) {
+  var layout = colony.hiveLayout;
+  var removedKg = 0;
+
+  if (layout && layout.supers && layout.supers[idx]) {
+    var sup = layout.supers[idx];
+    removedKg = sup.honeyKg || 0;
+    sup.honeyKg = 0;
+    sup.honeyType = 'summer'; /* reset type ready for next flow */
+    /* Empty all frames but mark them as drawn (comb remains) */
+    if (sup.frames) {
+      sup.frames.forEach(function(f) {
+        f.content = { honey: 0, nectar: 0, empty: 1, eggs: 0, larvae: 0, capped: 0, pollen: 0, drone: 0 };
+        f.drawn = true; /* drawn comb persists after harvest */
+        f.crystallised = false;
+      });
+    }
+    sup.drawnFrames = 11; /* All comb drawn after a harvest */
+  } else {
+    removedKg = colony.supers > 0 ? colony.superHoney / colony.supers : 0;
+  }
+
+  colony.superHoney = Math.max(0, _econ_roundPrice((colony.superHoney || 0) - removedKg));
+  if (colony.superHoney < 0.01) colony.superHoney = 0;
+}
+
 /* ---- _colony_removeSuperAt(colony, idx) ------------------------------ */
+/* Physically removes a super box from the hive. Used by removeEmptySuper().
+   Only call this when actually taking the box off — not on harvest. */
 function _colony_removeSuperAt(colony, idx) {
-  /* Update per-super honey in aggregate */
   var removedKg = 0;
   if (colony.hiveLayout && colony.hiveLayout.supers && colony.hiveLayout.supers[idx]) {
     removedKg = colony.hiveLayout.supers[idx].honeyKg || 0;
@@ -400,7 +446,10 @@ function _colony_removeSuperAt(colony, idx) {
   }
   colony.superHoney = Math.max(0, _econ_roundPrice((colony.superHoney || 0) - removedKg));
   colony.supers = Math.max(0, (colony.supers || 1) - 1);
-  if (colony.supers === 0) colony.superHoney = 0;
+  if (colony.supers === 0) {
+    colony.superHoney = 0;
+    colony.queenExcluder = false; /* QX has no function with no supers */
+  }
 }
 
 /* ---- extractAndBottle(honeyType, jarCount) -------------------------- */

@@ -144,12 +144,12 @@ const FORAGE = {
   nectar: [
     0,0,0,0,0,0.02,0.04,0.06,0.10,            // wk 1-9   Jan-early Mar
     0.16,0.24,0.34,0.45,                      // wk 10-13 mid Mar-early Apr
-    0.62,0.74,0.83,0.85,0.80,0.66,0.50,       // wk 14-20 Apr-mid May (spring peak)
-    0.36,0.28,0.30,0.40,                      // wk 21-24 June gap
-    0.56,0.70,0.82,0.88,0.85,0.78,0.66,0.54,  // wk 25-32 summer flow
-    0.46,0.40,0.36,0.30,0.24,                 // wk 33-37 late summer
-    0.22,0.18,0.14,0.10,0.06,                 // wk 38-42 ivy fading
-    0.03,0.02,0,0,0,0,0,0,0,0,                // wk 43-52 Nov-Dec
+    0.62,0.74,0.83,0.85,0.80,0.66,0.50,       // wk 14-20 Apr-mid May (OSR/spring peak)
+    0.22,0.14,0.16,0.24,                      // wk 21-24 June gap — clover barely started
+    0.50,0.68,0.82,0.88,0.85,0.78,0.66,0.54,  // wk 25-32 summer flow (lime/clover/bramble)
+    0.46,0.40,0.36,0.42,0.50,                 // wk 33-37 late summer; ivy builds wk 36-37
+    0.56,0.52,0.38,0.20,0.10,                 // wk 38-42 ivy peak wk 38-39, fading Oct
+    0.04,0.02,0,0,0,0,0,0,0,0,                // wk 43-52 Nov-Dec
   ],
   pollen: [
     0,0,0,0.02,0.05,0.10,0.16,0.22,0.30,      // wk 1-9

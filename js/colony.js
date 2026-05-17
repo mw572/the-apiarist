@@ -101,9 +101,10 @@ function _colony_makeLayoutBox(type) {
 
 function _colony_makeLayoutSuper() {
   return {
-    frames:      _colony_makeFrames(11, false, 0),
-    honeyKg:     0,
-    honeyType:   'summer',
+    frames:       _colony_makeFrames(11, false, 0),
+    honeyKg:      0,
+    honeyType:    'summer',
+    drawnFrames:  0,   /* undrawn foundation — bees must draw comb before filling */
     clearerBoard: false
   };
 }
@@ -246,6 +247,14 @@ function colonyWeeklyLayoutSync(colony) {
   var cap = SIM.honeyPerSuper;
 
   layout.supers.forEach(function(sup, si) {
+    /* Advance comb drawing: bees draw ~1 frame per 5,000 bees per week,
+       capped at 11 (a full super). Only progresses while the colony is active. */
+    if (sup.drawnFrames === undefined) sup.drawnFrames = 0;
+    if (sup.drawnFrames < 11) {
+      var drawRate = Math.floor((colony.population || 0) / 5000);
+      sup.drawnFrames = Math.min(11, sup.drawnFrames + drawRate);
+    }
+
     /* Bottom super fills first; upper supers only start receiving once the
        lower one is >75% full. This matches how bees actually work upward. */
     var prevSuperFull = true;
@@ -253,11 +262,22 @@ function colonyWeeklyLayoutSync(colony) {
       if ((layout.supers[pi].honeyKg || 0) < cap * 0.75) { prevSuperFull = false; break; }
     }
 
-    var thisCap = prevSuperFull ? cap : cap * 0.20;  // upper supers get very little until lower is 75%+
+    /* Honey can only go into drawn comb — scale capacity by drawn fraction */
+    var drawnFrac = Math.min(1, (sup.drawnFrames || 0) / 11);
+    var thisCap = prevSuperFull ? cap * drawnFrac : cap * 0.20 * drawnFrac;
     sup.honeyKg   = Math.min(thisCap, remaining);
     remaining     = Math.max(0, remaining - sup.honeyKg);
-    sup.honeyType = colony.superHoneyType || 'summer';
-    sup.osr       = colony.osrCrystallised && colony.superHoneyType === 'osr';
+    /* Lock honey type: set when honey first arrives, locked after that.
+       FIX: old code set type when honeyKg===0 (wrong — that's the empty state).
+       Correct logic: if the super currently has honey, preserve existing type.
+       If it was empty (tracked via _prevHoneyKg) and honey is now flowing in,
+       stamp it with the current flow type. This ensures OSR honey gets tagged
+       'oilseed' on the first week of fill, not left as the 'summer' default. */
+    if ((sup._prevHoneyKg || 0) === 0 && sup.honeyKg > 0) {
+      sup.honeyType = colony.superHoneyType || 'summer';
+    }
+    sup._prevHoneyKg = sup.honeyKg;
+    sup.osr       = colony.osrCrystallised && colony.superHoneyType === 'oilseed';
 
     var fillFrac = sup.honeyKg / cap;
 
@@ -393,6 +413,7 @@ function makeColony(opts){
     honey:         honey,
     superHoney:    superHoney,
     superHoneyType: 'summer',
+    broodHoneyType:  'summer',  // tracks dominant nectar type stored in brood box
     pollen:        pollen,
 
     varroa:  varroa,
@@ -416,14 +437,18 @@ function makeColony(opts){
     known:         null,
 
     demaree:   null,     // { age, checked, topBroodFrames } — set by demareeMethod action
-    osrRisk:   0,        // weeks since OSR flow ended without harvesting
+    osrRisk:   0,        // weeks since OSR flow ended without harvesting (supers)
     osrCrystallised: false,
+    osrBroodRisk: 0,         // weeks since OSR flow ended (brood box tracking)
+    osrBroodCrystallised: false,
+    _osrLockedCells: 0,      // brood cells unavailable due to crystallised OSR honey
 
     treatment: null,
     feeding:   0,
 
     productionThisYear: 0,
     _starvingWeeks: 0,
+    _highVarroaWeeks: 0,
 
     hiveLayout: null,
   };
@@ -473,8 +498,11 @@ function colonyWeeklyUpdate(colony, ctx){
 
     // Space is limited by brood already occupying cells, and by honey
     // backfilling the brood nest beyond a comfortable level.
+    // Issue D fix: crystallised OSR honey in brood box locks cells the queen
+    // cannot lay in. _osrLockedCells is set in section 11b-ii each tick.
+    const _osrLocked = (colony._osrLockedCells || 0);
     const spaceFactor = _colony_clamp(
-      1.05 - currentBrood / (colony.broodBoxes * 33000)
+      1.05 - (currentBrood + _osrLocked) / (colony.broodBoxes * 33000)
         - Math.max(0, colony.honey - SIM.broodNestComfort) / SIM.broodBoxStoreCap * 0.4,
       0.1, 1);
 
@@ -546,7 +574,11 @@ function colonyWeeklyUpdate(colony, ctx){
     if (t){
       let weeklyEfficacy = t.efficacy;
       if (t.broodlessOnly && broodPresent){
-        weeklyEfficacy = weeklyEfficacy * 0.15;  // mites in sealed brood are mostly protected
+        // Bug C fix: OA only kills phoretic mites (on the bees). With brood present roughly
+        // 60% of mites are sealed inside cells and fully protected. Real-world efficacy
+        // against the total mite population therefore drops to ~40%. Previously 0.15 was
+        // used, which underestimated the phoretic kill and overstated the overall miss rate.
+        weeklyEfficacy = weeklyEfficacy * 0.40;
       }
       const weeksTotal  = t.weeks || 1;
       const wSurvival   = Math.pow(1 - weeklyEfficacy, 1 / weeksTotal);
@@ -567,11 +599,44 @@ function colonyWeeklyUpdate(colony, ctx){
 
   colony.varroa = Math.max(0, Math.min(colony.varroa, colony.population * 0.6));
 
+  // Bug D fix — Reinfestation: treated colonies in a populated area re-acquire mites
+  // from drifting bees and robbing within weeks. Without this, treating dropped mite
+  // load to zero permanently, which is biologically impossible.
+  // Rate: 0.1–0.3% of phoretic population per week (higher in summer drift season).
+  // Apiary density is approximated by the number of colonies visible in the simulation.
+  {
+    const wkIdxR = ((week - 1) % 52);
+    // Summer (wk 14-35): high forager drift and robbing → higher reinfestation pressure
+    const driftRate = (wkIdxR >= 13 && wkIdxR <= 34) ? 0.003 : 0.001;
+    // Each colony in the apiary adds a small contribution (capped at a multiplier of 2.0)
+    const apiaryColonyCount = typeof Game !== 'undefined'
+      ? Math.min(10, (Game.colonies || []).filter(function(c){ return c.alive && c.apiaryId === colony.apiaryId; }).length)
+      : 3;
+    const densityMultiplier = Math.min(2.0, 0.5 + apiaryColonyCount * 0.15);
+    // Reinfestation: a small absolute mite count based on bee population × rate × density
+    const reinfestation = colony.population * driftRate * densityMultiplier;
+    colony.varroa += reinfestation;
+    colony.varroa = Math.max(0, Math.min(colony.varroa, colony.population * 0.6));
+  }
+
   const infest = varroaInfestation(colony);
 
+  // Bug E fix — High-varroa consecutive-weeks tracker: if infestation stays above
+  // 3% for 3+ weeks in a row, virus transmission (DWV) accelerates sharply.
+  // This models the real-world collapse curve: sustained high mite load degrades
+  // winter bee fat bodies, reducing overwinter survival even after a late treatment.
+  if (infest > 0.03) {
+    colony._highVarroaWeeks = (colony._highVarroaWeeks || 0) + 1;
+  } else {
+    colony._highVarroaWeeks = 0;
+  }
+
   // DWV rises sharply once varroa exceeds a threshold; clears slowly otherwise
+  // If the colony has had 3+ consecutive high-varroa weeks, DWV escalation doubles —
+  // chronic exposure causes disproportionate virus build-up.
   if (infest > 0.04){
-    colony.dwv = Math.min(1, colony.dwv + (infest - 0.04) * 2.0);
+    const chronicMultiplier = (colony._highVarroaWeeks >= 3) ? 2.0 : 1.0;
+    colony.dwv = Math.min(1, colony.dwv + (infest - 0.04) * 2.0 * chronicMultiplier);
   } else {
     colony.dwv = Math.max(0, colony.dwv - 0.10);
   }
@@ -623,21 +688,36 @@ function colonyWeeklyUpdate(colony, ctx){
 
   const honeyDelta = nectarIncome - consumption;
 
+  /* Effective super capacity limited to drawn comb only.
+     Bees cannot store honey in undrawn foundation.
+     Read drawnFrames from each super's layout object if available;
+     fall back to full capacity for legacy/pre-layout supers. */
+  let effectiveSuperCap;
+  if (colony.hiveLayout && colony.hiveLayout.supers && colony.hiveLayout.supers.length > 0) {
+    effectiveSuperCap = colony.hiveLayout.supers.reduce(function(sum, sup) {
+      var drawnFrac = Math.min(1, (sup.drawnFrames !== undefined ? sup.drawnFrames : 11) / 11);
+      return sum + SIM.honeyPerSuper * drawnFrac;
+    }, 0);
+  } else {
+    effectiveSuperCap = colony.supers * SIM.honeyPerSuper;
+  }
+
   if (honeyDelta >= 0){
     // Surplus: fill brood nest comfort zone, then overflow to supers
     const spaceInNest = SIM.broodNestComfort - colony.honey;
     if (spaceInNest > 0){
       const toNest = Math.min(honeyDelta, spaceInNest);
       colony.honey += toNest;
+      // Tag brood box honey type when nectar income fills it
+      if (toNest > 0) colony.broodHoneyType = honeyTypeForWeek(week, ctx.siteType || 'rural');
       const leftover = honeyDelta - toNest;
       if (leftover > 0){
         if (colony.supers > 0){
-          const superCap = colony.supers * SIM.honeyPerSuper;
-          const superSpace = superCap - colony.superHoney;
-          colony.superHoney += Math.min(leftover, superSpace);
+          const superSpace = effectiveSuperCap - colony.superHoney;
+          colony.superHoney += Math.min(leftover, Math.max(0, superSpace));
           colony.superHoneyType = honeyTypeForWeek(week, ctx.siteType || 'rural');
-          colony.productionThisYear += Math.min(leftover, superSpace);
-          // Surplus beyond super cap is lost — overflow increases swarm pressure (backfilling)
+          colony.productionThisYear += Math.min(leftover, Math.max(0, superSpace));
+          // Surplus beyond drawn capacity is lost — overflow increases swarm pressure (backfilling)
           if (leftover > superSpace){
             colony.swarmPressure = _colony_clamp(colony.swarmPressure + 0.04, 0, 1);
           }
@@ -645,7 +725,9 @@ function colonyWeeklyUpdate(colony, ctx){
           // No supers: store in brood box up to physical cap
           const nestCap   = colony.broodBoxes * SIM.broodBoxStoreCap;
           const nestSpace  = nestCap - colony.honey;
-          colony.honey   += Math.min(leftover, nestSpace);
+          const toNestNoSuper = Math.min(leftover, nestSpace);
+          colony.honey   += toNestNoSuper;
+          if (toNestNoSuper > 0) colony.broodHoneyType = honeyTypeForWeek(week, ctx.siteType || 'rural');
           if (leftover > nestSpace){
             // Completely backfilled — strong upward pressure on swarming
             colony.swarmPressure = _colony_clamp(colony.swarmPressure + 0.07, 0, 1);
@@ -655,9 +737,8 @@ function colonyWeeklyUpdate(colony, ctx){
     } else {
       // Brood nest already at comfort; all goes to super or box
       if (colony.supers > 0){
-        const superCap   = colony.supers * SIM.honeyPerSuper;
-        const superSpace  = superCap - colony.superHoney;
-        const toSuper    = Math.min(honeyDelta, superSpace);
+        const superSpace  = effectiveSuperCap - colony.superHoney;
+        const toSuper    = Math.min(honeyDelta, Math.max(0, superSpace));
         colony.superHoney += toSuper;
         colony.superHoneyType = honeyTypeForWeek(week, ctx.siteType || 'rural');
         colony.productionThisYear += toSuper;
@@ -687,7 +768,7 @@ function colonyWeeklyUpdate(colony, ctx){
 
   // Clamp stores
   colony.honey      = _colony_clamp(colony.honey,      0, colony.broodBoxes * SIM.broodBoxStoreCap);
-  colony.superHoney = _colony_clamp(colony.superHoney, 0, colony.supers * SIM.honeyPerSuper);
+  colony.superHoney = _colony_clamp(colony.superHoney, 0, effectiveSuperCap);
 
   // Pollen
   colony.pollen += pollenIncome - colony.larvae * SIM.broodCostPollen;
@@ -713,6 +794,49 @@ function colonyWeeklyUpdate(colony, ctx){
     }
   } else {
     colony._starvingWeeks = 0;
+  }
+
+  // --- 8a. ISOLATION STARVATION (deep winter) ----------------------
+  // A small winter cluster cannot move across cold frames to reach honey
+  // stored away from the cluster. If the cluster has fewer than ~5,000 bees
+  // and stores are low (< 5 kg), the bees may be physically isolated from
+  // remaining honey — the classic "starved with full frames on the outside".
+  // Fondant placed directly on the top bars resolves this; syrup cannot
+  // (too cold for bees to take it down). Only applies deep winter:
+  // December (wkIdx 44-51) and January-February (wkIdx 0-7).
+  var _deepWinterWeek = (wkIdx <= 7 || wkIdx >= 44);
+  if (_deepWinterWeek && colony.honey > 0 && colony.honey < 5 && colony.population < 5000){
+    colony._isolationRisk = (colony._isolationRisk || 0) + 1;
+    if (colony._isolationRisk >= 2){
+      // After two consecutive weeks of isolation risk, the cluster may fail
+      var _isolationDie = _colony_rand() < (0.25 + (1 - colony.winterBeeHealth) * 0.35);
+      if (_isolationDie){
+        colony.alive      = false;
+        colony.deadReason = 'isolation starvation — cluster too small to reach stores';
+        colony.deadWeek   = week;
+        events.push({ type: 'died', colony: colony,
+                       reason: 'isolation starvation — cluster too small to reach stores' });
+        return events;
+      }
+      // Even without dying, the colony weakens faster from the stress
+      colony.population = Math.round(colony.population * 0.88);
+      events.push({ type: 'starved', colony: colony });
+    }
+  } else if (!_deepWinterWeek || colony.honey >= 5 || colony.population >= 5000) {
+    colony._isolationRisk = 0;
+  }
+
+  // --- 8b. PRE-WINTER STORES WARNING (late autumn) -----------------
+  // Emit a warning event during the feeding window (wkIdx 35-43 = Sep-Oct)
+  // when brood-box stores fall below the safe winter minimum (18 kg).
+  // Resets once stores are built back up, so it can re-fire if they drop.
+  if (wkIdx >= 35 && wkIdx <= 43 && colony.honey < SIM.winterStoresNeed){
+    if (!colony._warnedLowWinterStores){
+      colony._warnedLowWinterStores = true;
+      events.push({ type: 'low_winter_stores', colony: colony, honey: colony.honey });
+    }
+  } else if (colony.honey >= SIM.winterStoresNeed){
+    colony._warnedLowWinterStores = false;
   }
 
   // --- 9. DISEASE --------------------------------------------------
@@ -867,22 +991,106 @@ function colonyWeeklyUpdate(colony, ctx){
   }
 
   // --- 11b. OSR crystallisation ------------------------------------
-  // Oilseed rape honey crystallises in the comb ~10-14 days after the flow ends.
-  // If not harvested in time the frames are ruined.
-  if (colony.superHoney > 0 && colony.superHoneyType === 'osr') {
-    const osrFlowActive = ctx.nectar > 0.35 && wkIdx >= 14 && wkIdx <= 21;
-    if (!osrFlowActive && wkIdx >= 16 && wkIdx <= 28) {
+  // Oilseed rape (OSR) honey has ~30% glucose — the highest of any common
+  // UK honey type. It begins to set in the comb within 10-14 days of the
+  // flow ending. Once set it cannot be extracted by centrifuge and will
+  // block brood space if it crystallises in the brood box.
+  //
+  // FIX (Issue A): honeyTypeForWeek() returns 'oilseed' (matching HONEY_TYPES
+  // keys). The old code checked superHoneyType === 'osr' which never matched,
+  // silently disabling all OSR crystallisation mechanics. All checks now use
+  // 'oilseed' consistently.
+  //
+  // FIX (Issue B): wkIdx is 0-based. OSR farmland flow = wkInYear 14-19
+  // = wkIdx 13-18. Old flow-active check used wkIdx >= 14 (off by one) and
+  // the post-flow window started at wkIdx 16 (too late). Fixed below.
+  //
+  // FIX (Issue E): add osrWarning event at 1 week post-flow so the player
+  // gets an early alert while the honey is still extractable, not just when
+  // crystallisation is already under way.
+  //
+  // FIX (Issue F): propagate crystallised state per-super (not just colony-
+  // level) so each sup.crystallised flag is set individually.
+  //
+  // Timeline:
+  //   wkIdx 13-18, ctx.nectar > 0.50 → flow active, osrRisk stays 0
+  //   wkIdx 19+   → risk += 1 each week
+  //   osrRisk 1   → fire osrWarning  (still extractable, urgent)
+  //   osrRisk >= 2 → fire osrCrystal (honey setting, most extraction lost)
+  if (colony.superHoney > 0 && colony.superHoneyType === 'oilseed') {
+    // The farmland 1.55× multiplier in simulation.js pushes ctx.nectar above
+    // 0.60 during weeks 14-19 on farmland sites. The 0.50 threshold ensures
+    // only genuine OSR-site colonies enter the crystallisation path.
+    const osrFlowActive = ctx.nectar > 0.50 && wkIdx >= 13 && wkIdx <= 18;
+    if (!osrFlowActive && wkIdx >= 18 && wkIdx <= 31) {
       colony.osrRisk = (colony.osrRisk || 0) + 1;
+      // One week post-flow: still extractable but beekeeper must act now
+      if (colony.osrRisk === 1) {
+        events.push({ type: 'osrWarning', colony: colony });
+      }
+      // Two weeks post-flow: honey setting in comb — extraction badly impaired
       if (colony.osrRisk >= 2 && !colony.osrCrystallised) {
         colony.osrCrystallised = true;
+        // Per-super crystallised flag (Issue F fix)
+        if (colony.hiveLayout && colony.hiveLayout.supers) {
+          colony.hiveLayout.supers.forEach(function(sup) {
+            if (sup.honeyType === 'oilseed' && sup.honeyKg > 0) {
+              sup.crystallised = true;
+            }
+          });
+        }
         events.push({ type: 'osrCrystal', colony: colony });
       }
-    } else {
+    } else if (osrFlowActive) {
       colony.osrRisk = 0;
     }
   } else if (!colony.superHoney || colony.superHoney < 0.5) {
+    // Supers empty or harvested — clear OSR state
     colony.osrRisk = 0;
     colony.osrCrystallised = false;
+  }
+
+  // --- 11b-ii. OSR crystallisation in BROOD BOX -----------------------
+  // Issue D fix: if OSR honey crystallises in the brood box, bees cannot
+  // uncap or move it. The queen cannot lay in crystallised cells. This
+  // reduces effective brood space and escalates swarm pressure.
+  // We model this separately from super crystallisation because the beekeeper
+  // cannot extract it — the only remedies are warming frames or cutting comb.
+  //
+  // Trigger: same timing as super crystallisation (wkIdx >= 20, osrRisk-equivalent
+  // based on broodHoneyType === 'oilseed') but tracked via osrBroodRisk so it
+  // does not interfere with the super crystallisation counter.
+  if (colony.honey > 3 && colony.broodHoneyType === 'oilseed') {
+    const broodOsrFlowActive = ctx.nectar > 0.50 && wkIdx >= 13 && wkIdx <= 18;
+    if (!broodOsrFlowActive && wkIdx >= 18 && wkIdx <= 31) {
+      colony.osrBroodRisk = (colony.osrBroodRisk || 0) + 1;
+      if (colony.osrBroodRisk >= 2 && !colony.osrBroodCrystallised) {
+        colony.osrBroodCrystallised = true;
+        // Crystallised frames in the brood box block queen space.
+        // Model this as a direct spaceFactor penalty via swarm pressure spike
+        // and a brood space reduction (fewer effective laying cells).
+        // The queen cannot lay in wax-hard crystallised cells.
+        colony.swarmPressure = _colony_clamp(colony.swarmPressure + 0.15, 0, 1);
+        events.push({ type: 'osrBroodCrystal', colony: colony });
+      }
+    } else if (broodOsrFlowActive) {
+      colony.osrBroodRisk = 0;
+    }
+  } else if (colony.honey < 1) {
+    colony.osrBroodRisk = 0;
+    colony.osrBroodCrystallised = false;
+  }
+
+  // Apply brood space penalty while brood box OSR is crystallised
+  // Crystallised cells are effectively unavailable for brood — reduce
+  // the queen's effective laying space by capping a fraction of cells
+  if (colony.osrBroodCrystallised && colony.queen && colony.queen.present && colony.queen.mated) {
+    // Block ~20% of brood box capacity by artificially inflating capped count
+    // This feeds into the spaceFactor in section 3 (queen laying) next tick
+    const lockedCells = Math.round(colony.broodBoxes * 33000 * 0.20);
+    colony._osrLockedCells = lockedCells;
+  } else {
+    colony._osrLockedCells = 0;
   }
 
   // --- 11c. Start swarm cells: larvae visible, player has ONE week -
@@ -906,13 +1114,17 @@ function colonyWeeklyUpdate(colony, ctx){
     events.push({ type: 'queencells', colony: colony });
   }
 
-  // --- 11d. Swarm cells age: larvae→capped (age 1) = swarm fires ---
+  // --- 11d. Swarm cells age: larvae→capped (age 1), swarm fires at age 2 ---
+  // Real timeline: cells first seen as larvae (age 0 → tick creates them).
+  // After one week (age 1) cells are capped — swarm IMMINENT warning.
+  // After a second week capped (age 2) the prime swarm issues.
+  // Player has one full inspection window between capped and swarm firing.
   if (colony.queenCells.type === 'swarm'){
     colony.queenCells.age++;
     colony.queenCells.state = colony.queenCells.age >= 1 ? 'capped' : 'larvae';
 
-    if (colony.queenCells.age >= 1) {
-      // First cell CAPPED — swarm fires unless queen is clipped
+    if (colony.queenCells.age >= 2) {
+      // Cells capped for a full week — prime swarm fires unless queen is clipped
       if (queen && queen.clipped) {
         // Clipped queen exits hive but FALLS to the ground — cannot fly.
         // Swarm mills outside for hours, then returns to the hive.
@@ -930,13 +1142,14 @@ function colonyWeeklyUpdate(colony, ctx){
         // Pressure barely drops — the impulse is not satisfied
         colony.swarmPressure = _colony_clamp(colony.swarmPressure - 0.08, 0, 1);
       } else {
-        // PRIME SWARM ISSUES — old queen leaves with 50-60% of workforce
-        const swarmFrac = _colony_randRange(0.50, 0.62);
+        // PRIME SWARM ISSUES — old queen leaves with 55-65% of workforce
+        const swarmFrac = _colony_randRange(0.55, 0.65);
         events.push({ type: 'swarm', colony: colony });
         colony.population      = Math.round(colony.population * (1 - swarmFrac));
         colony.swarmedThisYear = true;
         colony.swarmPressure   = 0;
-        // Cells remain capped — virgin emerges next tick from postSwarm
+        colony.queen           = null;  // old queen departs with the swarm
+        // Cells remain capped — first virgin emerges next tick
         colony.queenCells = {
           type:  'postSwarm',
           count: colony.queenCells.count,
@@ -944,7 +1157,6 @@ function colonyWeeklyUpdate(colony, ctx){
           state: 'capped',
           clippedAbort: false
         };
-        // Old queen is gone — colony.queen will be replaced by virgin from cells
       }
     }
   }
@@ -979,8 +1191,10 @@ function colonyWeeklyUpdate(colony, ctx){
         // Normal post-primary-swarm: virgin becomes the new queen
         colony.queen = _colony_virginFromParent(queen, year);
 
-        // CAST SWARM: strong colony + many cells = real chance of secondary swarm
-        if (colony.population > 14000 && cellCount > 5 && _colony_rand() < 0.42) {
+        // CAST SWARM: multiple cells remaining after prime swarm = real chance of
+        // secondary swarm with a virgin. Population threshold is post-swarm
+        // (already halved) so 8000 corresponds to a strong original colony.
+        if (colony.population > 8000 && cellCount > 3 && _colony_rand() < 0.42) {
           const castFrac = _colony_randRange(0.22, 0.32);
           events.push({ type: 'castSwarm', colony: colony });
           colony.population = Math.round(colony.population * (1 - castFrac));
@@ -993,14 +1207,21 @@ function colonyWeeklyUpdate(colony, ctx){
 
   // --- 11f. Emergency / replacement cells --------------------------
   // Raised from a split, nucleus method, artificial swarm, or missed Demaree check.
+  // Only install the virgin when the colony is actually queenless — do NOT
+  // overwrite a living queen (e.g. Demaree top box raising cells while the
+  // real queen is safely below the QX in the bottom box).
   if (colony.queenCells.type === 'emergency'){
     colony.queenCells.age++;
     colony.queenCells.state = colony.queenCells.age >= 1 ? 'capped' : 'larvae';
     if (colony.queenCells.age >= 2){
-      colony.queen           = _colony_virginFromParent(colony.queen, year);
-      colony.queenCells      = { type: 'none', count: 0, age: 0, state: 'none' };
-      colony.layingWorkers   = false;
-      colony._queenlessWeeks = 0;
+      const queenAlive = colony.queen && colony.queen.present
+        && colony.queen.state !== 'absent';
+      if (!queenAlive) {
+        colony.queen           = _colony_virginFromParent(colony.queen, year);
+        colony.layingWorkers   = false;
+        colony._queenlessWeeks = 0;
+      }
+      colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
     }
   }
 
@@ -1082,8 +1303,27 @@ function colonyWeeklyUpdate(colony, ctx){
         && colony._queenlessWeeks > 3;
       if (noHope) colony.layingWorkers = true;
     }
+
+    // Death spiral: queenless with no queen cells and no fresh brood young enough
+    // to raise new cells from. Foragers die of old age with no replacements coming.
+    // Laying workers produce drones only — colony cannot recover from this state.
+    const trulyQueenless = colony.queenCells.type === 'none'
+      && (colony.eggs + colony.larvae < 200);
+    if (trulyQueenless) {
+      colony._hopelessWeeks = (colony._hopelessWeeks || 0) + 1;
+      if (colony._hopelessWeeks >= 5) {
+        colony.alive      = false;
+        colony.deadReason = 'queenless collapse — no replacement queen was raised';
+        colony.deadWeek   = week;
+        events.push({ type: 'died', colony: colony, reason: colony.deadReason });
+        return events;
+      }
+    } else {
+      colony._hopelessWeeks = 0;
+    }
   } else {
     colony._queenlessWeeks = 0;
+    colony._hopelessWeeks  = 0;
   }
 
   // --- 13. WINTER BEE HEALTH ---------------------------------------

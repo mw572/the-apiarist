@@ -692,6 +692,68 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 
 /* ====================================================================
+   BUG A/B FIX — Foundation vs drawn empty super states
+   ==================================================================== */
+
+/* Foundation super: pale grey-cream background, clearly undrawn */
+.cross-super-foundation {
+  background: linear-gradient(180deg, #e8e4d8, #d6d0bc) !important;
+  opacity: 0.85;
+}
+
+/* Foundation note label inside the super box */
+.cross-foundation-note {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .3px; color: #7a6a4a;
+  background: rgba(180,160,120,0.25); border-radius: 2px;
+  padding: 1px 5px; margin: 0 4px 2px; text-align: center;
+  flex: none;
+}
+
+/* Bug B fix: empty drawn comb — light amber, distinguishable from foundation grey */
+.cross-super-empty {
+  background: linear-gradient(180deg, #f5ead8, #e8d8b0) !important;
+}
+
+/* ====================================================================
+   BUG D FIX — Swarm peanut: add qc-swarm tint rule (was missing)
+   ==================================================================== */
+
+/* Swarm cells (hanging from bottom): warm wax tone — distinct from supersedure */
+.cross-qcell-peanut.qc-swarm {
+  background: radial-gradient(ellipse 60% 100% at 50% 80%, #d4b030 60%, #a07820 100%);
+  border-color: #7a5a10;
+}
+
+/* ====================================================================
+   BUG H FIX — Dead colony cross-section state
+   ==================================================================== */
+
+.hive-cross-dead { opacity: 0.7; filter: grayscale(0.5); }
+
+.cross-dead-state {
+  width: 210px; min-height: 180px;
+  background: linear-gradient(180deg, #c8c0b0, #b0a898);
+  border: 2px solid #8a8278; border-radius: 4px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px; padding: 18px;
+}
+
+.cross-dead-icon { font-size: 36px; }
+
+.cross-dead-label {
+  font-family: var(--serif); font-size: 14px; font-weight: 700;
+  color: #4a3a2a; text-transform: uppercase; letter-spacing: .5px;
+}
+
+.cross-dead-reason {
+  font-size: 12px; color: #6a5a4a; text-align: center;
+  background: rgba(0,0,0,0.08); border-radius: 4px;
+  padding: 4px 8px; line-height: 1.4;
+}
+
+/* ====================================================================
    HIVE CARD — swarm pressure strip
    ==================================================================== */
 

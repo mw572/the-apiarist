@@ -776,20 +776,20 @@ function _ui_buildHiveCard(colony) {
     }
   }
 
-  /* Inspection urgency: days since last inspect, shown during swarm season */
+  /* Inspection urgency: days since last inspect, shown during swarm season.
+     Bug G fix: only fires when colony HAS been inspected (lastInspected > 0).
+     Never-inspected colonies show 'Not yet inspected' — no stale-inspection badge. */
   var inspectUrgency = null;
-  if (colony.alive) {
+  if (colony.alive && colony.lastInspected > 0) {
     var _curWeek = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
     var _inWin   = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(_curWeek) : false;
-    var _weeksSince = _curWeek - (colony.lastInspected || 0);
+    var _weeksSince = _curWeek - colony.lastInspected;
     if (_inWin && _weeksSince >= 1) {
       var _daysSince = _weeksSince * 7;
-      var _urgCls = _weeksSince >= 2 ? 'insp-urgent' : _weeksSince >= 1 ? 'insp-warn' : '';
-      if (_urgCls) {
-        inspectUrgency = h('div', { class: 'hive-insp-badge ' + _urgCls,
-          title: _daysSince + ' days since last inspection' },
-          _daysSince + 'd');
-      }
+      var _urgCls = _weeksSince >= 2 ? 'insp-urgent' : 'insp-warn';
+      inspectUrgency = h('div', { class: 'hive-insp-badge ' + _urgCls,
+        title: _daysSince + ' days since last inspection' },
+        _daysSince + 'd');
     }
   }
 
@@ -1572,7 +1572,22 @@ function openHiveDetail(colony) {
     weeksAgo = Game.week - known.week;
   }
 
-  var crossSection = _ui_buildHiveCross(colony);
+  /* Bug H fix: dead colonies get a dedicated dead-state panel instead of
+     the live cross-section which would show misleading frame content. */
+  var crossSection;
+  if (!colony.alive) {
+    var deadReason = colony.deadReason || 'Unknown cause';
+    crossSection = h('div', { class: 'hive-cross hive-cross-dead' }, [
+      h('div', { class: 'cross-section-title' }, 'Hive cross-section'),
+      h('div', { class: 'cross-dead-state' }, [
+        h('div', { class: 'cross-dead-icon' }, '🪦'),
+        h('div', { class: 'cross-dead-label' }, 'Colony lost'),
+        h('div', { class: 'cross-dead-reason' }, 'Cause: ' + deadReason)
+      ])
+    ]);
+  } else {
+    crossSection = _ui_buildHiveCross(colony);
+  }
 
   var infoNode = h('div', { class: 'hive-info' }, []);
 
@@ -1618,24 +1633,44 @@ function _ui_buildHiveCross(colony) {
   /* --- Supers (top to bottom = highest index first) ------------------ */
   for (var s = superCount - 1; s >= 0; s--) {
     (function(sidx) {
-      var sup      = (layout.supers && layout.supers[sidx]) || { honeyKg: 0, frames: [], honeyType: 'summer' };
-      var fillFrac = Math.min(1, sup.honeyKg / SIM.honeyPerSuper);
-      var fillPct  = (fillFrac * 100).toFixed(0);
-      var ht       = (typeof HONEY_TYPES !== 'undefined' && HONEY_TYPES[sup.honeyType]) || {};
-      var lbl      = 'Super ' + (sidx + 1) + ' — ' + sup.honeyKg.toFixed(1) + ' kg / ' + SIM.honeyPerSuper + ' kg';
-      if (ht.name) lbl += ' (' + ht.name + ')';
+      var sup          = (layout.supers && layout.supers[sidx]) || { honeyKg: 0, frames: [], honeyType: 'summer', drawnFrames: 0 };
+      var drawnFrames  = sup.drawnFrames !== undefined ? Math.floor(sup.drawnFrames) : 11;
+      var isFoundation = drawnFrames < 11;
+      var fillFrac     = Math.min(1, sup.honeyKg / SIM.honeyPerSuper);
+      var fillPct      = (fillFrac * 100).toFixed(0);
+      var ht           = (typeof HONEY_TYPES !== 'undefined' && HONEY_TYPES[sup.honeyType]) || {};
+
+      /* Bug A fix: foundation supers show drawn-comb progress, not kg weight */
+      var lbl;
+      if (isFoundation) {
+        lbl = 'Super ' + (sidx + 1) + ' — Foundation (' + drawnFrames + '/11 drawn)';
+      } else {
+        lbl = 'Super ' + (sidx + 1) + ' — ' + sup.honeyKg.toFixed(1) + ' kg / ' + SIM.honeyPerSuper + ' kg';
+        if (ht.name) lbl += ' (' + ht.name + ')';
+      }
 
       var framesEl = _ui_buildCrossFrames(sup.frames || [], 'super', -1, -1, colony);
 
       var fillColor = fillFrac > 0.75 ? '#c87010' : fillFrac > 0.35 ? '#e8a020' : '#f0c060';
 
+      /* Bug A fix: foundation note inside the box */
+      var foundationNote = isFoundation
+        ? h('div', { class: 'cross-foundation-note' }, drawnFrames + '/11 frames drawn')
+        : null;
+
+      /* Bug B fix: empty drawn comb gets distinct class from new foundation */
+      var superCls = 'cross-box cross-super clickable';
+      if (isFoundation) superCls += ' cross-super-foundation';
+      else if (fillFrac < 0.05) superCls += ' cross-super-empty';
+
       stack.appendChild(h('div', {
-        class: 'cross-box cross-super clickable',
+        class: superCls,
         title: lbl + ' — click to manage frames',
         onclick: function() { _ui_openBoxDetail(colony, 'super', sidx); }
       }, [
         h('div', { class: 'cross-box-label' }, lbl),
         framesEl,
+        foundationNote,
         h('div', { class: 'cross-fill-bar' }, [
           h('div', { class: 'cross-fill-fill', style: { width: fillPct + '%', background: fillColor } })
         ])
@@ -1643,8 +1678,8 @@ function _ui_buildHiveCross(colony) {
     })(s);
   }
 
-  /* --- Queen excluder ----------------------------------------------- */
-  if (colony.queenExcluder) {
+  /* --- Queen excluder — Bug C fix: only show when supers are present */
+  if (colony.queenExcluder && superCount > 0) {
     stack.appendChild(h('div', { class: 'cross-box cross-excluder', title: 'Queen excluder' }, [
       h('span', { class: 'cross-excluder-label' }, 'QX')
     ]));
@@ -2159,6 +2194,21 @@ function _ui_buildKnownSummary(known) {
       : tm === 'lively' ? 'A little lively, but manageable with calm handling and smoke.'
       : 'Very defensive — worth requeening with calmer stock.'));
 
+  /* Last inspected timestamp */
+  var inspWeek = known.week || 0;
+  var curWeek  = (typeof Game !== 'undefined' && Game) ? Game.week : inspWeek;
+  var weeksBack = curWeek - inspWeek;
+  var inspLabel = weeksBack <= 0 ? 'This week'
+    : weeksBack === 1 ? '1 week ago'
+    : weeksBack + ' weeks ago';
+  var inspTone = weeksBack >= 3 ? 'warn' : 'neutral';
+
+  rows.push(row('Last inspected', inspLabel, inspTone,
+    weeksBack >= 3
+      ? 'It has been a while — the colony\'s situation may have changed since this snapshot was taken.'
+      : weeksBack >= 1 ? 'The snapshot below was taken ' + weeksBack + ' week' + (weeksBack === 1 ? '' : 's') + ' ago.'
+      : 'Inspected today — this is a fresh read.'));
+
   return h('div', {}, [
     h('div', { class: 'card-title', text: 'What you saw last inspection' }),
     h('div', { class: 'known-list' }, rows)
@@ -2602,6 +2652,25 @@ function openInspection(colony) {
       : { ok: false, frames: [], findings: [], summary: [], lesson: null };
   } catch (e) {
     toast('Inspection failed: ' + e.message, 'bad');
+    return;
+  }
+
+  /* Weather gate — hard block. Show the reason as a modal (not just a toast)
+     so the player reads why and learns the rule. */
+  if (!report.ok && !report.weatherOk) {
+    openModal({
+      title: 'Cannot inspect today',
+      body: h('div', { class: 'modal-body' }, [
+        h('div', { class: 'explainer' }, [
+          h('div', { class: 'explainer-art' }, '🌧️'),
+          h('div', { class: 'explainer-body' }, [
+            h('p', { text: report.blockReason || 'Conditions are not suitable for an inspection right now.' }),
+            h('p', { html: '<b>When to inspect:</b> choose a calm, dry day when the temperature is above 12°C and foragers are flying. Spring and summer mornings are ideal. Avoid rain, strong wind, and cold snaps.' })
+          ])
+        ])
+      ]),
+      buttons: [{ label: 'OK — I\'ll wait', cls: 'btn-primary', act: closeModal }]
+    });
     return;
   }
 

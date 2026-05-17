@@ -61,16 +61,21 @@ function inspectColony(colony) {
   report.weatherOk = weatherOk;
 
   if (!weatherOk) {
-    /* Still proceed but note the disruption and set the colony back */
+    /* Hard block — do NOT update colony.known or colony.lastInspected.
+       Inspecting in poor conditions risks chilling brood, stressing the
+       colony and giving you a false read. Wait for a calm, dry day above 12°C. */
+    report.ok = false;
     if (deepWinter) {
-      report.findings.push({ icon: '❄️', text: 'Opened in deep winter — chilled the brood and disturbed the cluster.' });
+      report.blockReason = 'Too cold to open the hive safely. The cluster needs to stay sealed in deep winter (December–February). If you are worried about stores, heft the hive instead — no need to open it.';
+    } else if (wx.warmth < 0.25) {
+      /* cold but not deep winter */
+      report.blockReason = 'It is too cold to inspect — the bees need at least 12°C before you open them up. A cold brood nest can set the colony back weeks. Wait for a warmer day.';
+    } else if (wx.hazard === 'storm') {
+      report.blockReason = 'Too windy and stormy to inspect safely. Strong wind makes the bees very defensive and you risk losing frames. Wait for calmer conditions.';
     } else {
-      report.findings.push({ icon: '⛅', text: 'Poor weather for an inspection — the bees are unsettled and flying poorly.' });
+      report.blockReason = 'The weather is not suitable for an inspection today (' + (wx.label || 'poor conditions') + '). Inspect on a fine or mixed day — rain and cold disturb the colony and make disease signs much harder to read.';
     }
-    /* Chill brood slightly and raise temperament */
-    colony.capped = Math.max(0, colony.capped - Math.floor(colony.capped * 0.04));
-    colony.larvae = Math.max(0, colony.larvae - Math.floor(colony.larvae * 0.03));
-    colony.temperament = _act_clamp(colony.temperament + 0.08, 0, 1);
+    return report;
   }
 
   /* ---- Equipment checks -------------------------------------------- */
@@ -624,20 +629,52 @@ function addSuper(colony) {
 
 /**
  * removeSuper(colony) -> {ok, msg}
- * Remove a super (only if empty or spare).
+ * Physically removes the top super box and returns it to equipment inventory.
+ * Only allowed when the super is nearly empty (< 0.5 kg) — a full super is
+ * too heavy and the bees will defend it. Harvest first, then remove the box.
+ * If removing the last super, the queen excluder is also removed (it serves
+ * no purpose without supers and can trap bees).
  */
 function removeSuper(colony) {
   if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
   if (colony.supers <= 0) return { ok: false, msg: 'No supers to remove.' };
-  /* Don't allow removal if the super has significant honey */
-  if (colony.superHoney > 2) {
-    return { ok: false, msg: 'The super still has honey in it — harvest or clear it first.' };
-  }
-  colony.supers--;
+
+  /* Work out how much honey is in the top super specifically.
+     If hiveLayout is available, check the top super directly; otherwise
+     use a simple per-super average. */
+  var topSuperHoney = 0;
   if (colony.hiveLayout && colony.hiveLayout.supers && colony.hiveLayout.supers.length > 0) {
-    colony.hiveLayout.supers.pop();
+    var topIdx = colony.hiveLayout.supers.length - 1;
+    topSuperHoney = colony.hiveLayout.supers[topIdx].honeyKg || 0;
+  } else {
+    topSuperHoney = (colony.superHoney || 0) / Math.max(colony.supers, 1);
   }
-  const msg = `Super removed from ${colony.name}.`;
+
+  /* Block removal if the top super still has significant honey */
+  if (topSuperHoney >= 0.5) {
+    return {
+      ok: false,
+      msg: 'The top super still has ' + topSuperHoney.toFixed(1) + ' kg of honey in it — harvest it first, then remove the box.'
+    };
+  }
+
+  /* Physically remove the box and return it to inventory */
+  _colony_removeSuperAt(colony, (colony.hiveLayout && colony.hiveLayout.supers)
+    ? colony.hiveLayout.supers.length - 1
+    : 0);
+
+  /* _colony_removeSuperAt already clears the QX when supers reach 0,
+     but double-check here for safety */
+  if ((colony.supers || 0) === 0) {
+    colony.queenExcluder = false;
+  }
+
+  /* Return the box to the spare hive pool */
+  if (!Game.inventory.spareHives) Game.inventory.spareHives = 0;
+  Game.inventory.spareHives += 1;
+
+  var msg = `Super removed from ${colony.name} and returned to equipment stock.` +
+    (colony.supers === 0 ? ' Queen excluder also removed — no supers left.' : '');
   logEvent('📦', msg, 'plain');
   render();
   return { ok: true, msg };
@@ -824,19 +861,32 @@ function feedColony(colony, kg, kind) {
   const feedConversion = { syrup1: 0.70, syrup2: 0.90, fondant: 0.75 }[kind];
   colony.feeding = (colony.feeding || 0) + kg * feedConversion;
 
-  /* Warn if feeding syrup with honey supers on */
+  const season = seasonOfWeek(Game.week);
+  const wkInYr = ((Game.week - 1) % 52) + 1;
+  /* Deep winter = Dec (wk 44-52) or Jan-Feb (wk 1-8) */
+  const deepWinter = (wkInYr <= 8 || wkInYr >= 44);
+
+  /* Warn if feeding syrup with honey supers on — risk of contaminating the crop.
+     Syrup fed while supers are present can be carried up and mixed with honey.
+     Fondant placed on the top bars of the brood box does NOT reach the super honey,
+     so it is safe to use even if supers are on (though supers should already be off). */
   let warning = '';
   if ((kind === 'syrup1' || kind === 'syrup2') && colony.supers > 0) {
-    warning = ' Warning: feeding syrup with honey supers on can contaminate the crop.';
+    warning = ' Warning: feeding syrup with honey supers on risks contaminating the crop — remove the supers first.';
   }
 
-  /* Fondant only appropriate in emergency winter feeding */
-  const season = seasonOfWeek(Game.week);
+  /* Syrup is ineffective in deep winter: bees too cold to take it down and evaporate water.
+     Fondant is the correct deep-winter emergency feed — placed directly on the top bars. */
+  if ((kind === 'syrup1' || kind === 'syrup2') && deepWinter) {
+    warning += ' Syrup is not suitable in deep winter — bees cannot process it when clustered. Use fondant placed directly on the frames instead.';
+  }
+
+  /* Fondant outside winter — it works but is less efficient than syrup for store building */
   if (kind === 'fondant' && season !== 'winter') {
-    warning += ' Fondant is an emergency feed — syrup works better outside winter.';
+    warning += ' Fondant works best as an emergency winter feed placed on the frames. Outside winter, 2:1 syrup is more efficient for building stores.';
   }
 
-  const kindLabel = { syrup1: '1:1 syrup (spring stimulation)', syrup2: '2:1 syrup (store building)', fondant: 'fondant (emergency)' }[kind];
+  const kindLabel = { syrup1: '1:1 syrup (spring stimulation)', syrup2: '2:1 syrup (store building)', fondant: 'fondant (emergency winter feed)' }[kind];
 
   const msg = `${colony.name} fed ${kg} kg of ${kindLabel} (used ${sugarNeeded} kg of sugar from stock).${warning}`;
   logEvent('🍯', msg, warning ? 'bad' : 'plain');
@@ -853,15 +903,12 @@ function treatColony(colony, treatmentId) {
   const t = TREATMENTS[treatmentId];
   if (!t) return { ok: false, msg: `Unknown treatment: ${treatmentId}.` };
 
-  /* MAQS (formic acid) is the ONLY treatment approved for use with supers on.
-     All other treatments contaminate honey — supers must be off first. */
-  if (colony.supers > 0 && !t.harvestSafe && treatmentId !== 'maqs') {
-    return { ok: false, msg: `Cannot apply ${t.name} while honey supers are on — it will contaminate the crop. Remove the supers first.` };
-  }
-  if (colony.supers > 0 && treatmentId === 'maqs') {
-    /* MAQS with supers: honey is safe but should be labelled */
-    warnings = warnings || [];
-    warnings.push('MAQS can be used with supers on — honey remains safe to eat but note the treatment dates for your records.');
+  /* All varroa treatments contaminate honey — supers must be off first.
+     No treatment is legal for use with supers on under UK regulations.
+     (The old MAQS/formic acid exemption was incorrect — it is not approved
+     for use over honey in the UK even though some other countries permit it.) */
+  if (colony.supers > 0 && !t.harvestSafe) {
+    return { ok: false, msg: `Cannot apply ${t.name} while honey supers are on — it will contaminate the crop and is illegal in the UK. Remove the supers (and harvest if necessary) before treating.` };
   }
 
   /* Check treatment stock — paid for at Market, not here */
@@ -886,10 +933,19 @@ function treatColony(colony, treatmentId) {
     warnings.push(`It is very hot — ${t.name} may stress the bees or harm the queen at these temperatures.`);
   }
 
-  /* Broodless-only treatments */
+  /* Bug F fix — MAQS (formic acid) specific: warn at >25°C even below the hard tempMax,
+     because formic acid fumes intensify rapidly above 25°C and can kill the queen. */
+  if (t.queenRisk && approxTemp > 25 && approxTemp <= (t.tempMax || 40)) {
+    warnings.push(`Temperature is above 25°C — formic acid fumes are intensifying. Queen loss risk is elevated; consider waiting for cooler weather.`);
+  }
+
+  /* Broodless-only treatments (OA trickle / vaporise) */
   const hasActiveBrood = colony.eggs > 0 || colony.larvae > 0 || colony.capped > 0;
   if (t.broodlessOnly && hasActiveBrood) {
-    warnings.push(`${t.name} only works in the broodless period. With brood present it will barely touch the mites sealed in the cells — wait until mid-winter.`);
+    /* Bug C fix — OA with brood present: treatment still applied but efficacy is cut
+       to ~40% inside colony.js (mites in sealed cells are fully protected).
+       Give a clear, accurate warning rather than a flat block. */
+    warnings.push(`${t.name} only kills mites on the bees — it cannot reach mites sealed inside brood cells. With brood present efficacy drops to roughly 40%. For a proper knock-down, wait for the broodless period (mid-winter) or create an artificial brood break first.`);
   }
 
   colony.treatment = { id: treatmentId, weeksLeft: t.weeks };
@@ -988,14 +1044,14 @@ function artificialSwarm(colony) {
   newColony.queen = Object.assign({}, colony.queen);
   newColony.queen.age = colony.queen.age;
   newColony.swarmPressure = 0;
-  newColony.queenCells = { type: 'none', count: 0, age: 0 };
+  newColony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
 
   /* The original site keeps the brood and raises a new queen from the cells */
   colony.population = remainPop;
   colony.swarmPressure = 0; /* The swarming impulse is resolved */
   colony.queen = null; /* The old queen has gone to the new hive */
   /* The retained cells become a replacement queen, with no further swarm */
-  colony.queenCells = { type: 'emergency', count: Math.max(2, colony.queenCells.count || 3), age: 0 };
+  colony.queenCells = { type: 'emergency', count: Math.max(2, colony.queenCells.count || 3), age: 0, state: 'larvae' };
 
   Game.colonies.push(newColony);
   Game.stats.splitsMade++;
@@ -1050,7 +1106,7 @@ function splitColony(colony) {
   newColony.larvae = splitLarvae;
   newColony.capped = splitCapped;
   newColony.queen  = null; /* One part will raise a queen */
-  newColony.queenCells = { type: 'emergency', count: _act_randInt(3, 6), age: 0 };
+  newColony.queenCells = { type: 'emergency', count: _act_randInt(3, 6), age: 0, state: 'larvae' };
 
   Game.colonies.push(newColony);
   Game.stats.splitsMade++;
@@ -1091,12 +1147,12 @@ function nucleusMethod(colony) {
     year: gameYear(),
   });
   newColony.queen = Object.assign({}, colony.queen);
-  newColony.queenCells = { type: 'none', count: 0, age: 0 };
+  newColony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
   newColony.swarmPressure = 0;
 
   /* Original loses its queen and raises an emergency queen */
   colony.queen = null;
-  colony.queenCells = { type: 'emergency', count: _act_randInt(4, 8), age: 0 };
+  colony.queenCells = { type: 'emergency', count: _act_randInt(4, 8), age: 0, state: 'larvae' };
   colony.swarmPressure = _act_clamp(colony.swarmPressure - 0.4, 0, 1);
 
   Game.colonies.push(newColony);
@@ -1120,7 +1176,7 @@ function removeQueenCells(colony) {
   }
 
   const hadType = colony.queenCells.type;
-  colony.queenCells = { type: 'none', count: 0, age: 0 };
+  colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
   /* Swarm pressure is UNCHANGED — the colony will rebuild cells within days */
 
   const msg = `Queen cells removed from ${colony.name}. However, with swarm pressure still high the bees will draw new cells within the week. This alone will not prevent swarming — a split or artificial swarm is needed.`;

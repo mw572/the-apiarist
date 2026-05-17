@@ -464,11 +464,44 @@ function _sim_resolveEvent(ev, week) {
       out.push({ kind: 'toast', text: colony.name + ': Demaree complete. Top box ready to remove.', tone: 'good' });
       break;
 
-    case 'osrCrystal':
-      logEvent('🍯', colony.name + ': your oilseed rape honey is crystallising in the comb. Extract immediately — another week and the frames will be ruined.', 'bad');
+    // FIX (Issue E): added osrWarning event — fires one week post-flow while
+    // honey is still extractable. osrCrystal fires a week later when it has set.
+    case 'osrWarning':
+      logEvent('🍯', colony.name + ': the OSR flow has ended and the honey is at risk of crystallising in the comb. OSR honey sets rock-hard within 10-14 days of the flow ending. Harvest within the next week before it is ruined.', 'warn');
       out.push({
         kind: 'toast',
-        text: colony.name + ': OSR honey setting in comb — harvest THIS WEEK.',
+        text: colony.name + ': OSR flow ended — harvest within 1 week before honey sets in the comb.',
+        tone: 'warn',
+      });
+      break;
+
+    case 'osrCrystal':
+      logEvent('🍯', colony.name + ': your oilseed rape honey is crystallising in the comb. OSR honey sets like concrete — it cannot be extracted by centrifuge once set. Extract immediately or most of this crop will be lost.', 'bad');
+      out.push({
+        kind: 'toast',
+        text: colony.name + ': OSR honey setting in comb — extract NOW or most is lost.',
+        tone: 'bad',
+      });
+      // First-time explainer teaching the OSR crystallisation mechanic
+      if (!Game.flags.seenExplainers['osr_crystal_first']) {
+        out.push({
+          kind  : 'explainer',
+          id    : 'osr_crystal_first',
+          title : 'Oilseed Rape Honey — A Race Against Time',
+          body  : '<p><strong>Oilseed rape honey crystallises faster than any other common UK honey.</strong> Its high glucose content (~30%) means it begins to set in the comb within 10-14 days of the flow ending.</p>' +
+                  '<p>Once crystallised in the comb it sets like concrete. Bees cannot uncap or move it. In supers it cannot be extracted by centrifuge — it must be cut out or the frames warmed. In the brood box it blocks cells the queen needs for laying.</p>' +
+                  '<p><strong>The rule with OSR:</strong> as soon as you see the flow is ending (late May on farmland sites), inspect the supers immediately and harvest any capped OSR honey within the next 7-10 days. Do not wait for the super to be fully capped.</p>' +
+                  '<p>You can tell OSR honey in the comb: it looks white or very pale cream rather than golden, and the frames feel unusually heavy for their state of cappings.</p>',
+        });
+      }
+      break;
+
+    case 'osrBroodCrystal':
+      // Issue D: OSR honey has crystallised in the brood box
+      logEvent('🍯', colony.name + ': oilseed rape honey has crystallised inside the brood box. The queen cannot lay in those cells until the frames are cleared. This will restrict brood space and increase swarm pressure. Warm the frames gently or remove and cut out the set comb.', 'bad');
+      out.push({
+        kind: 'toast',
+        text: colony.name + ': OSR set in brood box — queen space blocked.',
         tone: 'bad',
       });
       break;
@@ -480,6 +513,28 @@ function _sim_resolveEvent(ev, week) {
         text: colony.name + ' is starving. Feed immediately.',
         tone: 'bad',
       });
+      break;
+
+    case 'low_winter_stores':
+      // Autumn stores below winter safe minimum — fired during feeding window (Sep-Oct)
+      var _storesKg = ev.honey != null ? ev.honey.toFixed(1) : '?';
+      logEvent('🍯', colony.name + ' has only ' + _storesKg + ' kg in the brood box — below the 18 kg safe minimum for winter. Feed 2:1 syrup now.', 'bad');
+      if (!Game.flags.seenExplainers['low_winter_stores_first']) {
+        out.push({
+          kind  : 'explainer',
+          id    : 'low_winter_stores_first',
+          title : 'Winter Stores Warning',
+          body  : '<p><strong>' + colony.name + '</strong> has fewer than 18 kg of stores going into winter — the standard UK minimum a colony needs to survive until spring forage starts in March.</p>' +
+                  '<p>Feed <strong>2:1 sugar syrup</strong> (2 kg sugar to 1 litre water) now, while the weather is still warm enough for the bees to take it down and convert it to stores. Stop when the hive feels reassuringly heavy when hefted from behind, or when night temperatures consistently drop below about 10°C — cold bees cannot process syrup.</p>' +
+                  '<p>If you miss the syrup window, <strong>fondant</strong> placed directly on the top bars in January or February can save a starving colony — bees can reach it even in a tight cluster without breaking formation.</p>',
+        });
+      } else {
+        out.push({
+          kind: 'toast',
+          text: colony.name + ': stores below winter safe minimum (' + _storesKg + ' kg). Feed 2:1 syrup to build to 18 kg.',
+          tone: 'bad',
+        });
+      }
       break;
 
     case 'disease':
@@ -758,6 +813,36 @@ function buildAdvisor() {
       badCount++;
     }
 
+    /* OSR crystallisation warnings — read directly from colony state, not
+       col.known, because crystallisation is a physical fact visible without
+       a formal inspection (the beekeeper can see the super is on the hive).
+       FIX (Issue E): these are the persistent mentor-panel warnings that
+       complement the one-shot toast events from colony.js. */
+    if (col.osrBroodCrystallised) {
+      items.push({
+        tone: 'bad',
+        icon: '🍯',
+        text: col.name + ': OSR honey has crystallised inside the brood box, blocking cells the queen needs. Remove or warm the affected frames to restore brood space.',
+      });
+      badCount++;
+    }
+
+    if (col.osrCrystallised && col.superHoney > 0) {
+      items.push({
+        tone: 'bad',
+        icon: '🍯',
+        text: col.name + ': the OSR honey in your supers has crystallised in the comb. It cannot be extracted by centrifuge. Harvest immediately — you will lose most of this crop but the frames must be cleared before they are permanently ruined.',
+      });
+      badCount++;
+    } else if ((col.osrRisk || 0) >= 1 && col.superHoney > 0 && !col.osrCrystallised) {
+      items.push({
+        tone: 'warn',
+        icon: '🍯',
+        text: col.name + ': OSR honey is at risk of crystallising in the comb. The flow has ended and it will set within 7-10 days. Harvest this super immediately — do not wait for full capping.',
+      });
+      warnCount++;
+    }
+
     if (k.status === 'ok') okCount++;
   }
 
@@ -776,10 +861,55 @@ function buildAdvisor() {
         text: 'Start feeding 2:1 syrup to top up winter stores, until each hive feels heavy when hefted from behind.' });
       if (wkInYear >= 40) items.push({ tone: 'info', icon: '🐭',
         text: 'Check mouse guards are fitted before the weather turns cold.' });
+
+      /* Supers-still-on warning after week 35 — delays varroa treatment and risks wet honey */
+      if (wkInYear >= 36) {
+        var aliveCols2 = aliveColonies();
+        for (var _si = 0; _si < aliveCols2.length; _si++) {
+          if ((aliveCols2[_si].supers || 0) > 0) {
+            items.push({ tone: 'warn', icon: '📦',
+              text: aliveCols2[_si].name + ' still has supers on. After week 35 any honey risks being too wet to store safely, and you cannot apply most varroa treatments until the supers are off.' });
+            warnCount++;
+            break;
+          }
+        }
+      }
     }
     if ((season === 'winter' && wkInYear >= 49) || wkInYear <= 4) {
       items.push({ tone: 'info', icon: '💊',
         text: 'Midwinter, while the colony is broodless, is the best time to treat with oxalic acid.' });
+    }
+
+    /* Deep-winter isolation starvation risk: small cluster + low brood-box honey.
+       Reads actual colony.honey (not fog-of-war). Bees cannot move to distant frames
+       when in cluster — fondant on the top bars can save them. */
+    var _deepWinter = (wkInYear <= 8 || wkInYear >= 44);
+    if (_deepWinter) {
+      var aliveCols4 = aliveColonies();
+      for (var _ii = 0; _ii < aliveCols4.length; _ii++) {
+        var _ic = aliveCols4[_ii];
+        if (_ic.honey > 0 && _ic.honey < 5 && _ic.population < 5000) {
+          items.push({ tone: 'bad', icon: '🍯',
+            text: _ic.name + ' is a small cluster (' + Math.round(_ic.population / 1000) + 'k bees) with only ' + _ic.honey.toFixed(1) + ' kg in the brood box. Risk of isolation starvation — the cluster may not be able to reach stores on distant frames. Place fondant directly on the top bars now.' });
+          badCount++;
+        }
+      }
+    }
+
+    /* Pre-winter stores check — proactive warning in Oct (wk 40-43) even without inspection.
+       A colony needs at least 18 kg in the brood box to be safe through a UK winter.
+       This reads the real colony honey value (not fog-of-war) to flag low stores BEFORE winter. */
+    if (wkInYear >= 40 && wkInYear <= 43) {
+      var aliveCols3 = aliveColonies();
+      for (var _wi = 0; _wi < aliveCols3.length; _wi++) {
+        var _wc = aliveCols3[_wi];
+        if (_wc.honey < SIM.winterStoresNeed) {
+          var _deficit = (SIM.winterStoresNeed - _wc.honey).toFixed(1);
+          items.push({ tone: 'warn', icon: '🍯',
+            text: _wc.name + ' has around ' + _wc.honey.toFixed(1) + ' kg in the brood box — ' + _deficit + ' kg short of the safe winter minimum (18 kg). Feed 2:1 syrup now; stop when it is too cold for bees to take it down (below about 10°C).' });
+          warnCount++;
+        }
+      }
     }
     if (season === 'spring' && wkInYear >= 16 && wkInYear <= 22) {
       items.push({ tone: 'info', icon: '📦',
