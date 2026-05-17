@@ -1527,6 +1527,7 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 .inspect-detail { display: flex; gap: 16px; margin-bottom: 14px; align-items: flex-start; }
 .inspect-detail-read { flex: 1; min-width: 0; }
+.inspect-frame-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .frame-note {
   background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px;
   padding: 7px 10px; font-size: 13px; margin: 8px 0;

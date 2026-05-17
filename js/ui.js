@@ -2983,11 +2983,33 @@ function _openInspectionModal(colony, report) {
   var selected = 0;
   var seen = {};        // frame index -> true once it has been lifted
   var answers = {};     // frame index -> { chosen, correct }
+  var faceFlip = {};    // frame index -> true when showing face B
   seen[0] = true;
 
   /* The teaching Q&A runs only until the player has completed one full
      inspection — after that, lifting a frame just shows its reading. */
   var teaching = !(Game.flags && Game.flags.inspectionTaught);
+
+  /* Produce face B cells: edge frames gain honey on outer face, central frames
+     have a slightly earlier-stage brood pattern (queen laid on face A first) */
+  function _insp_faceBCells(cells, frameIdx) {
+    var N = frames.length || 11;
+    var center = (N - 1) / 2;
+    var dist = Math.abs(frameIdx - center) / (center || 1);
+    var c = {};
+    Object.keys(cells || {}).forEach(function(k) { c[k] = cells[k] || 0; });
+    var shift = Math.round(dist * 0.12 * (c.empty || 0));
+    if (shift > 0) {
+      c.honey = (c.honey || 0) + shift;
+      c.empty = Math.max(0, (c.empty || 0) - shift);
+    }
+    if (dist < 0.3) {
+      var delta = Math.round((c.eggs || 0) * 0.2);
+      c.eggs  = Math.max(0, c.eggs - delta);
+      c.larva = (c.larva || 0) + delta;
+    }
+    return c;
+  }
 
   var modalBody = h('div', { class: 'inspect' });
 
@@ -3021,7 +3043,7 @@ function _openInspectionModal(colony, report) {
         title: isSeen
           ? ('Frame ' + (idx + 1) + (fr.label ? ' — ' + fr.label : ''))
           : ('Frame ' + (idx + 1) + ' — not yet examined'),
-        onclick: function() { selected = idx; seen[idx] = true; build(); }
+        onclick: function() { selected = idx; seen[idx] = true; faceFlip[idx] = false; build(); }
       });
       /* a frame only reveals what it holds once you have lifted it out */
       if (isSeen) {
@@ -3041,18 +3063,42 @@ function _openInspectionModal(colony, report) {
     ]));
 
     var fr = frames[selected] || { cells: {}, label: '', hasQueen: false };
+    var isFlipped = !!faceFlip[selected];
+    /* Build the display cells — face B is a computed variation of face A */
+    var displayCells = isFlipped ? _insp_faceBCells(fr.cells, selected) : (fr.cells || {});
+    var displayFr = { cells: displayCells, hasQueen: fr.hasQueen && !isFlipped,
+                      queenCellType: fr.queenCellType, label: fr.label };
+
+    /* Flip button */
+    var inspFlipBtn = h('button', {
+      class: 'fm-flip-btn' + (isFlipped ? ' fm-flip-btn--b' : ''),
+      title: isFlipped ? 'Rotate back to face A' : 'Rotate frame to see the other side'
+    }, [
+      h('span', { class: 'fm-flip-icon' }, '🔄'),
+      h('span', {}, isFlipped ? ' Face B' : ' Face A')
+    ]);
+    inspFlipBtn.addEventListener('click', function() {
+      faceFlip[selected] = !faceFlip[selected];
+      build();
+    });
+
     modalBody.appendChild(h('div', { class: 'inspect-detail' }, [
-      _ui_buildComb(fr),
+      _ui_buildComb(displayFr),
       h('div', { class: 'inspect-detail-read' }, [
-        h('div', { class: 'card-title' }, 'Frame ' + (selected + 1) + (fr.label ? ' — ' + fr.label : '')),
-        fr.hasQueen ? h('div', { class: 'find-result found' }, [
+        h('div', { class: 'inspect-frame-header' }, [
+          h('div', { class: 'card-title' }, 'Frame ' + (selected + 1) + (fr.label ? ' — ' + fr.label : '')),
+          inspFlipBtn
+        ]),
+        displayFr.hasQueen ? h('div', { class: 'find-result found' }, [
           h('span', { class: 'queen-mini' }), ' The queen is on this frame'
-        ]) : null,
+        ]) : (fr.hasQueen && isFlipped ? h('div', { class: 'find-result found' }, [
+          h('span', { class: 'queen-mini' }), ' Queen on face A — flip back to see her'
+        ]) : null),
         _ui_buildCombLegend()
       ])
     ]));
 
-    /* the teaching question for the frame in hand */
+    /* the teaching question for the frame in hand — use face A content for quiz */
     modalBody.appendChild(_ui_buildFrameQA(fr, selected, colony, answers, build, teaching));
 
     /* findings and summary stay locked until every frame has been examined */
