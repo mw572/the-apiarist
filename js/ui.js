@@ -1630,59 +1630,85 @@ function _ui_buildJournalView() {
  * openHiveDetail(colony)
  * Opens a modal showing the colony's last-known state and action buttons.
  */
-function openHiveDetail(colony) {
+function openHiveDetail(colony, _startTab) {
   var known = colony.known;
   var weeksAgo = 0;
   if (known && typeof Game !== 'undefined' && Game) {
     weeksAgo = Game.week - known.week;
   }
 
-  /* Bug H fix: dead colonies get a dedicated dead-state panel instead of
-     the live cross-section which would show misleading frame content. */
+  /* Default tab: actions if never inspected, inspection otherwise */
+  var activeTab = _startTab || (known && !known.heftOnly ? 'inspection' : 'actions');
+
+  /* ── Left column: cross-section + hive assembly ── */
   var crossSection;
   if (!colony.alive) {
-    var deadReason = colony.deadReason || 'Unknown cause';
     crossSection = h('div', { class: 'hive-cross hive-cross-dead' }, [
       h('div', { class: 'cross-section-title' }, 'Hive cross-section'),
       h('div', { class: 'cross-dead-state' }, [
         h('div', { class: 'cross-dead-icon' }, '🪦'),
         h('div', { class: 'cross-dead-label' }, 'Colony lost'),
-        h('div', { class: 'cross-dead-reason' }, 'Cause: ' + deadReason)
+        h('div', { class: 'cross-dead-reason' }, 'Cause: ' + (colony.deadReason || 'Unknown cause') )
       ])
     ]);
   } else {
     crossSection = _ui_buildHiveCross(colony);
   }
 
-  var infoNode = h('div', { class: 'hive-info' }, []);
-
-  if (!known) {
-    infoNode.appendChild(h('div', { class: 'colony-known-note', text: 'This colony has not been inspected yet. You know nothing of its interior state.' }));
-  } else if (known.heftOnly) {
-    /* Heft stub — stores only, hive not opened */
-    var storesLabel = { critical: 'critically low — feed fondant now', low: 'running light — consider fondant', ok: 'adequate', heavy: 'plenty in reserve', unknown: 'unknown' }[known.stores] || known.stores;
-    infoNode.appendChild(h('div', { class: 'colony-known-note' },
-      'Stores checked by hefting (week ' + known.week + '): ' + storesLabel + '. The hive has not been opened — inspect to see the full picture.'));
-  } else {
-    if (weeksAgo >= 3) {
-      infoNode.appendChild(h('div', { class: 'colony-known-note' },
-        'Last inspected ' + weeksAgo + ' weeks ago. The colony may have changed considerably since then.'));
-    }
-    infoNode.appendChild(_ui_buildKnownSummary(known));
-  }
-
-  infoNode.appendChild(h('div', { class: 'divider' }));
-  infoNode.appendChild(h('div', { style: { fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--honey-dk)', marginBottom: '8px' } }, 'Actions'));
-  infoNode.appendChild(_ui_buildActionButtons(colony));
-
-  /* Stack editor below cross-section */
   var stackEditor = colony.alive ? _ui_buildStackEditor(colony) : null;
   var leftCol = h('div', { class: 'hive-left-col' }, stackEditor ? [crossSection, stackEditor] : [crossSection]);
 
-  var bodyNode = h('div', { class: 'hive-detail' }, [leftCol, infoNode]);
+  /* ── Inspection panel content ── */
+  var inspectionContent = h('div', {}, []);
+  if (!known) {
+    inspectionContent.appendChild(h('div', { class: 'colony-known-note', text: 'This colony has not been inspected yet. You know nothing of its interior state.' }));
+  } else if (known.heftOnly) {
+    var storesLabel = { critical: 'critically low — feed fondant now', low: 'running light — consider fondant', ok: 'adequate', heavy: 'plenty in reserve', unknown: 'unknown' }[known.stores] || known.stores;
+    inspectionContent.appendChild(h('div', { class: 'colony-known-note' },
+      'Stores checked by hefting (week ' + known.week + '): ' + storesLabel + '. The hive has not been opened — inspect to see the full picture.'));
+  } else {
+    if (weeksAgo >= 3) {
+      inspectionContent.appendChild(h('div', { class: 'colony-known-note' },
+        'Last inspected ' + weeksAgo + ' weeks ago. The colony may have changed considerably since then.'));
+    }
+    inspectionContent.appendChild(_ui_buildKnownSummary(known));
+  }
+
+  /* ── Tab panels ── */
+  var panelInspection = h('div', { class: 'hive-tab-panel' + (activeTab === 'inspection' ? '' : ' hive-tab-hidden') }, [inspectionContent]);
+  var panelActions    = h('div', { class: 'hive-tab-panel' + (activeTab === 'actions'    ? '' : ' hive-tab-hidden') }, [_ui_buildActionButtons(colony)]);
+
+  /* ── Tab bar ── */
+  var tabInspect = h('button', {
+    class: 'hive-tab' + (activeTab === 'inspection' ? ' active' : ''),
+    onclick: function() {
+      tabInspect.className = 'hive-tab active';
+      tabAct.className = 'hive-tab';
+      panelInspection.classList.remove('hive-tab-hidden');
+      panelActions.classList.add('hive-tab-hidden');
+    }
+  }, '🔍 Last inspection' + (known && !known.heftOnly && weeksAgo > 0 ? ' (' + weeksAgo + 'w ago)' : ''));
+
+  var tabAct = h('button', {
+    class: 'hive-tab' + (activeTab === 'actions' ? ' active' : ''),
+    onclick: function() {
+      tabAct.className = 'hive-tab active';
+      tabInspect.className = 'hive-tab';
+      panelActions.classList.remove('hive-tab-hidden');
+      panelInspection.classList.add('hive-tab-hidden');
+    }
+  }, '⚙ Actions');
+
+  var rightCol = h('div', { class: 'hive-right-col' }, [
+    h('div', { class: 'hive-tab-bar' }, [tabInspect, tabAct]),
+    panelInspection,
+    panelActions
+  ]);
+
+  var bodyNode = h('div', { class: 'hive-detail' }, [leftCol, rightCol]);
 
   openModal({
-    title: colony.name + (colony.alive ? '' : ' (Dead)'),
+    title: colony.name + (colony.alive ? '' : ' — Colony lost'),
     body: bodyNode,
     xwide: true,
     buttons: [{ label: 'Close', act: closeModal }]
@@ -1705,7 +1731,7 @@ function _ui_buildStackEditor(colony) {
   function refresh() {
     closeModal();
     render();
-    if (colony.alive) openHiveDetail(colony);
+    if (colony.alive) openHiveDetail(colony, 'actions');
   }
 
   var ICONS  = { broodBox: '🟫', super: '📦', queenExcluder: '🔲', clearerBoard: '🔳', newspaper: '📰' };
@@ -2327,7 +2353,7 @@ function _ui_openBoxDetail(colony, boxType, boxIdx) {
 
   buildPanel();
 
-  function _backToHive() { closeModal(); if (colony.alive) openHiveDetail(colony); }
+  function _backToHive() { closeModal(); if (colony.alive) openHiveDetail(colony, 'actions'); }
   var buttons = [{ label: '← Back', act: _backToHive }];
   if (boxType === 'super' && colony.alive) {
     buttons.unshift({ label: '🍯 Harvest honey', cls: 'btn-leaf', act: function() {
@@ -2700,10 +2726,10 @@ function _ui_openHarvestDialog(colony) {
     }
     closeModal();
     render();
-    if (colony.alive) openHiveDetail(colony);
+    if (colony.alive) openHiveDetail(colony, 'actions');
   }
 
-  function backToHive() { closeModal(); if (colony.alive) openHiveDetail(colony); }
+  function backToHive() { closeModal(); if (colony.alive) openHiveDetail(colony, 'actions'); }
 
   openModal({
     title: '🍯 Harvest honey — ' + colony.name,
@@ -2756,7 +2782,7 @@ function _ui_actionDialog(key, colony) {
   }
 
   var controls = _ui_actionControls(key, colony);
-  function back() { closeModal(); if (colony.alive) openHiveDetail(colony); }
+  function back() { closeModal(); if (colony.alive) openHiveDetail(colony, 'actions'); }
 
   if (controls.options) {
     body.appendChild(h('div', { class: 'ag-label', style: { marginTop: '14px' } }, 'Your choice'));
@@ -2773,7 +2799,7 @@ function _ui_actionDialog(key, colony) {
         if (r && r.msg) toast(r.msg, r.ok ? 'good' : 'bad');
         closeModal();
         render();
-        if (colony.alive) openHiveDetail(colony);
+        if (colony.alive) openHiveDetail(colony, 'actions');
       } }
     ] });
   }
@@ -2864,7 +2890,7 @@ function _ui_actionControls(key, colony) {
       if (r && r.msg) toast(r.msg, r.ok ? 'good' : 'bad');
       closeModal();
       render();
-      if (colony.alive) openHiveDetail(colony);
+      if (colony.alive) openHiveDetail(colony, 'actions');
     } }, [
       h('span', { class: 'ag-option-label', text: label }),
       note ? h('span', { class: 'ag-option-note', text: note }) : null

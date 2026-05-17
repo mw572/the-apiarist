@@ -512,8 +512,8 @@ button { font-family: var(--sans); cursor: pointer; }
   width: 560px; animation: pop .16s ease-out;
 }
 @keyframes pop { from { transform: scale(.94); opacity: 0; } }
-.modal.wide { width: 880px; }
-.modal.xwide { width: 1080px; }
+.modal.wide  { width: 900px; }
+.modal.xwide { width: min(1400px, 96vw); }
 .modal-head {
   display: flex; align-items: center; gap: 10px;
   padding: 13px 18px; border-bottom: 2px solid var(--honey);
@@ -536,10 +536,24 @@ button { font-family: var(--sans); cursor: pointer; }
    HIVE DETAIL — cross-section with real frame content
    ==================================================================== */
 
-.hive-detail { display: flex; gap: 20px; min-height: 0; }
+.hive-detail { display: flex; gap: 24px; min-height: 0; height: calc(88vh - 110px); }
 .hive-cross  { flex: none; width: 260px; display: flex; flex-direction: column; overflow-y: visible; max-height: none; }
 .hive-left-col > .hive-cross { width: 100%; }
-.hive-info   { flex: 1; min-width: 0; overflow-y: auto; max-height: 72vh; }
+.hive-right-col { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.hive-tab-bar {
+  display: flex; gap: 0; border-bottom: 2px solid var(--honey);
+  margin-bottom: 14px; flex-shrink: 0;
+}
+.hive-tab {
+  padding: 8px 18px; font-size: 13px; font-weight: 600;
+  background: transparent; border: none; border-bottom: 3px solid transparent;
+  cursor: pointer; color: var(--ink-soft); margin-bottom: -2px;
+  border-radius: 6px 6px 0 0; transition: color .12s;
+}
+.hive-tab:hover { color: var(--ink); background: var(--paper-2); }
+.hive-tab.active { color: var(--honey-dk); border-bottom-color: var(--honey-dk); background: transparent; }
+.hive-tab-panel { flex: 1; min-height: 0; overflow-y: auto; }
+.hive-tab-hidden { display: none; }
 
 /* Primary action row — big buttons at the top of the actions panel */
 .action-primary-row {
@@ -1474,8 +1488,9 @@ button { font-family: var(--sans); cursor: pointer; }
   .modal-foot { padding: 10px 14px; }
 
   /* --- hive detail: stack on mobile --- */
-  .hive-detail { flex-direction: column; }
-  .hive-cross, .hive-info { max-height: none; overflow-y: visible; }
+  .hive-detail { flex-direction: column; height: auto; }
+  .hive-cross, .hive-right-col { max-height: none; overflow-y: visible; }
+  .hive-tab-panel { overflow-y: visible; }
 
   /* --- inspection: frames scroll sideways, detail stacks --- */
   .inspect-box-inner { justify-content: flex-start; overflow-x: auto; padding-bottom: 4px; }
