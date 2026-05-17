@@ -594,6 +594,103 @@ button { font-family: var(--sans); cursor: pointer; }
 .cross-meta-line  { font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
 .cross-click-hint { font-size: 10px; color: var(--ink-3); margin-top: 5px; font-style: italic; }
 
+/* Queen cell peanut overlays on brood box */
+.cross-box { position: relative; }
+.cross-qcell-overlay {
+  position: absolute; display: flex; gap: 3px;
+  z-index: 6; pointer-events: none;
+}
+.cross-qcells-bottom {
+  bottom: -7px; left: 50%; transform: translateX(-50%);
+  flex-direction: row;
+}
+.cross-qcells-face {
+  left: 6px; top: 50%; transform: translateY(-50%);
+  flex-direction: column;
+}
+.cross-qcell-peanut {
+  width: 8px; height: 14px;
+  background: radial-gradient(ellipse 60% 100% at 50% 80%, #d4a030 60%, #a07020 100%);
+  border: 1.5px solid #7a5010;
+  border-radius: 40% 40% 50% 50% / 30% 30% 70% 70%;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+.cross-qcell-peanut.qc-capped {
+  background: radial-gradient(ellipse 60% 100% at 50% 80%, #c07820 60%, #804808 100%);
+  border-color: #502800;
+}
+.cross-qcell-peanut.qc-super {
+  background: radial-gradient(ellipse 60% 100% at 50% 80%, #c84030 60%, #882018 100%);
+  border-color: #501010;
+  border-radius: 50% 50% 50% 50%;
+  width: 9px; height: 9px;
+}
+
+/* Swarm imminent — brood box pulsing glow */
+@keyframes swarm-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 40, 20, 0); outline-color: #c82814; }
+  50%       { box-shadow: 0 0 8px 3px rgba(200, 40, 20, 0.55); outline-color: #ff4020; }
+}
+.cross-brood-imminent {
+  outline: 2px solid #c82814 !important;
+  outline-offset: -1px !important;
+  animation: swarm-pulse 1.2s ease-in-out infinite;
+}
+
+/* Demaree top-box style */
+.cross-brood-demaree {
+  outline: 2px dashed var(--honey-dk) !important;
+  outline-offset: -1px !important;
+  background: linear-gradient(180deg, #f5e8b0, #d8bc72) !important;
+}
+
+/* OSR warning blocks */
+.cross-osr-warn {
+  font-size: 10px; font-weight: 700; color: #8a3000;
+  background: #fde8c8; border: 1px solid #c07020; border-radius: 3px;
+  padding: 3px 6px; margin-top: 6px; width: 210px; box-sizing: border-box;
+}
+.cross-osr-notice {
+  font-size: 10px; color: var(--honey-dk);
+  background: #fef4d8; border: 1px solid #d4a020; border-radius: 3px;
+  padding: 2px 6px; margin-top: 5px; width: 210px; box-sizing: border-box;
+}
+
+/* Demaree info block */
+.cross-demaree-info {
+  font-size: 10px; color: var(--ink-soft);
+  background: #f4ecd0; border: 1px solid #c0a050; border-radius: 3px;
+  padding: 2px 6px; margin-top: 5px; width: 210px; box-sizing: border-box;
+}
+
+/* Queen cells meta line */
+.cross-qc-meta {
+  font-size: 11px; color: var(--ink-soft); margin-top: 4px;
+}
+
+/* Urgent highlight for imminent states */
+.qc-urgent {
+  color: #b01810 !important; font-weight: 700;
+  background: #fde8e0 !important; border-color: #c82020 !important;
+  border-radius: 3px; padding: 2px 5px;
+}
+
+/* Hive card inspection urgency badge */
+.hive-insp-badge {
+  font-size: 9px; font-weight: 700; border-radius: 3px;
+  padding: 1px 4px; margin-top: 2px; display: inline-block;
+}
+.insp-warn    { background: #fff3cd; color: #8a6000; border: 1px solid #d4a000; }
+.insp-urgent  { background: #ffe0d0; color: #8a2000; border: 1px solid #c04000; }
+
+/* Hive card urgency badges */
+.badge-warn     { background: var(--warn-bg,#fef3c7); color: var(--honey-dk); }
+.badge-bad      { background: var(--bad-bg,#fee2e2);  color: var(--bad,#c03030); }
+.badge-imminent {
+  background: #ffe0d0; color: #b01810;
+  animation: swarm-pulse 1.2s ease-in-out infinite;
+}
+
 /* ====================================================================
    HIVE CARD — swarm pressure strip
    ==================================================================== */

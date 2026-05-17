@@ -665,6 +665,114 @@ function addBroodBox(colony) {
 }
 
 /**
+ * demareeMethod(colony) -> {ok, msg}
+ *
+ * The Demaree method — keeps the colony intact while relieving congestion.
+ * The queen is left in a new brood box on the original floor with one frame
+ * of open brood. All the remaining brood goes into a box above the supers,
+ * separated from the queen by two queen excluders. The colony "feels" like
+ * it has swarmed but you keep all the bees and foragers.
+ *
+ * CRITICAL PATH DEPENDENCY: the top box will raise emergency cells from
+ * its youngest larvae. Player MUST inspect within 7 days (one tick) and
+ * call demareeCheck() to destroy those cells, or a cast swarm may issue.
+ */
+function demareeMethod(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+  if (colony.demaree) return { ok: false, msg: 'A Demaree is already in progress on this hive.' };
+  if (!colony.queenExcluder) return { ok: false, msg: 'You need a queen excluder fitted first.' };
+
+  const weekOfYear = ((typeof Game !== 'undefined' && Game.week) || 1);
+  const wkIdx = ((weekOfYear - 1) % 52);
+  if (wkIdx < 13 || wkIdx > 30) {
+    return { ok: false, msg: 'The Demaree method is a swarm-season manipulation — do it in late April to July when the colony is at risk of swarming.' };
+  }
+
+  /* Must have found the queen at last inspection */
+  if (!colony.known || !colony.known.queenSeen) {
+    return { ok: false, msg: 'You need to find the queen before you can do a Demaree — inspect the hive first and locate her.' };
+  }
+
+  const boxCost = 35;
+  if (!spend(boxCost, `Spare brood box for Demaree on ${colony.name}`)) {
+    return { ok: false, msg: `Not enough funds — a spare brood box costs £${boxCost}.` };
+  }
+
+  /* Set up the Demaree state */
+  colony.demaree = { age: 0, checked: false, topBroodFrames: 8 };
+
+  /* Immediate relief: swarm pressure drops sharply, queen cells destroyed if any */
+  colony.swarmPressure = Math.min(colony.swarmPressure, 0.15);
+  if (colony.queenCells.type === 'swarm') {
+    colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
+  }
+
+  const msg = `Demaree carried out on ${colony.name} (£${boxCost}). The queen is in the lower box; all other brood is above the supers. You have 7 days to come back and destroy the emergency cells in the top box — do not miss this check or the colony may swarm from above.`;
+  logEvent('🔄', msg, 'good');
+  render();
+  return { ok: true, msg };
+}
+
+/**
+ * demareeCheck(colony) -> {ok, msg}
+ *
+ * The critical day-7 check after a Demaree. Player destroys all emergency
+ * queen cells in the top box. If done in time, the Demaree holds and no
+ * cast swarm is possible (top box larvae too old to rear queens after this).
+ */
+function demareeCheck(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+  if (!colony.demaree) return { ok: false, msg: 'No Demaree in progress on this hive.' };
+  if (colony.demaree.age >= 2) {
+    return { ok: false, msg: 'The top brood has all emerged — the Demaree has already resolved naturally.' };
+  }
+
+  colony.demaree.checked = true;
+
+  /* Destroy any emergency cells that may have formed */
+  if (colony.queenCells.type === 'emergency') {
+    colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
+  }
+
+  /* Swarm pressure remains low */
+  colony.swarmPressure = Math.min(colony.swarmPressure, 0.20);
+
+  const msg = `Demaree check complete on ${colony.name}. Emergency cells in the top box destroyed — no queen can emerge from there now. The top brood will hatch over the next 2 weeks, leaving an extra box of empty drawn comb.`;
+  logEvent('✅', msg, 'good');
+  render();
+  return { ok: true, msg };
+}
+
+/**
+ * fitClearerBoard(colony) -> {ok, msg}
+ *
+ * Fit a clearer board between the super and the brood box the evening
+ * before harvest. Bees move down through the one-way escapes and cannot
+ * return — super is bee-free the next day, no brushing needed.
+ */
+function fitClearerBoard(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+  if ((colony.supers || 0) === 0) return { ok: false, msg: 'No supers on this hive to fit a clearer board for.' };
+  if (colony.clearerFitted) return { ok: false, msg: 'Clearer board is already fitted — harvest when ready.' };
+
+  /* Check inventory or charge hire fee */
+  let cost = 0;
+  if (!Game.inventory.tools.clearerBoard) {
+    cost = 8;
+    if (!spend(cost, `Hire a clearer board for ${colony.name}`)) {
+      return { ok: false, msg: `Not enough funds — hiring a clearer board costs £${cost}.` };
+    }
+  }
+
+  colony.clearerFitted = true;
+
+  const msg = `Clearer board fitted on ${colony.name}${cost ? ` (hired for £${cost})` : ''}. Leave it overnight — the bees will clear from the supers and you can harvest clean tomorrow.`;
+  logEvent('🍯', msg, 'plain');
+  render();
+  return { ok: true, msg };
+}
+
+/**
  * setEntrance(colony, mode) -> {ok, msg}
  * Set entrance mode: 'open', 'reduced', or 'mouseguard'. Free and instant.
  */
@@ -745,9 +853,15 @@ function treatColony(colony, treatmentId) {
   const t = TREATMENTS[treatmentId];
   if (!t) return { ok: false, msg: `Unknown treatment: ${treatmentId}.` };
 
-  /* Refuse if honey supers are on and treatment is not harvest safe */
-  if (colony.supers > 0 && !t.harvestSafe) {
+  /* MAQS (formic acid) is the ONLY treatment approved for use with supers on.
+     All other treatments contaminate honey — supers must be off first. */
+  if (colony.supers > 0 && !t.harvestSafe && treatmentId !== 'maqs') {
     return { ok: false, msg: `Cannot apply ${t.name} while honey supers are on — it will contaminate the crop. Remove the supers first.` };
+  }
+  if (colony.supers > 0 && treatmentId === 'maqs') {
+    /* MAQS with supers: honey is safe but should be labelled */
+    warnings = warnings || [];
+    warnings.push('MAQS can be used with supers on — honey remains safe to eat but note the treatment dates for your records.');
   }
 
   /* Check treatment stock — paid for at Market, not here */

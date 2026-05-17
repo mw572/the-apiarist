@@ -752,10 +752,46 @@ function _ui_buildHiveCard(colony) {
     ? known.populationBand.charAt(0).toUpperCase() + known.populationBand.slice(1)
     : (known.note || 'Inspected'));
 
-  var showBadge = known && ((known.queenCells && known.queenCells !== 'none') || known.disease);
+  var showBadge = false;
   var badgeGlyph = '';
-  if (known && known.queenCells && known.queenCells !== 'none') badgeGlyph = '⚠️';
-  else if (known && known.disease) badgeGlyph = '🔴';
+  var badgeCls = '';
+  if (colony.alive) {
+    /* Priority 1: swarm cells or disease warning */
+    if (known && known.queenCells && known.queenCells !== 'none') {
+      showBadge = true; badgeGlyph = '⚠️'; badgeCls = 'badge-warn';
+    } else if (known && known.disease) {
+      showBadge = true; badgeGlyph = '🔴'; badgeCls = 'badge-bad';
+    }
+    /* Priority 2: cells capped = swarm IMMINENT */
+    if (colony.queenCells && colony.queenCells.type === 'swarm' && colony.queenCells.state === 'capped') {
+      showBadge = true; badgeGlyph = '🚨'; badgeCls = 'badge-imminent';
+    }
+    /* Priority 3: demaree active — needs check */
+    if (colony.demaree && !colony.demaree.checked && colony.demaree.age >= 1) {
+      showBadge = true; badgeGlyph = '🔄'; badgeCls = 'badge-warn';
+    }
+    /* Priority 4: OSR crystallisation risk */
+    if (colony.osrCrystallised) {
+      showBadge = true; badgeGlyph = '🍯'; badgeCls = 'badge-bad';
+    }
+  }
+
+  /* Inspection urgency: days since last inspect, shown during swarm season */
+  var inspectUrgency = null;
+  if (colony.alive) {
+    var _curWeek = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
+    var _inWin   = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(_curWeek) : false;
+    var _weeksSince = _curWeek - (colony.lastInspected || 0);
+    if (_inWin && _weeksSince >= 1) {
+      var _daysSince = _weeksSince * 7;
+      var _urgCls = _weeksSince >= 2 ? 'insp-urgent' : _weeksSince >= 1 ? 'insp-warn' : '';
+      if (_urgCls) {
+        inspectUrgency = h('div', { class: 'hive-insp-badge ' + _urgCls,
+          title: _daysSince + ' days since last inspection' },
+          _daysSince + 'd');
+      }
+    }
+  }
 
   // Box stack: supers on top, brood boxes below
   var boxes = [];
@@ -821,7 +857,8 @@ function _ui_buildHiveCard(colony) {
     onclick: function() { openHiveDetail(colony); }
   }, [
     h('div', { class: 'hive-dot ' + dotCls }),
-    showBadge ? h('div', { class: 'hive-badge' }, badgeGlyph) : null,
+    showBadge ? h('div', { class: 'hive-badge ' + badgeCls }, badgeGlyph) : null,
+    inspectUrgency,
     h('div', { class: 'hive-bees' }, beeNodes),
     h('div', { class: 'hive-roof' }),
     h('div', { class: 'hive-stack' }, boxes),
@@ -1617,24 +1654,65 @@ function _ui_buildHiveCross(colony) {
   var queenFrameIdx = _ui_estimateQueenFrameIdx(colony);
   var qcellFrameIdx = _ui_estimateQCellFrameIdx(colony);
 
+  /* Queen cell state for visual overlays */
+  var qc = colony.queenCells || { type: 'none', count: 0, age: 0, state: 'none' };
+  var qcType  = qc.type  || 'none';
+  var qcState = qc.state || 'none';
+  var qcCount = qc.count || 0;
+  var hasQCells = (qcType !== 'none' && qcState !== 'none');
+  var isImminent = (qcType === 'swarm' && qcState === 'capped');
+
   for (var b = broodCount - 1; b >= 0; b--) {
     (function(bidx) {
-      var box    = (layout.broodBoxes && layout.broodBoxes[bidx]) || { frames: [] };
-      var lbl    = broodCount > 1 ? ('Brood box ' + (bidx + 1)) : 'Brood box';
-      /* Queen lives in bottom box (bidx 0) */
-      var qFrame = (bidx === 0) ? queenFrameIdx : -1;
+      var box = (layout.broodBoxes && layout.broodBoxes[bidx]) || { frames: [] };
+      var lbl = broodCount > 1 ? ('Brood box ' + (bidx + 1)) : 'Brood box';
+      var qFrame  = (bidx === 0) ? queenFrameIdx : -1;
       var qcFrame = (bidx === 0) ? qcellFrameIdx : -1;
 
       var framesEl = _ui_buildCrossFrames(box.frames || [], 'brood', qFrame, qcFrame, colony);
 
+      /* Box CSS classes */
+      var boxCls = 'cross-box cross-brood clickable';
+      if (bidx === 0 && isImminent) boxCls += ' cross-brood-imminent';
+      if (colony.demaree && bidx === 1) boxCls += ' cross-brood-demaree';
+
+      /* Label: add Demaree tag on top box */
+      var lblText = lbl;
+      if (colony.demaree && bidx === 1) {
+        var dAge = colony.demaree.age || 0;
+        var dChecked = !!colony.demaree.checked;
+        lblText += dChecked ? ' [Demaree ✓]' : (dAge >= 1 ? ' [Demaree – CHECK NOW]' : ' [Demaree day 0]');
+      }
+
+      /* Queen cell peanut overlay — bottom box only */
+      var peanutOverlay = null;
+      if (bidx === 0 && hasQCells) {
+        var peanuts = [];
+        var pCls = 'cross-qcell-peanut'
+          + (qcState === 'capped'   ? ' qc-capped' : '')
+          + (qcType  === 'swarm'    ? ' qc-swarm'  : '')
+          + (qcType  === 'supersedure' || qcType === 'emergency' ? ' qc-super' : '');
+        var pCount = Math.min(qcCount, 5);
+        for (var pi = 0; pi < pCount; pi++) {
+          peanuts.push(h('div', { class: pCls, title: qcType + ' cell (' + qcState + ')' }));
+        }
+        var overlayCls = (qcType === 'swarm')
+          ? 'cross-qcell-overlay cross-qcells-bottom'
+          : 'cross-qcell-overlay cross-qcells-face';
+        peanutOverlay = h('div', { class: overlayCls }, peanuts);
+      }
+
+      var boxChildren = [
+        h('div', { class: 'cross-box-label' }, lblText),
+        framesEl
+      ];
+      if (peanutOverlay) boxChildren.push(peanutOverlay);
+
       stack.appendChild(h('div', {
-        class: 'cross-box cross-brood clickable',
+        class: boxCls,
         title: lbl + ' — click to manage frames',
         onclick: function() { _ui_openBoxDetail(colony, 'brood', bidx); }
-      }, [
-        h('div', { class: 'cross-box-label' }, lbl),
-        framesEl
-      ]));
+      }, boxChildren));
     })(b);
   }
 
@@ -1647,6 +1725,27 @@ function _ui_buildHiveCross(colony) {
   /* --- Swarm pressure bar ------------------------------------------- */
   var swarmBar = _ui_buildSwarmPressureBar(colony);
 
+  /* --- OSR crystallisation warning ---------------------------------- */
+  var osrWarn = null;
+  if (colony.osrCrystallised) {
+    osrWarn = h('div', { class: 'cross-osr-warn' }, '🍯 OSR honey crystallising — harvest now or lose 70%');
+  } else if (colony.osrRisk >= 1) {
+    osrWarn = h('div', { class: 'cross-osr-notice' }, '⚠ OSR honey at risk of crystallisation');
+  }
+
+  /* --- Demaree info block ------------------------------------------- */
+  var demareeInfo = null;
+  if (colony.demaree) {
+    var dAge2 = colony.demaree.age || 0;
+    var dChecked2 = !!colony.demaree.checked;
+    var dMsg = dChecked2
+      ? 'Demaree: checked (week ' + dAge2 + '/3) — emergency cells destroyed'
+      : dAge2 >= 1
+        ? 'Demaree: URGENT — open top box and destroy emergency cells'
+        : 'Demaree: active — check again next week';
+    demareeInfo = h('div', { class: 'cross-demaree-info' + ((!dChecked2 && dAge2 >= 1) ? ' qc-urgent' : '') }, dMsg);
+  }
+
   /* --- Queen / entrance meta ---------------------------------------- */
   var queen = colony.queen;
   var queenParts = [];
@@ -1658,19 +1757,33 @@ function _ui_buildHiveCross(colony) {
     queenParts.push('Queen: ' + qs);
     if (queen.marked) queenParts.push('marked ' + queen.marked);
     if (queen.clipped) queenParts.push('clipped ✂');
-    queenParts.push('yr ' + (queen.bornYear || 1));
+    queenParts.push('yr ' + (queen.bornYear || 1));
   } else {
     queenParts.push('No queen');
   }
 
-  return h('div', { class: 'hive-cross' }, [
+  /* --- Queen cells meta line ---------------------------------------- */
+  var qcMeta = null;
+  if (hasQCells) {
+    var qcDesc = qcCount + ' ' + qcType + ' cell' + (qcCount !== 1 ? 's' : '') + ' — ' + qcState;
+    if (isImminent) qcDesc += ' — SWARM IMMINENT';
+    var qcMetaCls = 'cross-qc-meta' + (isImminent ? ' qc-urgent' : '');
+    qcMeta = h('div', { class: qcMetaCls }, qcDesc);
+  }
+
+  var crossChildren = [
     h('div', { class: 'cross-section-title' }, 'Hive cross-section'),
     stack,
-    swarmBar,
-    h('div', { class: 'cross-meta-line' }, queenParts.join(' · ')),
-    h('div', { class: 'cross-meta-line' }, entranceLabel),
-    h('div', { class: 'cross-click-hint' }, 'Click any box to manage frames')
-  ]);
+    swarmBar
+  ];
+  if (osrWarn) crossChildren.push(osrWarn);
+  if (demareeInfo) crossChildren.push(demareeInfo);
+  if (qcMeta) crossChildren.push(qcMeta);
+  crossChildren.push(h('div', { class: 'cross-meta-line' }, queenParts.join(' · ')));
+  crossChildren.push(h('div', { class: 'cross-meta-line' }, entranceLabel));
+  crossChildren.push(h('div', { class: 'cross-click-hint' }, 'Click any box to manage frames'));
+
+  return h('div', { class: 'hive-cross' }, crossChildren);
 }
 
 /* Build a row of 11 frame strips for one box */

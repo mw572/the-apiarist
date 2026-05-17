@@ -142,75 +142,137 @@ function colonyWeeklyLayoutSync(colony) {
   }
 
   /* --- Distribute brood and stores across brood box frames ----------- */
+  /* Real "rainbow" pattern: eggs at centre (warmest), larvae ring around them,
+     capped brood large central mass, pollen band at nest edge, honey arch outer frames.
+     Each stage occupies a different distance zone, not a blurred Gaussian. */
+
   var totalBoxFrames = layout.broodBoxes.length * FRAMES;
   var totalBrood = colony.eggs + colony.larvae + colony.capped;
-  var broodEquiv = totalBrood / 6500;
-  var broodReach = Math.max(0.8, (broodEquiv + 2) / 2);
+  var broodEquiv = totalBrood / 6500;   // frames-equivalent of brood
   var gMid = (totalBoxFrames - 1) / 2;
 
-  function _bW(d) { return Math.max(0, 1 - d / (broodReach + 0.35)); }
-  var bNorm = 0;
-  for (var g = 0; g < totalBoxFrames; g++) bNorm += _bW(Math.abs(g - gMid));
-  if (bNorm <= 0) bNorm = 1;
+  /* Zone radii (in frame-units from centre).
+     Eggs:   innermost 1.0 frames from centre
+     Larvae: within 2.2 frames
+     Capped: within broodReach frames (expands with population)
+     Pollen: 0.8 frames band just outside capped zone
+     Honey:  outer frames + top arch on all frames                */
+  var broodReach   = Math.max(1.0, Math.min(5.0, broodEquiv * 0.55 + 0.8));
+  var eggsReach    = Math.min(1.0, broodReach * 0.40);
+  var larvaeReach  = Math.min(2.2, broodReach * 0.70);
+  var pollenInner  = broodReach - 0.2;
+  var pollenOuter  = broodReach + 1.1;
 
-  function _hW(d) { return 0.25 + d / (gMid + 1); }
-  var hNorm = 0;
-  for (var g2 = 0; g2 < totalBoxFrames; g2++) hNorm += _hW(Math.abs(g2 - gMid));
-  if (hNorm <= 0) hNorm = 1;
+  /* Brood totals for proportional distribution */
+  var tb = Math.max(1, totalBrood);
 
   layout.broodBoxes.forEach(function(box, boxIdx) {
     box.frames.forEach(function(frame, fi) {
       var gfi  = boxIdx * FRAMES + fi;
-      var dist = Math.abs(gfi - gMid);
-
-      var broodFrac = totalBrood > 100
-        ? Math.min(0.85, _bW(dist) / bNorm * broodEquiv) : 0;
+      var dist = Math.abs(gfi - gMid);  // distance from nest centre (in frames)
 
       var c = { eggs:0, larvae:0, capped:0, honey:0, pollen:0, nectar:0, empty:0, drone:0 };
-      if (broodFrac > 0.01) {
-        var tb = Math.max(1, totalBrood);
-        c.eggs   = broodFrac * (colony.eggs   / tb);
-        c.larvae = broodFrac * (colony.larvae / tb);
-        c.capped = broodFrac * (colony.capped / tb);
-        c.drone  = (colony.drones > 2000 && dist > broodReach - 1.5 && dist < broodReach + 0.7) ? 0.05 : 0;
+
+      /* --- Brood zones --- */
+      if (totalBrood > 100) {
+        if (dist <= eggsReach) {
+          /* Egg zone: youngest, most central */
+          var eggShare = Math.max(0, 1 - dist / (eggsReach + 0.1));
+          c.eggs = Math.min(0.55, eggShare * (colony.eggs / tb) * 3.5);
+        }
+        if (dist <= larvaeReach) {
+          var larvaShare = Math.max(0, 1 - dist / (larvaeReach + 0.2));
+          c.larvae = Math.min(0.65, larvaShare * (colony.larvae / tb) * 2.8);
+        }
+        if (dist <= broodReach) {
+          var cappedShare = Math.max(0, 1 - dist / (broodReach + 0.4));
+          c.capped = Math.min(0.80, cappedShare * (colony.capped / tb) * 2.2);
+        }
+        /* Drone brood: outer edges of brood nest in spring/summer */
+        if (dist >= broodReach - 1.2 && dist <= broodReach + 0.5 && colony.drones > 800) {
+          c.drone = Math.min(0.08, (colony.drones / 3000) * 0.08);
+        }
       }
+
       var broodUsed = c.eggs + c.larvae + c.capped + c.drone;
       var free = Math.max(0, 1 - broodUsed);
 
-      /* Honey: edge-biased arch */
-      var honeyFrac = Math.min(0.9, _hW(dist) / hNorm * (colony.honey / Math.max(1, 2.3 * totalBoxFrames)));
-      c.honey = Math.min(free, honeyFrac);
+      /* --- Pollen band: sits between brood edge and honey stores --- */
+      var inPollenBand = dist >= pollenInner && dist <= pollenOuter;
+      if (inPollenBand && colony.pollen > 0.2) {
+        var pBand = Math.min(free, 0.25 * Math.min(1.5, colony.pollen / 600));
+        c.pollen = pBand;
+        free = Math.max(0, free - c.pollen);
+      } else if (colony.pollen > 0.3 && dist < pollenInner) {
+        /* Pollen pockets within brood nest on frames that aren't brood-full */
+        c.pollen = Math.min(free * 0.3, 0.08 * Math.min(1, colony.pollen / 600));
+        free = Math.max(0, free - c.pollen);
+      }
+
+      /* --- Honey: outer frames dominant, arch at top of all frames ---
+         Formula: outer frames get more honey; also a baseline arch exists
+         on all frames (honey at top corners = the classic pattern).         */
+      var outerBias  = Math.min(0.9, 0.15 + (dist / (gMid + 0.5)) * 0.75);
+      var honeyStore = colony.honey / Math.max(1, colony.broodBoxes * SIM.broodBoxStoreCap);
+      var honeyFrac  = outerBias * honeyStore * 1.4;
+      c.honey = Math.min(free, Math.min(0.92, honeyFrac));
       free    = Math.max(0, free - c.honey);
 
-      /* Pollen: band flanking brood nest */
-      var nearNest = dist > broodReach - 1.4 && dist < broodReach + 1.3;
-      c.pollen = Math.min(free, (nearNest ? 0.20 : 0.05) * Math.min(1.4, 0.45 + colony.pollen / 700));
-      free     = Math.max(0, free - c.pollen);
+      /* Nectar: small amount on active frames near nest */
+      if (dist < broodReach + 1.5) {
+        c.nectar = Math.min(free, 0.04);
+        free = Math.max(0, free - c.nectar);
+      }
 
-      c.nectar = Math.min(free, 0.06);
-      free     = Math.max(0, free - c.nectar);
-      c.empty  = Math.max(0, free);
+      c.empty = Math.max(0, free);
 
       frame.content = c;
-      if ((broodFrac > 0.05 || c.honey > 0.05) && !frame.drawn) frame.drawn = true;
-      /* slow natural comb darkening */
+      if ((broodUsed > 0.05 || c.honey > 0.05) && !frame.drawn) frame.drawn = true;
       if (frame.drawn && _colony_rand() < 0.001) {
         frame.combAge = Math.min(5, frame.combAge + 1);
       }
     });
   });
 
-  /* --- Distribute superHoney across supers (fill from bottom up) ----- */
+  /* --- Distribute superHoney across supers (bottom super fills first) --
+     Within each super, honey fills centre frames before edges (realistic:
+     bees work from above the brood cluster outward).                       */
+
+  /* Centre-outward frame weights for an 11-frame super */
+  var _superFW = [0.12, 0.28, 0.52, 0.75, 0.92, 1.00, 0.92, 0.75, 0.52, 0.28, 0.12];
+  var _superFWSum = _superFW.reduce(function(s, v) { return s + v; }, 0);
+
   var remaining = colony.superHoney || 0;
-  layout.supers.forEach(function(sup) {
-    var cap  = SIM.honeyPerSuper;
-    sup.honeyKg  = Math.min(cap, remaining);
-    remaining    = Math.max(0, remaining - sup.honeyKg);
+  var cap = SIM.honeyPerSuper;
+
+  layout.supers.forEach(function(sup, si) {
+    /* Bottom super fills first; upper supers only start receiving once the
+       lower one is >75% full. This matches how bees actually work upward. */
+    var prevSuperFull = true;
+    for (var pi = 0; pi < si; pi++) {
+      if ((layout.supers[pi].honeyKg || 0) < cap * 0.75) { prevSuperFull = false; break; }
+    }
+
+    var thisCap = prevSuperFull ? cap : cap * 0.20;  // upper supers get very little until lower is 75%+
+    sup.honeyKg   = Math.min(thisCap, remaining);
+    remaining     = Math.max(0, remaining - sup.honeyKg);
     sup.honeyType = colony.superHoneyType || 'summer';
-    var fillFrac  = sup.honeyKg / cap;
-    sup.frames.forEach(function(frame) {
-      frame.content = { honey: fillFrac * 0.85, nectar: fillFrac * 0.10, empty: Math.max(0, 1 - fillFrac * 0.95) };
-      if (fillFrac > 0.05 && !frame.drawn) frame.drawn = true;
+    sup.osr       = colony.osrCrystallised && colony.superHoneyType === 'osr';
+
+    var fillFrac = sup.honeyKg / cap;
+
+    /* Per-frame distribution: centre frames get most honey */
+    sup.frames.forEach(function(frame, fi) {
+      var fw       = _superFW[fi] / _superFWSum * FRAMES;   // weight × 11 / sum
+      /* Scale so total across all frames equals fillFrac */
+      var frameFill = Math.min(1.0, fillFrac * fw * 1.05);
+      var cappedF  = frameFill * 0.78;   /* capped honey */
+      var nectarF  = frameFill * 0.18;   /* uncapped/incoming nectar */
+      var emptyF   = Math.max(0, 1 - cappedF - nectarF);
+      frame.content = { honey: cappedF, nectar: nectarF, empty: emptyF,
+                        eggs:0, larvae:0, capped:0, pollen:0, drone:0 };
+      if (frameFill > 0.05 && !frame.drawn) frame.drawn = true;
+      frame.crystallised = sup.osr;
     });
   });
 }
@@ -344,7 +406,7 @@ function makeColony(opts){
     hornet:       0,
 
     swarmPressure:    0,
-    queenCells:       { type: 'none', count: 0, age: 0 },
+    queenCells:       { type: 'none', count: 0, age: 0, state: 'none' },
     swarmedThisYear:  false,
 
     temperament: opts.temperament !== undefined ? opts.temperament
@@ -353,13 +415,17 @@ function makeColony(opts){
     lastInspected: 0,
     known:         null,
 
+    demaree:   null,     // { age, checked, topBroodFrames } — set by demareeMethod action
+    osrRisk:   0,        // weeks since OSR flow ended without harvesting
+    osrCrystallised: false,
+
     treatment: null,
     feeding:   0,
 
     productionThisYear: 0,
-    _starvingWeeks: 0,    // internal counter — not part of the public shape but stored on colony for persistence
+    _starvingWeeks: 0,
 
-    hiveLayout: null,     // populated by colonyWeeklyLayoutSync on first weekly tick
+    hiveLayout: null,
   };
 }
 
@@ -773,62 +839,166 @@ function colonyWeeklyUpdate(colony, ctx){
         + popFactor     * 0.03
         + condFactor    * 0.02,
       0, 1);
+
+    // Demaree keeps pressure suppressed while active
+    if (colony.demaree) {
+      colony.swarmPressure = _colony_clamp(colony.swarmPressure * 0.60, 0, 0.30);
+    }
   } else {
-    // Outside swarm window, pressure slowly decays
     colony.swarmPressure = _colony_clamp(colony.swarmPressure * 0.80, 0, 1);
   }
 
-  // Start swarm cells?
+  // --- 11a. Demaree progression ------------------------------------
+  if (colony.demaree) {
+    colony.demaree.age++;
+    if (colony.demaree.age === 1 && !colony.demaree.checked) {
+      // Day-7 check missed: top box raises emergency cells from youngest larvae.
+      // Player must now deal with these or a virgin may emerge and cast.
+      if (colony.queenCells.type === 'none') {
+        colony.queenCells = { type: 'emergency', count: 5, age: 0, state: 'larvae' };
+        events.push({ type: 'demareeUnchecked', colony: colony });
+      }
+    }
+    if (colony.demaree.age >= 3) {
+      // Top box brood all emerged — top box becomes stores, demaree complete
+      events.push({ type: 'demareeComplete', colony: colony });
+      colony.demaree = null;
+    }
+  }
+
+  // --- 11b. OSR crystallisation ------------------------------------
+  // Oilseed rape honey crystallises in the comb ~10-14 days after the flow ends.
+  // If not harvested in time the frames are ruined.
+  if (colony.superHoney > 0 && colony.superHoneyType === 'osr') {
+    const osrFlowActive = ctx.nectar > 0.35 && wkIdx >= 14 && wkIdx <= 21;
+    if (!osrFlowActive && wkIdx >= 16 && wkIdx <= 28) {
+      colony.osrRisk = (colony.osrRisk || 0) + 1;
+      if (colony.osrRisk >= 2 && !colony.osrCrystallised) {
+        colony.osrCrystallised = true;
+        events.push({ type: 'osrCrystal', colony: colony });
+      }
+    } else {
+      colony.osrRisk = 0;
+    }
+  } else if (!colony.superHoney || colony.superHoney < 0.5) {
+    colony.osrRisk = 0;
+    colony.osrCrystallised = false;
+  }
+
+  // --- 11c. Start swarm cells: larvae visible, player has ONE week -
+  // Real: queen lays in cup → egg → larva (4 days) → capped (day 8-9).
+  // 1 game tick ≈ 7 days → cells appear as larvae, cap on the NEXT tick.
   if (colony.swarmPressure > 0.62
       && colony.queenCells.type === 'none'
       && colony.population > 18000
+      && queen && queen.present && queen.mated
       && _colony_inSwarmWindow(week)){
+    // If colony hasn't been inspected this week during swarm season,
+    // cells may already be capped by the time the player discovers them.
+    const weeksSinceInspect = week - (colony.lastInspected || 0);
+    const startAge = (weeksSinceInspect >= 2) ? 1 : 0;  // already capped if overdue
     colony.queenCells = {
       type:  'swarm',
-      count: 4 + _colony_randInt(0, 9),
-      age:   0,
+      count: 5 + _colony_randInt(0, 15),   // 5-20 cells (realistic range)
+      age:   startAge,
+      state: startAge >= 1 ? 'capped' : 'larvae'
     };
     events.push({ type: 'queencells', colony: colony });
   }
 
-  // Age existing swarm cells and trigger the swarm itself
+  // --- 11d. Swarm cells age: larvae→capped (age 1) = swarm fires ---
   if (colony.queenCells.type === 'swarm'){
     colony.queenCells.age++;
-    if (colony.queenCells.age >= 2){
+    colony.queenCells.state = colony.queenCells.age >= 1 ? 'capped' : 'larvae';
+
+    if (colony.queenCells.age >= 1) {
+      // First cell CAPPED — swarm fires unless queen is clipped
       if (queen && queen.clipped) {
-        // Clipped queen cannot fly — the prime swarm clusters briefly on the
-        // hive and returns. Buys one week but the impulse remains strong.
+        // Clipped queen exits hive but FALLS to the ground — cannot fly.
+        // Swarm mills outside for hours, then returns to the hive.
+        // NO bees are lost. BUT the cells are still capped and NOT destroyed.
+        // Next tick: first virgin emerges and CAN fly → she leads the delayed swarm.
         events.push({ type: 'swarmAborted', colony: colony });
-        colony.queenCells = { type: 'none', count: 0, age: 0 };
-        // Pressure drops a little but the colony will raise fresh cells soon
-        colony.swarmPressure = _colony_clamp(colony.swarmPressure - 0.25, 0, 1);
+        // Cells continue as postSwarm — virgin emerges next tick
+        colony.queenCells = {
+          type:  'postSwarm',
+          count: colony.queenCells.count,
+          age:   0,
+          state: 'capped',
+          clippedAbort: true     // old (clipped) queen still present
+        };
+        // Pressure barely drops — the impulse is not satisfied
+        colony.swarmPressure = _colony_clamp(colony.swarmPressure - 0.08, 0, 1);
       } else {
-        // The swarm issues — old queen leaves with ~58% of the workforce
+        // PRIME SWARM ISSUES — old queen leaves with 50-60% of workforce
+        const swarmFrac = _colony_randRange(0.50, 0.62);
         events.push({ type: 'swarm', colony: colony });
-        colony.population      = Math.round(colony.population * 0.42);
+        colony.population      = Math.round(colony.population * (1 - swarmFrac));
         colony.swarmedThisYear = true;
         colony.swarmPressure   = 0;
-
-        // Afterswarm / cast: if many cells, chance of a secondary swarm (smaller)
-        if (colony.queenCells.count > 7 && _colony_rand() < 0.40){
-          colony.population = Math.round(colony.population * 0.70);
-        }
-
-        // Leave a virgin queen in the hive (from the cells)
-        colony.queen      = _colony_virginFromParent(queen, year);
-        colony.queenCells = { type: 'none', count: 0, age: 0 };
+        // Cells remain capped — virgin emerges next tick from postSwarm
+        colony.queenCells = {
+          type:  'postSwarm',
+          count: colony.queenCells.count,
+          age:   0,
+          state: 'capped',
+          clippedAbort: false
+        };
+        // Old queen is gone — colony.queen will be replaced by virgin from cells
       }
     }
   }
 
-  // Emergency / replacement cells (from a split, the nucleus method or an
-  // artificial swarm): the colony raises a new queen from the cells, without
-  // swarming. After the cells are sealed a virgin emerges and goes to mate.
+  // --- 11e. PostSwarm cells: capped → virgin emerges (age 1) ------
+  if (colony.queenCells.type === 'postSwarm') {
+    colony.queenCells.age++;
+
+    if (colony.queenCells.age >= 1) {
+      colony.queenCells.state = 'emerged';
+      const wasClipAbort  = !!colony.queenCells.clippedAbort;
+      const cellCount     = colony.queenCells.count;
+
+      if (wasClipAbort) {
+        // Old clipped queen is still present. Virgin emerges and CAN fly.
+        // She leads the ACTUAL swarm (one week delayed by the clipping).
+        // This IS the real swarm — the clipping only delayed it.
+        const swarmFrac = _colony_randRange(0.45, 0.58);
+        events.push({ type: 'swarm', colony: colony });
+        colony.population      = Math.round(colony.population * (1 - swarmFrac));
+        colony.swarmedThisYear = true;
+        colony.swarmPressure   = 0;
+        // The virgin leaves with the swarm; old clipped queen remains
+        // Workers may supersede the old clipped queen shortly (flag for supersedure)
+        if (_colony_rand() < 0.60) {
+          colony.queenCells = { type: 'supersedure', count: 2, age: 0, state: 'larvae' };
+        } else {
+          // Old queen survives and continues laying
+          colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
+        }
+      } else {
+        // Normal post-primary-swarm: virgin becomes the new queen
+        colony.queen = _colony_virginFromParent(queen, year);
+
+        // CAST SWARM: strong colony + many cells = real chance of secondary swarm
+        if (colony.population > 14000 && cellCount > 5 && _colony_rand() < 0.42) {
+          const castFrac = _colony_randRange(0.22, 0.32);
+          events.push({ type: 'castSwarm', colony: colony });
+          colony.population = Math.round(colony.population * (1 - castFrac));
+        }
+
+        colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
+      }
+    }
+  }
+
+  // --- 11f. Emergency / replacement cells --------------------------
+  // Raised from a split, nucleus method, artificial swarm, or missed Demaree check.
   if (colony.queenCells.type === 'emergency'){
     colony.queenCells.age++;
+    colony.queenCells.state = colony.queenCells.age >= 1 ? 'capped' : 'larvae';
     if (colony.queenCells.age >= 2){
       colony.queen           = _colony_virginFromParent(colony.queen, year);
-      colony.queenCells      = { type: 'none', count: 0, age: 0 };
+      colony.queenCells      = { type: 'none', count: 0, age: 0, state: 'none' };
       colony.layingWorkers   = false;
       colony._queenlessWeeks = 0;
     }
@@ -876,18 +1046,15 @@ function colonyWeeklyUpdate(colony, ctx){
         || queen.age > 95
         || queen.layQuality < 0.60;
       if (failing && _colony_rand() < 0.18){
-        colony.queenCells = { type: 'supersedure', count: 2, age: 0 };
+        colony.queenCells = { type: 'supersedure', count: 2, age: 0, state: 'larvae' };
       }
     }
-    // Progress and resolve a supersedure already under way. This must run
-    // every week the cells exist — not only when type was 'none' — or the
-    // cells would stall at age 0 and the queen would never be replaced.
     if (colony.queenCells.type === 'supersedure'){
       colony.queenCells.age++;
+      colony.queenCells.state = colony.queenCells.age >= 1 ? 'capped' : 'larvae';
       if (colony.queenCells.age >= 3){
-        // Quiet queen replacement — no population loss
         colony.queen      = _colony_matedQueen(queen, year);
-        colony.queenCells = { type: 'none', count: 0, age: 0 };
+        colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
         events.push({ type: 'supersede', colony: colony });
       }
     }

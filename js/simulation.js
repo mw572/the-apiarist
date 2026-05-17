@@ -432,11 +432,44 @@ function _sim_resolveEvent(ev, week) {
       break;
 
     case 'swarmAborted':
-      logEvent('✂️', colony.name + ': the colony tried to swarm, but the clipped queen could not fly. The cluster returned to the hive. Swarm pressure is still high — act now.', 'warn');
+      logEvent('✂️', colony.name + ': the queen tried to leave but her clipped wing stopped her. The swarm milled outside and returned. Queen cells are still capped — the first virgin will emerge next week and CAN fly. You have one week to act.', 'warn');
       out.push({
         kind: 'toast',
-        text: colony.name + ': swarm aborted — clipped queen. The impulse is still there. Take swarm-control action this week.',
+        text: colony.name + ': swarm aborted by clipping — but cells are still live. Virgin emerges next week. Act now.',
         tone: 'warn',
+      });
+      break;
+
+    case 'castSwarm':
+      Game.stats.swarmsLost = (Game.stats.swarmsLost || 0) + 1;
+      logEvent('🐝', colony.name + ': a cast swarm has left — a virgin queen led a secondary swarm from the cells. The colony is now significantly weaker.', 'bad');
+      out.push({
+        kind: 'toast',
+        text: colony.name + ': cast swarm issued. Colony has lost further bees.',
+        tone: 'bad',
+      });
+      break;
+
+    case 'demareeUnchecked':
+      logEvent('⚠️', colony.name + ': you missed the Demaree 7-day check. The top box has raised emergency queen cells — deal with these now or the colony may cast.', 'warn');
+      out.push({
+        kind: 'toast',
+        text: colony.name + ': Demaree check overdue — emergency cells in top box.',
+        tone: 'warn',
+      });
+      break;
+
+    case 'demareeComplete':
+      logEvent('✅', colony.name + ': Demaree complete — top brood has all emerged. The colony is fully intact and the extra box is now stores.', 'good');
+      out.push({ kind: 'toast', text: colony.name + ': Demaree complete. Top box ready to remove.', tone: 'good' });
+      break;
+
+    case 'osrCrystal':
+      logEvent('🍯', colony.name + ': your oilseed rape honey is crystallising in the comb. Extract immediately — another week and the frames will be ruined.', 'bad');
+      out.push({
+        kind: 'toast',
+        text: colony.name + ': OSR honey setting in comb — harvest THIS WEEK.',
+        tone: 'bad',
       });
       break;
 

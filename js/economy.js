@@ -346,12 +346,24 @@ function harvestSuperAt(colony, superIdx) {
   var isHeightOfFlow = (season === 'summer' && (typeof forageNectar === 'function') && forageNectar(Game.week) > 0.7);
   if (isHeightOfFlow) msgs.push('Some frames may have unripe honey — check moisture before bottling.');
 
-  /* No clearer board: brush-off loss ~8% */
-  if (!Game.inventory.tools.clearerBoard) {
+  /* OSR crystallisation: frames mostly ruined if left too long */
+  if (colony.osrCrystallised && type === 'osr') {
+    var crystalLoss = _econ_roundPrice(kg * 0.70);
+    kg = _econ_roundPrice(kg - crystalLoss);
+    msgs.push('The OSR honey had partially crystallised in the comb — most could not be extracted (' + crystalLoss.toFixed(1) + ' kg lost).');
+    colony.osrCrystallised = false;
+    colony.osrRisk = 0;
+  }
+
+  /* Clearer board: use colony.clearerFitted flag (set by fitClearerBoard action)
+     OR the global tool. If neither, pay the brushing loss. */
+  var hasClearer = colony.clearerFitted || (Game.inventory.tools && Game.inventory.tools.clearerBoard);
+  if (!hasClearer) {
     var loss = _econ_roundPrice(kg * 0.08);
     kg = _econ_roundPrice(kg - loss);
     msgs.push('Without a clearer board you had to brush bees off, losing ' + loss.toFixed(2) + ' kg.');
   }
+  colony.clearerFitted = false;  /* Reset — one-shot per harvest */
 
   /* Cappings wax */
   Game.inventory.wax = _econ_roundPrice((Game.inventory.wax || 0) + _econ_roundPrice(kg * 0.013));
