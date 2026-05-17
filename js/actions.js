@@ -794,6 +794,14 @@ function demareeMethod(colony) {
   /* Set up the Demaree state */
   colony.demaree = { age: 0, checked: false, topBroodFrames: 8 };
 
+  /* Add a temporary second brood box so the cross-section shows the top box.
+     The layout sync in colonyWeeklyUpdate will keep this in sync each week.
+     It is removed automatically when the Demaree completes (age >= 3). */
+  colony.broodBoxes = 2;
+  if (colony.hiveLayout && colony.hiveLayout.broodBoxes.length < 2) {
+    colony.hiveLayout.broodBoxes.push(_colony_makeLayoutBox('brood'));
+  }
+
   /* Immediate relief: swarm pressure drops sharply, queen cells destroyed if any */
   colony.swarmPressure = Math.min(colony.swarmPressure, 0.15);
   if (colony.queenCells.type === 'swarm') {
@@ -804,7 +812,7 @@ function demareeMethod(colony) {
      fully intact while relieving congestion takes real understanding. */
   addXp(15);
 
-  const msg = `Demaree carried out on ${colony.name} (£${boxCost}). The queen is in the lower box; all other brood is above the supers. You have 7 days to come back and destroy the emergency cells in the top box — do not miss this check or the colony may swarm from above.`;
+  const msg = `Demaree carried out on ${colony.name} (£${boxCost}). This is a single-hive technique — no new colony is created. Your hive now has two brood boxes: the queen is sealed in the lower box with one frame of open brood; all other brood sits in the top box above the supers, separated by two queen excluders. Come back NEXT WEEK and open the top box to destroy any emergency cells — if you miss this, the top box will raise a virgin and a cast swarm will issue.`;
   logEvent('🔄', msg, 'good');
   render();
   return { ok: true, msg };
@@ -1233,6 +1241,13 @@ function splitColony(colony) {
     return { ok: false, msg: 'The colony is not strong enough to split safely — it needs to be building well.' };
   }
 
+  /* Cannot split a queenless colony — the original would have no queen and no
+     route to one after giving brood to the split. */
+  const _splitIsQueenless = !colony.queen || !colony.queen.present || colony.queen.state === 'absent';
+  if (_splitIsQueenless) {
+    return { ok: false, msg: `${colony.name} has no queen — you cannot split a queenless colony. Both halves would be queenless with no way to recover. Wait for a new queen to emerge and mate, or introduce one first.` };
+  }
+
   /* Use a nucBox if available, otherwise spare hive */
   if (Game.inventory.nucBoxes > 0) {
     Game.inventory.nucBoxes--;
@@ -1272,7 +1287,10 @@ function splitColony(colony) {
   Game.stats.splitsMade++;
 
   addXp(12);
-  const msg = `Split made — ${newColony.name} has bees and brood, and will raise an emergency queen. ${colony.name} retains the original queen.`;
+  const _parentQueenDesc = (colony.queen && colony.queen.present && colony.queen.virgin)
+    ? 'a virgin queen (not yet mated)'
+    : 'the original laying queen';
+  const msg = `Split made — ${newColony.name} has bees and brood, and will raise an emergency queen. ${colony.name} retains ${_parentQueenDesc}.`;
   logEvent('🔀', msg, 'good');
   render();
   return { ok: true, msg };
@@ -1548,6 +1566,13 @@ function uniteColonies(weak, strong) {
   strong.pollen     = strong.pollen + weak.pollen * 0.7;
   strong.varroa     = strong.varroa + Math.round(weak.varroa * 0.85);
 
+  /* Transfer brood — in the newspaper method the two hive bodies are stacked
+     so all brood frames remain in the combined colony. The strong colony's
+     existing brood capping means peak will not exceed one box capacity. */
+  strong.eggs   = Math.round((strong.eggs   || 0) + (weak.eggs   || 0) * 0.85);
+  strong.larvae = Math.round((strong.larvae || 0) + (weak.larvae || 0) * 0.85);
+  strong.capped = Math.round((strong.capped || 0) + (weak.capped || 0) * 0.85);
+
   /* Return the weak colony's super boxes to the equipment pool. The newspaper
      sheet sits between the two hive bodies, so the weak colony's supers cannot
      be transferred live to the strong colony — they are removed as empty boxes.
@@ -1631,8 +1656,13 @@ function cageQueen(colony) {
   if (colony.queen.virgin) {
     return { ok: false, msg: 'Do not cage a virgin queen — she needs to complete her mating flights.' };
   }
-  if (!colony.known || !colony.known.queenSeen) {
-    return { ok: false, msg: 'You need to find the queen before you can cage her — inspect the hive first and locate her.' };
+  const _cageQueenConfirmed = colony.known && (
+    colony.known.queenSeen ||
+    colony.known.eggsSeen ||
+    (colony.known.queenStatus && colony.known.queenStatus !== 'queenless' && colony.known.queenStatus !== 'unknown')
+  );
+  if (!_cageQueenConfirmed) {
+    return { ok: false, msg: 'You need to find the queen before you can cage her — inspect the hive and locate her (or see fresh eggs confirming she is laying).' };
   }
 
   colony.queen.caged = true;

@@ -1109,6 +1109,11 @@ function colonyWeeklyUpdate(colony, ctx){
       // Top box brood all emerged — top box becomes stores, demaree complete
       events.push({ type: 'demareeComplete', colony: colony });
       colony.demaree = null;
+      // Remove the temporary second brood box added by demareeMethod
+      if (colony.broodBoxes > 1) colony.broodBoxes = 1;
+      if (colony.hiveLayout && colony.hiveLayout.broodBoxes.length > 1) {
+        colony.hiveLayout.broodBoxes.pop();
+      }
     }
   }
 
