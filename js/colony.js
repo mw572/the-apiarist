@@ -267,14 +267,13 @@ function colonyWeeklyLayoutSync(colony) {
     var thisCap = prevSuperFull ? cap * drawnFrac : cap * 0.20 * drawnFrac;
     sup.honeyKg   = Math.min(thisCap, remaining);
     remaining     = Math.max(0, remaining - sup.honeyKg);
-    /* Lock honey type: set when honey first arrives, locked after that.
-       FIX: old code set type when honeyKg===0 (wrong — that's the empty state).
-       Correct logic: if the super currently has honey, preserve existing type.
-       If it was empty (tracked via _prevHoneyKg) and honey is now flowing in,
-       stamp it with the current flow type. This ensures OSR honey gets tagged
-       'oilseed' on the first week of fill, not left as the 'summer' default. */
-    if ((sup._prevHoneyKg || 0) === 0 && sup.honeyKg > 0) {
-      sup.honeyType = colony.superHoneyType || 'summer';
+    /* Lock honey type: set on first fill; allow update when super is <20% full
+       and the current flow type changes (e.g. colony moved to moorland for heather). */
+    var _prevFrac = (sup._prevHoneyKg || 0) / Math.max(cap, 0.1);
+    var _flowType = colony.superHoneyType || 'summer';
+    if ((_prevFrac === 0 && sup.honeyKg > 0) ||
+        (_prevFrac < 0.20 && sup.honeyKg > 0 && sup.honeyType !== _flowType)) {
+      sup.honeyType = _flowType;
     }
     sup._prevHoneyKg = sup.honeyKg;
     sup.osr       = colony.osrCrystallised && colony.superHoneyType === 'oilseed';
