@@ -301,8 +301,20 @@ function harvestColony(colony) {
   // Almost nothing in the supers — still take them off (for winter, or to
   // clear the way for varroa treatment), but nothing is worth extracting.
   if (colony.superHoney < 1) {
+    var clearedSupers = colony.supers;
     colony.superHoney = 0;
     colony.supers = 0;
+    colony.queenExcluder = false;
+    colony.clearerFitted = false;
+    if (colony.hiveLayout) colony.hiveLayout.supers = [];
+    if (colony.stack) {
+      colony.stack = colony.stack.filter(function(i) {
+        return i.type !== 'super' && i.type !== 'queenExcluder' && i.type !== 'clearerBoard';
+      });
+    }
+    if (clearedSupers > 0) {
+      Game.inventory.supers = (Game.inventory.supers || 0) + clearedSupers;
+    }
     var clearedMsg = 'Cleared the supers from ' + colony.name + '. There was barely anything in them, so it was left for the bees.';
     logEvent('📦', clearedMsg, 'plain');
     toast('Supers cleared from ' + colony.name + '.', 'plain');
@@ -356,8 +368,7 @@ function harvestColony(colony) {
   var supersRemoved = colony.supers;
   colony.supers = 0;
   if (supersRemoved > 0) {
-    if (!Game.inventory.spareHives) Game.inventory.spareHives = 0;
-    Game.inventory.spareHives += supersRemoved;
+    Game.inventory.supers = (Game.inventory.supers || 0) + supersRemoved;
   }
   // Keep hiveLayout in sync immediately so the frame cross-section does not
   // show honey-filled supers after a harvest (the weekly sync would fix this
