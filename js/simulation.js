@@ -13,16 +13,33 @@ var _sim_hornetApiaries = {};
 // Count of absolute game-years elapsed (used to detect year boundaries).
 var _sim_yearsPlayed = 0;
 
+// Consecutive weeks of wet or storm weather within the same season.
+// Used to detect a prolonged summer wet spell (4+ weeks wks 24-34)
+// and fire the summer dearth explainer.
+var _sim_wetStreak = 0;
+
 /* ====================================================================
    generateWeather() -> string
    Pick a weather type for the current week, tilted by yearQuality and
    diff().weatherKindness.  Sets Game.weatherType and returns the key.
+
+   Week-specific modifiers applied on top of the seasonal base table:
+   - Weeks 21-24 (June gap): wet and cool boosted; fine/mixed/heatwave cut.
+     The OSR flow is over and clover/bramble haven't opened — UK June is
+     frequently cool and unsettled.
+   - Weeks 9-13 (late-winter/early-spring): cold weight boosted.
+     A UK spring has cold snaps; bees can fly one week and be confined the
+     next, producing the variability real beekeepers know.
+   - Weeks 44-52 and 1-8 (Nov-Feb / deep winter): inspectable types
+     (fine, mixed) further reduced so inspect:true weeks are rare but
+     still possible in a genuine mild spell.
    ==================================================================== */
 function generateWeather() {
-  var season  = seasonOfWeek(Game.week);
-  var base    = WEATHER_TABLE[season];
-  var quality = Game.yearQuality;         // 0..1
-  var kindness = diff().weatherKindness;  // 0..1 (higher = kinder)
+  var season   = seasonOfWeek(Game.week);
+  var wkInYear = ((Game.week - 1) % 52) + 1;   // 1..52
+  var base     = WEATHER_TABLE[season];
+  var quality  = Game.yearQuality;         // 0..1
+  var kindness = diff().weatherKindness;   // 0..1 (higher = kinder)
 
   // Combined "niceness" factor 0..1
   var nice = quality * 0.6 + kindness * 0.4;
@@ -43,6 +60,38 @@ function generateWeather() {
     weights[key] = Math.max(0, w);
   }
 
+  // ---- Week-specific modifiers ----------------------------------------
+
+  // June gap (wks 21-24): cool and unsettled; the OSR flow is over and
+  // the summer flow has not yet opened.  Boost wet/cool; cut fine/heatwave.
+  if (wkInYear >= 21 && wkInYear <= 24) {
+    weights.wet      = (weights.wet      || 0) * 1.55;
+    weights.cool     = (weights.cool     || 0) * 1.40;
+    weights.storm    = (weights.storm    || 0) * 1.25;
+    weights.fine     = (weights.fine     || 0) * 0.55;
+    weights.mixed    = (weights.mixed    || 0) * 0.70;
+    weights.heatwave = (weights.heatwave || 0) * 0.30;
+  }
+
+  // Late winter / early spring (wks 9-13): cold snap risk.
+  // UK spring regularly has frost into May.
+  if (wkInYear >= 9 && wkInYear <= 13) {
+    weights.cold  = (weights.cold  || 0) * 1.45;
+    weights.cool  = (weights.cool  || 0) * 1.20;
+    weights.fine  = (weights.fine  || 0) * 0.80;
+  }
+
+  // Deep winter (wks 44-52 and 1-8): further reduce inspectable types.
+  // fine and mixed can still occur in a mild spell but should be uncommon.
+  if (wkInYear >= 44 || wkInYear <= 8) {
+    weights.fine  = (weights.fine  || 0) * 0.60;
+    weights.mixed = (weights.mixed || 0) * 0.65;
+    weights.cold  = (weights.cold  || 0) * 1.20;
+  }
+
+  // Clamp all weights
+  for (var key in weights) weights[key] = Math.max(0, weights[key]);
+
   // Weighted random pick
   var total = 0;
   for (var k in weights) total += weights[k];
@@ -51,6 +100,15 @@ function generateWeather() {
   for (var k in weights) {
     r -= weights[k];
     if (r <= 0) { chosen = k; break; }
+  }
+
+  // ---- Wet-streak tracker for summer dearth detection -----------------
+  // Count consecutive wet/storm weeks.  The summer wet-spell event is
+  // surfaced in runWeek() when _sim_wetStreak reaches 4 in wks 24-34.
+  if (chosen === 'wet' || chosen === 'storm') {
+    _sim_wetStreak++;
+  } else {
+    _sim_wetStreak = 0;
   }
 
   Game.weatherType = chosen;
@@ -106,6 +164,7 @@ function runWeek() {
     fly     : weatherBase.fly,
     inspect : weatherBase.inspect,
     warmth  : weatherBase.warmth,
+    tempC   : weatherBase.tempC,    // actual °C for treatment temperature checks
   };
   if (weatherBase.hazard) weatherCtx.hazard = weatherBase.hazard;
 
@@ -138,8 +197,8 @@ function runWeek() {
       pollenSite *= 1.25;
     }
 
-    // Heather moorland August bonus (weeks 31-36)
-    if (site.heather && wkInYear >= 31 && wkInYear <= 36) {
+    // Heather moorland August bonus (weeks 31-35 — UK heather peak is late Jul to mid-Aug)
+    if (site.heather && wkInYear >= 31 && wkInYear <= 35) {
       nectarSite *= 1.9;
     }
 
@@ -366,6 +425,36 @@ function runWeek() {
     }
   }
 
+  /* 6b. Prolonged summer wet spell ----------------------------------- */
+  // A run of 4+ consecutive wet/storm weeks during the summer flow
+  // (wks 24-34) is a real UK hazard.  Colonies burn their stores while
+  // foragers cannot leave, exactly as they do during a June gap or a
+  // cold snap.  Fire a one-time explainer on the 4th consecutive wet week
+  // so the player knows to check stores.
+  var _wetWk = ((Game.week - 1) % 52) + 1;
+  if (_sim_wetStreak === 4 &&
+      _wetWk >= 24 && _wetWk <= 34 &&
+      aliveColonies().length > 0) {
+    logEvent('🌧️', 'Four weeks of wet weather. Bees have been confined and stores are being consumed with no new nectar coming in. Check every colony\'s stores — a prolonged wet spell in midsummer can empty a brood box faster than winter.', 'warn');
+    if (!Game.flags.seenExplainers['summer_wet_spell']) {
+      presentables.push({
+        kind  : 'explainer',
+        id    : 'summer_wet_spell',
+        title : 'Prolonged Summer Wet Spell',
+        body  : '<p>Four weeks of wet weather and your bees have barely left the hive. This is one of the less obvious hazards of UK beekeeping: a prolonged June or July wet spell can empty a brood box as quickly as a hard winter.</p>' +
+                '<p>Foragers confined to the hive still feed the colony. The queen may still be laying at full rate. Without incoming nectar, those stores get eaten faster than most beekeepers expect — particularly in a large colony.</p>' +
+                '<p><strong>What to do:</strong> Check your stores the moment there is a dry day. If any hive feels light when hefted, feed 1:1 syrup straight away — thin syrup in summer, not the thick 2:1 winter feed. If the weather breaks and a flow starts, take the feeder off before foragers start storing syrup in the supers.</p>' +
+                '<p>This is one reason experienced beekeepers check stores not just in autumn but after any extended unsettled spell between May and August.</p>',
+      });
+    } else {
+      presentables.push({
+        kind: 'toast',
+        text: 'Four weeks of wet weather — check stores in every hive before the colony runs short.',
+        tone: 'warn',
+      });
+    }
+  }
+
   /* 7. Advisor -------------------------------------------------------- */
   buildAdvisor();
 
@@ -388,6 +477,11 @@ function _sim_resolveEvent(ev, week) {
       var reason = ev.reason || 'unknown cause';
       logEvent('💀', colony.name + ' has died (' + reason + ').', 'bad');
 
+      /* XP: real beekeepers say you learn more from a dead colony than a live one.
+         5 "lesson learned" XP — small, but it acknowledges that failure teaches.
+         The explainer below reinforces this by prompting a post-mortem inspection. */
+      addXp(5);
+
       if (!Game.flags.seenExplainers['colony_death_first']) {
         out.push({
           kind  : 'explainer',
@@ -409,7 +503,12 @@ function _sim_resolveEvent(ev, week) {
 
     case 'swarm':
       Game.stats.swarmsLost++;
-      logEvent('🐝', colony.name + ' has swarmed. A prime swarm has left the hive.', 'bad');
+      var _noBaitHive = (Game.inventory.baitHives === 0);
+      var _swarmLogMsg = colony.name + ' has swarmed. A prime swarm has left the hive.';
+      if (_noBaitHive) {
+        _swarmLogMsg += ' You had no bait hive set out — the swarm is gone for good.';
+      }
+      logEvent('🐝', _swarmLogMsg, 'bad');
 
       if (!Game.flags.seenExplainers['swarm_first']) {
         out.push({
@@ -420,12 +519,23 @@ function _sim_resolveEvent(ev, week) {
                   '<p>The colony left behind has queen cells. Leave the strongest one and destroy the rest, or use one for a split. ' +
                   'The virgin queen will emerge, fly to mate, and begin laying in around three weeks.</p>' +
                   '<p>To prevent swarming: inspect every seven to nine days during swarm season (April to June), add space before the colony feels cramped, and remove queen cells promptly if you do not want a swarm. ' +
-                  'An artificial swarm is the most reliable control method once cells are found.</p>',
+                  'An artificial swarm is the most reliable control method once cells are found.</p>' +
+                  (_noBaitHive ? '<p><strong>Tip:</strong> A bait hive — an empty box with an old frame or two of dark comb, placed a few metres away — gives a swarm somewhere to land and gives you a chance to re-hive it. Without one, a swarm is simply lost.</p>' : ''),
+        });
+      } else if (_noBaitHive && !Game.flags.seenExplainers['swarm_lost_no_bait']) {
+        // One-time educational message: this swarm was lost because there was no bait hive
+        out.push({
+          kind  : 'explainer',
+          id    : 'swarm_lost_no_bait',
+          title : 'Swarm Lost — No Bait Hive',
+          body  : '<p>The swarm from <strong>' + colony.name + '</strong> has gone. Without a bait hive nearby it had nowhere obvious to land and has moved on — probably into a tree cavity somewhere in the neighbourhood.</p>' +
+                  '<p>A bait hive is a cheap insurance policy. An old brood box with one or two frames of dark drawn comb, a handful of lemongrass oil or Nasonov pheromone on a cotton pad, and an entrance reduced to about 10 cm is all it takes. Set it out from late April and check it every couple of weeks. A caught swarm is free bees — though always treat them as an unknown varroa risk until you have run a wash.</p>' +
+                  '<p>You can buy bait hives from the market, or use a spare hive from your equipment.</p>',
         });
       } else {
         out.push({
           kind: 'toast',
-          text: colony.name + ' has swarmed.',
+          text: colony.name + ' has swarmed.' + (_noBaitHive ? ' No bait hive — swarm is lost.' : ''),
           tone: 'bad',
         });
       }
@@ -546,7 +656,11 @@ function _sim_resolveEvent(ev, week) {
         var disBody = '<p><strong>' + (dis.name || ev.disease) + '</strong> has been detected in ' + colony.name + '.</p>';
         if (dis.sign)  disBody += '<p><em>What to look for:</em> ' + dis.sign + '.</p>';
         if (dis.desc)  disBody += '<p>' + dis.desc + '</p>';
-        if (dis.notifiable) disBody += '<p><strong>This is a notifiable disease.</strong> You must contact your local <strong>National Bee Unit</strong> bee inspector. Do not move this colony or its equipment until you have done so.</p>';
+        if (dis.notifiable) {
+          disBody += '<p><strong>This is a notifiable disease.</strong> You must contact your local <strong>National Bee Unit</strong> bee inspector immediately. Do not move this colony or its equipment until you have done so. Moving a colony with a notifiable disease is illegal under the Bee Diseases and Pests Control (England) Order 2006.</p>';
+          // Mark colony as awaiting inspector notification (blocks moveHive)
+          colony._notifiableDiseasePending = ev.disease;
+        }
         out.push({
           kind  : 'explainer',
           id    : explainerId,
@@ -557,6 +671,37 @@ function _sim_resolveEvent(ev, week) {
         out.push({
           kind: 'toast',
           text: colony.name + ': ' + (dis.name || ev.disease) + ' detected.',
+          tone: 'bad',
+        });
+      }
+      break;
+
+    case 'afbDestroy':
+      // AFB colony destroyed — all equipment must be burned, no refund
+      var _afbSupers     = ev.supers     || 0;
+      var _afbBroodBoxes = ev.broodBoxes || 1;
+      var equipDesc = 'all equipment in ' + colony.name + ' (' + _afbBroodBoxes + ' brood box' +
+        (_afbBroodBoxes !== 1 ? 'es' : '') +
+        (_afbSupers > 0 ? ', ' + _afbSupers + ' super' + (_afbSupers !== 1 ? 's' : '') : '') +
+        ')';
+      logEvent('🔥', 'AFB confirmed in ' + colony.name + '. By law, ' + equipDesc +
+        ' must be destroyed by burning. No equipment has been returned to your stock — it is condemned.', 'bad');
+      // Equipment is NOT returned to spare pool — it must be burned
+      if (!Game.flags.seenExplainers['afb_destroy_first']) {
+        out.push({
+          kind  : 'explainer',
+          id    : 'afb_destroy_first',
+          title : 'American Foul Brood — Colony and Equipment Destroyed',
+          body  : '<p><strong>American Foul Brood (AFB)</strong> has killed ' + colony.name + '. This is the most serious bee disease in the UK.</p>' +
+                  '<p><strong>There is no treatment.</strong> Under the Bee Diseases and Pests Control (England) Order 2006, the colony must be destroyed and all combs, frames, and wooden equipment must be burned on site. The hive body can sometimes be scorched and reused, but comb, frames, and any equipment contaminated with brood must be incinerated.</p>' +
+                  '<p>AFB spores remain viable in wood and wax for <em>decades</em>. Never give away, sell, or reuse equipment from an AFB colony without official clearance from your bee inspector.</p>' +
+                  '<p>You should have notified your local <strong>National Bee Unit</strong> inspector as soon as you suspected AFB. Contact them now if you have not done so.</p>' +
+                  '<p>All equipment has been removed from your inventory. No refund is possible — this is the consequence of AFB going undetected and unreported.</p>',
+        });
+      } else {
+        out.push({
+          kind: 'toast',
+          text: 'AFB destroyed ' + colony.name + '. All equipment condemned and burned. Contact your bee inspector.',
           tone: 'bad',
         });
       }
@@ -855,12 +1000,30 @@ function buildAdvisor() {
       items.push({ tone: 'info', icon: '📅', text: tips[ti] });
     }
     if (season === 'autumn') {
-      if (wkInYear >= 33 && wkInYear <= 38) items.push({ tone: 'info', icon: '🍯',
-        text: 'Varroa treatment window: get a treatment on as soon as the supers are off — late summer is the critical time.' });
-      if (wkInYear >= 36 && wkInYear <= 44) items.push({ tone: 'info', icon: '🧂',
-        text: 'Start feeding 2:1 syrup to top up winter stores, until each hive feels heavy when hefted from behind.' });
+      if (wkInYear >= 33 && wkInYear <= 38) {
+        /* Check whether any treatment is already in stock */
+        var _hasStock = Game.inventory.treatStock &&
+          (Object.keys(Game.inventory.treatStock).some(function(k){ return (Game.inventory.treatStock[k] || 0) > 0; }));
+        if (_hasStock) {
+          items.push({ tone: 'info', icon: '💊',
+            text: 'Varroa treatment window: get a treatment on as soon as the supers are off — late summer is the critical time.' });
+        } else {
+          items.push({ tone: 'warn', icon: '💊',
+            text: 'Varroa treatment window is open. You have no treatment in stock — visit the Market (Supplies tab) and buy Apiguard or Apivar, then apply it as soon as the supers are off.' });
+        }
+      }
+      if (wkInYear >= 36 && wkInYear <= 44) {
+        var _hasSugar = (Game.inventory.sugar || 0) >= 5;
+        if (_hasSugar) {
+          items.push({ tone: 'info', icon: '🧂',
+            text: 'Start feeding 2:1 syrup (2 kg sugar to 1 litre water) to top up winter stores, until each hive feels heavy when hefted from behind.' });
+        } else {
+          items.push({ tone: 'warn', icon: '🧂',
+            text: 'Time to feed for winter. You need sugar in stock — buy sugar bags from the Market (Supplies tab), then feed 2:1 syrup until the hive feels heavy when hefted.' });
+        }
+      }
       if (wkInYear >= 40) items.push({ tone: 'info', icon: '🐭',
-        text: 'Check mouse guards are fitted before the weather turns cold.' });
+        text: 'Fit mouse guards now — use the Entrance action on each hive and set it to "Mouse guard". Mice move into hives in autumn and wreck the comb.' });
 
       /* Supers-still-on warning after week 35 — delays varroa treatment and risks wet honey */
       if (wkInYear >= 36) {
@@ -882,13 +1045,16 @@ function buildAdvisor() {
 
     /* Deep-winter isolation starvation risk: small cluster + low brood-box honey.
        Reads actual colony.honey (not fog-of-war). Bees cannot move to distant frames
-       when in cluster — fondant on the top bars can save them. */
+       when in cluster — fondant on the top bars can save them.
+       Threshold scales with cluster size: a cluster under 3,000 bees cannot bridge
+       to stores more than a few frames away, so even 10 kg may be unreachable. */
     var _deepWinter = (wkInYear <= 8 || wkInYear >= 44);
     if (_deepWinter) {
       var aliveCols4 = aliveColonies();
       for (var _ii = 0; _ii < aliveCols4.length; _ii++) {
         var _ic = aliveCols4[_ii];
-        if (_ic.honey > 0 && _ic.honey < 5 && _ic.population < 5000) {
+        var _isolAdvThreshold = (_ic.population < 3000) ? 10 : 5;
+        if (_ic.honey > 0 && _ic.honey < _isolAdvThreshold && _ic.population < 5000) {
           items.push({ tone: 'bad', icon: '🍯',
             text: _ic.name + ' is a small cluster (' + Math.round(_ic.population / 1000) + 'k bees) with only ' + _ic.honey.toFixed(1) + ' kg in the brood box. Risk of isolation starvation — the cluster may not be able to reach stores on distant frames. Place fondant directly on the top bars now.' });
           badCount++;
@@ -911,6 +1077,33 @@ function buildAdvisor() {
         }
       }
     }
+    /* Moorland frost return warning — colonies left on the moor past week 39
+       risk being caught by the first autumn frosts. They should be moved back
+       to a sheltered lowland apiary before mid-October (wk 41-42). */
+    if (wkInYear >= 39 && wkInYear <= 42) {
+      var _moorColonies = [];
+      for (var _mai = 0; _mai < Game.apiaries.length; _mai++) {
+        var _mAp = Game.apiaries[_mai];
+        var _mSite = SITE_TYPES[_mAp.siteType] || {};
+        if (_mSite.heather) {
+          var _mCols = coloniesIn(_mAp.id);
+          for (var _mci = 0; _mci < _mCols.length; _mci++) {
+            if (_mCols[_mci].alive) _moorColonies.push({ colony: _mCols[_mci], apiary: _mAp });
+          }
+        }
+      }
+      if (_moorColonies.length > 0) {
+        var _moorNames = _moorColonies.map(function(r){ return r.colony.name; }).join(', ');
+        var _moorApiaryName = _moorColonies[0].apiary.name;
+        items.push({ tone: 'warn', icon: '⛰️',
+          text: 'The heather harvest is over and ' + _moorNames + ' ' +
+            (_moorColonies.length === 1 ? 'is' : 'are') + ' still on the moor at ' +
+            _moorApiaryName + '. Move ' + (_moorColonies.length === 1 ? 'this colony' : 'these colonies') +
+            ' to a sheltered lowland apiary before the first frosts (around week 42). Exposed moorland in October is cold and forage-free — colonies can starve or be killed by cold snaps.' });
+        warnCount++;
+      }
+    }
+
     if (season === 'spring' && wkInYear >= 16 && wkInYear <= 22) {
       items.push({ tone: 'info', icon: '📦',
         text: 'Colonies build fast now. Check whether any need an extra super — a cramped colony is more likely to swarm.' });

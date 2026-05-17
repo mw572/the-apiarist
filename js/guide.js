@@ -157,6 +157,54 @@ window.ACTION_GUIDE = {
     why: 'It lets you breed from your calmest, healthiest, most productive colonies, and keeps queens on hand for requeening and making up nucs.',
     when: 'Early summer, with drones flying and warm settled weather for the virgin queens to mate. It needs a strong cell-raising colony.',
     watch: 'An advanced skill — get your inspections and swarm control thoroughly solid first.'
+  },
+
+  heftColony: {
+    title: 'Hefting the hive', icon: '⚖️',
+    what: 'Lifting the back of the hive with both hands to feel its weight.',
+    why: 'In deep winter, when you must not open the hive, hefting is the only way to check the colony still has enough stores to survive. A hive that feels light may be close to starvation.',
+    when: 'Through autumn and winter — whenever you want a quick stores check without opening the hive. Especially important in January and February.',
+    watch: 'Hefting gives you a rough feel for the weight, not a precise reading. A reassuringly heavy hive is genuinely reassuring; a worryingly light one needs fondant on the crown board immediately.'
+  },
+
+  removeSuper: {
+    title: 'Removing an empty super', icon: '📦',
+    what: 'Taking a super box off the hive once the honey has been extracted and the box is nearly empty.',
+    why: 'Once a super has been harvested and the drawn comb returned to the hive for cleaning, there is no reason to leave it on indefinitely. An empty super is dead space that the bees have to heat and defend. Removing it tidies the hive and returns the box to your equipment stock for next season.',
+    when: 'After harvest, once the bees have cleaned up the frames. The super must have less than 0.5 kg remaining before removal.',
+    watch: 'Never remove a super that still holds a significant amount of honey — the bees have not finished with it. Harvest first, wait a few days for them to clean the comb, then remove.'
+  },
+
+  fitClearerBoard: {
+    title: 'Fitting a clearer board', icon: '🍯',
+    what: 'A clearer board (or porter escape board) fits between the super and the brood box the evening before harvest. One-way valves let the bees move down but not back up, so the super is bee-free by morning.',
+    why: 'Harvesting a super full of bees is messy and loses honey. A clearer board makes the job clean, quick, and gentler on the bees — the whole super comes off in one easy lift without brushing or shaking.',
+    when: 'The evening before you plan to harvest. Leave it overnight; the super should be clear in 12 to 24 hours.',
+    watch: 'A super cleared on a cold night may not be fully clear by morning — give it a second night if needed. Check the entrances are not blocked so the bees can exit freely.'
+  },
+
+  demareeMethod: {
+    title: 'The Demaree method', icon: '🔄',
+    what: 'A swarm-control technique that relieves the colony\'s urge to swarm without making a split. The queen stays in the lower brood box; all other brood is moved above the supers in a second box, separated by two queen excluders. The colony \'feels\' it has swarmed but every bee and every frame stays with you.',
+    why: 'It is the most space-efficient swarm control: no spare hives used, no flying bees lost, all the foragers kept. The main flow continues uninterrupted.',
+    when: 'Late April to July, when swarm pressure is mounting but before cells are capped. You must find the queen first.',
+    watch: 'Critical: you must come back within seven days and destroy the emergency cells in the top box. If you miss this check, the colony may cast from above with the first virgin to emerge.'
+  },
+
+  demareeCheck: {
+    title: 'Demaree check — destroy emergency cells', icon: '✅',
+    what: 'The essential follow-up visit, seven days after carrying out a Demaree. Open the top box and destroy all the emergency queen cells the bees have built from the brood left up there.',
+    why: 'Without this check the top box will raise a virgin queen who can cast a swarm from above — defeating the whole purpose of the Demaree. Once the larvae are too old to raise more queens (after this visit), the top brood simply hatches out and the box becomes empty drawn comb.',
+    when: 'Exactly seven days after the Demaree — not eight, not nine. The cells are on a timer.',
+    watch: 'Be thorough: one missed capped cell will produce a virgin. Check every frame in the top box and cut out everything that looks like a queen cell.'
+  },
+
+  moveHive: {
+    title: 'Moving a hive', icon: '🚚',
+    what: 'Relocating a colony to a different apiary site.',
+    why: 'Bees navigate precisely back to their original site. Moving can improve forage, separate a colony from a bad location, or reduce congestion at one site.',
+    when: 'At night, when all foragers are home. Move at least three miles (or less than three feet in increments) — any distance in between and half the foragers fly back to the old site.',
+    watch: 'Strap the hive closed tightly and block the entrance with foam until you reach the new site. The colony loses some foragers regardless — it will rebuild over a few weeks.'
   }
 
 };

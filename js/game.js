@@ -135,6 +135,47 @@ function startNewGame(name, difficulty){
   }
 }
 
+/* --- save migration -------------------------------------------------- */
+/* Normalise colony fields that may be missing in saves from earlier builds.
+   Called every time a save is loaded, before handing Game to the engine.
+   Rules:
+   - queenCells must have all four fields: type, count, age, state.
+     A save with {type:'swarm', count:2} (missing age/state) would cause
+     colony.queenCells.age++ to produce NaN, permanently blocking swarm logic.
+   - _highVarroaWeeks and _hopelessWeeks default to 0 if absent.
+   - osrRisk / osrBroodRisk default to 0 if absent.
+*/
+function _migrateSave(g) {
+  if (!g || !Array.isArray(g.colonies)) return;
+  g.colonies.forEach(function(c) {
+    /* queenCells: ensure all four fields are present and not NaN */
+    if (!c.queenCells || typeof c.queenCells !== 'object') {
+      c.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
+    } else {
+      if (typeof c.queenCells.type  !== 'string') c.queenCells.type  = 'none';
+      if (typeof c.queenCells.count !== 'number' || isNaN(c.queenCells.count)) c.queenCells.count = 0;
+      if (typeof c.queenCells.age   !== 'number' || isNaN(c.queenCells.age))   c.queenCells.age   = 0;
+      if (typeof c.queenCells.state !== 'string') {
+        /* infer state from type+age when possible */
+        if (c.queenCells.type === 'none') {
+          c.queenCells.state = 'none';
+        } else if (c.queenCells.age >= 1) {
+          c.queenCells.state = 'capped';
+        } else {
+          c.queenCells.state = 'larvae';
+        }
+      }
+    }
+
+    /* numeric trackers: default to 0 if absent or NaN */
+    if (typeof c._highVarroaWeeks !== 'number' || isNaN(c._highVarroaWeeks)) c._highVarroaWeeks = 0;
+    if (typeof c._hopelessWeeks   !== 'number' || isNaN(c._hopelessWeeks))   c._hopelessWeeks   = 0;
+    if (typeof c.osrRisk          !== 'number' || isNaN(c.osrRisk))          c.osrRisk          = 0;
+    if (typeof c.osrBroodRisk     !== 'number' || isNaN(c.osrBroodRisk))     c.osrBroodRisk     = 0;
+    if (typeof c.winterBeeHealth  !== 'number' || isNaN(c.winterBeeHealth))  c.winterBeeHealth  = 1;
+  });
+}
+
 /* --- save / load ----------------------------------------------------- */
 
 function saveGame(){
@@ -153,6 +194,7 @@ function loadGame(){
     if (!raw) return false;
     var g = JSON.parse(raw);
     if (!g || g.version !== 2) return false;
+    _migrateSave(g);
     Game = g;
     if (!Game.ui) Game.ui = { view:'apiary', selectedApiary: Game.apiaries[0].id, selectedColony:null };
     if (typeof buildAdvisor === 'function') buildAdvisor();
@@ -190,6 +232,7 @@ function loadSaveObject(obj){
       !Array.isArray(obj.colonies) || !Array.isArray(obj.apiaries) || !obj.apiaries.length){
     return { ok: false, msg: 'That file is not a valid Apiarist save.' };
   }
+  _migrateSave(obj);
   Game = obj;
   if (!Game.ui) Game.ui = { view: 'apiary', selectedApiary: Game.apiaries[0].id, selectedColony: null };
   if (!Game.flags) Game.flags = {};
@@ -252,6 +295,11 @@ function _checkWinterSurvival(){
     Game.flags.lastWinterYear = gameYear();
     if (gameYear() > 1 && aliveColonies().length > 0){
       Game.stats.wintersSurvived += 1;
+      /* XP: surviving winter is the single hardest milestone in beekeeping —
+         15 XP per colony alive at mid-spring (weeks 18-20). Getting all your
+         colonies through winter is a Year 2 goal and deserves real recognition. */
+      var survivingCount = aliveColonies().length;
+      addXp(15 * survivingCount);
       logEvent('🌷', 'Your bees came through the winter. That is the hardest part of the year.', 'good');
       if (typeof showExplainer === 'function'){
         notable({ kind:'explainer', id:'first-winter',

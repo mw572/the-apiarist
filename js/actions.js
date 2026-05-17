@@ -97,6 +97,13 @@ function inspectColony(colony) {
     report.findings.push({ icon: '⚠️', text: 'No smoker — this makes the bees considerably harder to manage.' });
     colony.temperament = _act_clamp(colony.temperament + 0.12, 0, 1);
   }
+  /* Edge 3 fix — hive tool penalty: without a hive tool the beekeeper cannot
+     properly prise frames apart. Queen cells on bottom bars and disease signs in
+     the comb are harder to spot. Apply a small visibility penalty to queen cell
+     and disease detection (a 15% reduction in effective skill for those checks). */
+  if (!hasHiveTool) {
+    report.findings.push({ icon: '⚠️', text: 'No hive tool — you cannot prise frames apart properly. Queen cells on the bottom bars may be missed.' });
+  }
 
   /* ---- Skill level -------------------------------------------------- */
   const skill = skillLevel(Game.skillXp); // 1..10
@@ -168,6 +175,12 @@ function inspectColony(colony) {
   if (skill <= 2 && colony.queenCells.count <= 2) {
     /* Beginners may miss just one or two cells */
     qcellsVisible = Math.random() < 0.6;
+  }
+  /* Edge 3 fix — no hive tool: cannot prise frames so swarm cells on bottom bars
+     are harder to spot. Low-skill beekeepers especially likely to miss them. */
+  if (!hasHiveTool && qcellsVisible && colony.queenCells.type === 'swarm') {
+    const missChance = skill <= 3 ? 0.45 : skill <= 5 ? 0.25 : 0.10;
+    if (Math.random() < missChance) qcellsVisible = false;
   }
 
   /* Build frames */
@@ -409,8 +422,21 @@ function inspectColony(colony) {
   if (_crisis) report.summary.unshift(_crisis);
 
   /* ---- Swarm season lesson ---------------------------------------- */
-  if (!report.lesson && season === 'spring' && colony.swarmPressure > 0.5) {
+  /* Only fire once we are past week 14 (swarm season proper). Weeks 9-13
+     are early spring build-up — swarm pressure is near zero and the "7-9
+     day inspection" message would mislead a beginner into thinking swarming
+     is imminent when it is not. */
+  const wkInYrForLesson = ((Game.week - 1) % 52) + 1;
+  if (!report.lesson && season === 'spring' && wkInYrForLesson >= 14 && colony.swarmPressure > 0.5) {
     report.lesson = 'Swarm pressure is building. Inspect every seven to nine days through the spring and have a spare hive ready.';
+  }
+
+  /* ---- Early spring build-up lesson (weeks 9-13) ------------------- */
+  /* The first spring inspection is a key teaching moment for beginners.
+     Teach the five-point check: queen, brood, health, stores, space.
+     Only fires if no more urgent lesson (disease, swarm cells etc.) has claimed the slot. */
+  if (!report.lesson && season === 'spring' && wkInYrForLesson >= 9 && wkInYrForLesson <= 13) {
+    report.lesson = 'Early spring check — the five things to confirm: (1) Is the queen present and laying? (2) Is there brood in all stages? (3) Are there any signs of disease? (4) Are stores adequate? (5) Is there enough room to expand? These same questions should guide every inspection all year.';
   }
 
   /* ---- XP award ----------------------------------------------------- */
@@ -458,6 +484,24 @@ function inspectColony(colony) {
 
   /* Log the inspection */
   logEvent('🔍', `Inspected ${colony.name}. ${report.findings.length} item${report.findings.length !== 1 ? 's' : ''} noted.`, 'plain');
+
+  /* ---- First-ever inspection: teach the fundamentals ---------------- */
+  /* Fires once after the inspection result is written, so the player has
+     the report in front of them when they read why it matters. */
+  if (!Game.flags.seenExplainers['first_inspection']) {
+    showExplainer('first_inspection',
+      'Reading Your First Inspection',
+      '<p>You have opened the hive for the first time. Here is how to read what you saw.</p>' +
+      '<h4>Eggs are your most important signal</h4>' +
+      '<p>A single egg, standing upright at the base of a cell, tells you the queen was present and laying within the last <strong>three days</strong>. You do not need to see the queen herself. Tilt each frame so the face catches the light — eggs are tiny, pale white, and easy to miss.</p>' +
+      '<h4>The bee lifecycle — why 21 days matters</h4>' +
+      '<p>Every worker bee takes exactly 21 days from egg to adult: three days as an egg, five or six as an open larva, then sealed in a capped cell for the rest. A healthy colony shows all three stages at once — eggs in the centre, curled larvae just outside, and a large area of flat, biscuit-brown sealed brood beyond. This is a concentric brood pattern. It means the queen is working well.</p>' +
+      '<h4>Capped versus uncapped</h4>' +
+      '<p>Sealed brood cells have flat, dry-looking wax cappings. Honey cells look the same but feel heavier. Cells still open and full of nectar are unripe — too wet to harvest. Only harvest honey once three-quarters or more of a super is capped.</p>' +
+      '<h4>The five questions, every time</h4>' +
+      '<p>Every inspection should answer: (1) Is the queen present and laying? (2) Is there brood in all stages? (3) Are there signs of disease? (4) Are stores adequate? (5) Is there room to expand? The five lines at the bottom of your report answer exactly these.</p>'
+    );
+  }
 
   render();
   return report;
@@ -750,6 +794,10 @@ function demareeMethod(colony) {
     colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
   }
 
+  /* XP: the Demaree is an advanced Year 3+ technique — keeping the colony
+     fully intact while relieving congestion takes real understanding. */
+  addXp(15);
+
   const msg = `Demaree carried out on ${colony.name} (£${boxCost}). The queen is in the lower box; all other brood is above the supers. You have 7 days to come back and destroy the emergency cells in the top box — do not miss this check or the colony may swarm from above.`;
   logEvent('🔄', msg, 'good');
   render();
@@ -828,6 +876,54 @@ function setEntrance(colony, mode) {
   logEvent('🚪', msg, 'plain');
   render();
   return { ok: true, msg };
+}
+
+
+/**
+ * improveVentilation(colony) -> {ok, msg}
+ *
+ * Improves hive ventilation to help clear chalkbrood and sacbrood.
+ * Both diseases thrive in damp, poorly ventilated conditions. Practical
+ * interventions: tilt the hive forward so condensation drains, open the
+ * entrance fully, move to a sunnier position if possible.
+ *
+ * Sets colony._ventilationBoost (weeks) which colony.js reads when
+ * computing the chalkbrood/sacbrood suppressionFactor. Not a cure:
+ * persistent disease despite ventilation points to a failing queen; requeen.
+ */
+function improveVentilation(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+
+  const dis = colony.diseases;
+  const hasBreathingDisease = (dis.chalkbrood || 0) > 0.05 || (dis.sacbrood || 0) > 0.05;
+
+  if (!hasBreathingDisease) {
+    return {
+      ok: false,
+      msg: colony.name + ' does not currently have chalkbrood or sacbrood -- ventilation improvement is most useful when these are present.',
+    };
+  }
+
+  // 4-week boost; colony.js checks _ventilationBoost each tick
+  colony._ventilationBoost = 4;
+
+  // Immediate small suppression: reducing moisture inhibits Ascosphaera apis spores
+  if (dis.chalkbrood > 0) dis.chalkbrood = Math.max(0, dis.chalkbrood - 0.05);
+  if (dis.sacbrood   > 0) dis.sacbrood   = Math.max(0, dis.sacbrood   - 0.03);
+
+  // Open the entrance as part of the same intervention
+  colony.entrance = 'open';
+
+  const diseaseNames = [];
+  if ((dis.chalkbrood || 0) > 0) diseaseNames.push('chalkbrood');
+  if ((dis.sacbrood   || 0) > 0) diseaseNames.push('sacbrood');
+  const disStr = diseaseNames.length ? diseaseNames.join(' and ') : 'the brood disease';
+
+  addXp(5);
+  const ventMsg = `Ventilation improved on ${colony.name}: hive tilted forward, entrance fully opened. This should help the bees manage ${disStr} over the next few weeks. If it persists after a month, consider requeening -- a hygienic queen is the lasting fix.`;
+  logEvent('💨', ventMsg, 'plain');
+  render();
+  return { ok: true, msg: ventMsg };
 }
 
 /**
@@ -909,12 +1005,13 @@ function treatColony(colony, treatmentId) {
   const t = TREATMENTS[treatmentId];
   if (!t) return { ok: false, msg: `Unknown treatment: ${treatmentId}.` };
 
-  /* All varroa treatments contaminate honey — supers must be off first.
-     No treatment is legal for use with supers on under UK regulations.
-     (The old MAQS/formic acid exemption was incorrect — it is not approved
-     for use over honey in the UK even though some other countries permit it.) */
+  /* Most treatments contaminate honey and must not be applied with supers in place.
+     Exception: formic acid strips (harvestSafe:true) — formic acid is a naturally
+     occurring compound in honey and is the one treatment approved for use with
+     supers on under UK/EU regulations. All other treatments (thymol, amitraz,
+     oxalic acid) must never be applied while honey supers are present. */
   if (colony.supers > 0 && !t.harvestSafe) {
-    return { ok: false, msg: `Cannot apply ${t.name} while honey supers are on — it will contaminate the crop and is illegal in the UK. Remove the supers (and harvest if necessary) before treating.` };
+    return { ok: false, msg: `Cannot apply ${t.name} while honey supers are on — it will contaminate the crop. Remove the supers (and harvest if necessary) before treating.` };
   }
 
   /* Check treatment stock — paid for at Market, not here */
@@ -928,21 +1025,23 @@ function treatColony(colony, treatmentId) {
 
   let warnings = [];
 
-  /* Temperature warnings */
+  /* Temperature warnings — use tempC directly from the WEATHER definition.
+     Falls back to the warmth-proxy formula for robustness if tempC is absent
+     (e.g., a save loaded before the field was added). */
   const wx = weather();
-  /* Use warmth proxy: warmth 1.0 = approx 20°C. Scale: cold=5°C, heatwave=32°C */
-  const approxTemp = 5 + wx.warmth * 27;
+  const approxTemp = (wx.tempC != null) ? wx.tempC : (5 + wx.warmth * 27);
   if (approxTemp < (t.tempMin || 0)) {
-    warnings.push(`It is too cold for ${t.name} to work well (needs at least ${t.tempMin}°C).`);
+    warnings.push(`It is too cold for ${t.name} to work well (needs at least ${t.tempMin}°C — currently around ${Math.round(approxTemp)}°C).`);
   }
   if (approxTemp > (t.tempMax || 40)) {
-    warnings.push(`It is very hot — ${t.name} may stress the bees or harm the queen at these temperatures.`);
+    warnings.push(`It is very hot (around ${Math.round(approxTemp)}°C) — ${t.name} may stress the bees or harm the queen at these temperatures (max ${t.tempMax}°C).`);
   }
 
-  /* Bug F fix — MAQS (formic acid) specific: warn at >25°C even below the hard tempMax,
-     because formic acid fumes intensify rapidly above 25°C and can kill the queen. */
-  if (t.queenRisk && approxTemp > 25 && approxTemp <= (t.tempMax || 40)) {
-    warnings.push(`Temperature is above 25°C — formic acid fumes are intensifying. Queen loss risk is elevated; consider waiting for cooler weather.`);
+  /* Formic acid (MAQS): queen-kill risk rises above 25°C regardless of tempMax.
+     This check fires even when approxTemp has not yet hit tempMax (29°C),
+     because queen-loss risk is already elevated from 25°C upward. */
+  if (t.queenRisk && approxTemp > 25) {
+    warnings.push(`Temperature is above 25°C — formic acid fumes are intensifying. Queen loss risk is elevated; consider waiting for cooler weather (below 25°C).`);
   }
 
   /* Broodless-only treatments (OA trickle / vaporise) */
@@ -954,7 +1053,26 @@ function treatColony(colony, treatmentId) {
     warnings.push(`${t.name} only kills mites on the bees — it cannot reach mites sealed inside brood cells. With brood present efficacy drops to roughly 40%. For a proper knock-down, wait for the broodless period (mid-winter) or create an artificial brood break first.`);
   }
 
+  /* Edge 7 fix — double treatment guard: only one treatment can be active at a time.
+     Applying a second over an active one would void the first course, create
+     unpredictable mite kill curves, and is not legal practice.
+     Refund the consumed stock unit before returning the error. */
+  if (colony.treatment) {
+    const existing = TREATMENTS[colony.treatment.id];
+    const existingName = existing ? existing.name : colony.treatment.id;
+    Game.inventory.treatStock[treatmentId] += 1;
+    return {
+      ok: false,
+      msg: `A treatment is already in progress on ${colony.name} (${existingName}, ${colony.treatment.weeksLeft} week${colony.treatment.weeksLeft !== 1 ? 's' : ''} remaining). Wait for it to finish before applying another.`
+    };
+  }
+
   colony.treatment = { id: treatmentId, weeksLeft: t.weeks };
+
+  /* XP: treating varroa is a core beekeeping skill — timing it correctly
+     (broodless period, right temperature, supers off) is something real
+     beekeepers learn through experience. Award XP for applying treatment. */
+  addXp(8);
 
   let msg = `${t.name} applied to ${colony.name}.`;
   if (warnings.length) {
@@ -1050,25 +1168,38 @@ function artificialSwarm(colony) {
   const newColony = makeColony({
     name: _act_nextHiveName(),
     apiaryId: colony.apiaryId,
-    source: 'split',
+    source: 'swarm', // flying bees + old queen = no brood (all brood stays at old site)
     population: newPop,
     queenQuality: colony.queen.layQuality,
     varroa: Math.round(colony.varroa * 0.35), // flying bees carry some mites
     year: gameYear(),
   });
 
-  /* Transfer the queen to the new colony */
+  /* Transfer the queen to the new colony.
+     The new colony has no brood — the flying bees filled their honey stomachs
+     before leaving (like a natural swarm) and all brood comb stays at the old site.
+     source:'swarm' in makeColony already zeros eggs/larvae/capped. */
   newColony.queen = Object.assign({}, colony.queen);
   newColony.queen.age = colony.queen.age;
   newColony.swarmPressure = 0;
   newColony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
 
-  /* The original site keeps the brood and raises a new queen from the cells */
+  /* The original site keeps the brood and raises a new queen from the cells.
+     The swarm cells stay — do NOT reset them to 'emergency'/'larvae'. If they
+     were already capped, the virgin is days away from emerging. Preserve the
+     existing age and state so the simulation loop advances them correctly. */
   colony.population = remainPop;
   colony.swarmPressure = 0; /* The swarming impulse is resolved */
   colony.queen = null; /* The old queen has gone to the new hive */
-  /* The retained cells become a replacement queen, with no further swarm */
-  colony.queenCells = { type: 'emergency', count: Math.max(2, colony.queenCells.count || 3), age: 0, state: 'larvae' };
+  /* Keep existing swarm cells intact. If there were no cells yet (edge case),
+     fall back to emergency cells — but in practice artificial swarm requires
+     swarm cells or high pressure, so cells should exist. */
+  if (!colony.queenCells || colony.queenCells.type === 'none' || colony.queenCells.count === 0) {
+    colony.queenCells = { type: 'emergency', count: 3, age: 0, state: 'larvae' };
+  }
+  /* If cells are already capped they will yield a virgin queen on schedule.
+     Mark the colony so the UI can hint the player a virgin is expected. */
+  colony.virginQueen = colony.queenCells.state === 'capped';
 
   Game.colonies.push(newColony);
   Game.stats.splitsMade++;
@@ -1150,9 +1281,19 @@ function nucleusMethod(colony) {
 
   Game.inventory.nucBoxes--;
 
-  /* The nuc takes the queen and a small contingent of bees */
+  /* The nuc takes the queen, ~2 frames of brood and ~1 frame of stores,
+     plus the adhering bees (~25% of colony population). Brood is taken
+     proportionally from the parent so the parent's state is updated correctly. */
   const nucPop = Math.round(colony.population * 0.25);
   colony.population -= nucPop;
+
+  /* ~30% of the parent brood goes into the nuc (2 frames out of ~7) */
+  const nucEggs   = Math.round((colony.eggs   || 0) * 0.30);
+  const nucLarvae = Math.round((colony.larvae  || 0) * 0.30);
+  const nucCapped = Math.round((colony.capped  || 0) * 0.30);
+  colony.eggs   = (colony.eggs   || 0) - nucEggs;
+  colony.larvae = (colony.larvae || 0) - nucLarvae;
+  colony.capped = (colony.capped || 0) - nucCapped;
 
   const newColony = makeColony({
     name: _act_nextHiveName(),
@@ -1160,6 +1301,9 @@ function nucleusMethod(colony) {
     source: 'split',
     population: nucPop,
     queenQuality: colony.queen.layQuality,
+    eggs:   nucEggs,
+    larvae: nucLarvae,
+    capped: nucCapped,
     varroa: Math.round(colony.varroa * 0.2),
     year: gameYear(),
   });
@@ -1207,6 +1351,10 @@ function removeQueenCells(colony) {
   const hadType = colony.queenCells.type;
   colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
   /* Swarm pressure is UNCHANGED — the colony will rebuild cells within days */
+
+  /* XP: finding and acting on queen cells is a core Year 1-2 skill.
+     Small award — this action alone doesn't solve the problem. */
+  addXp(3);
 
   const msg = `Queen cells removed from ${colony.name}. However, with swarm pressure still high the bees will draw new cells within the week. This alone will not prevent swarming — a split or artificial swarm is needed.`;
   const lesson = 'Removing queen cells is a short-term measure only. The impulse to swarm is still there. Unless you address the underlying congestion and desire to swarm, new cells will appear within a week.';
@@ -1304,11 +1452,39 @@ function requeen(colony, source) {
   }
   /* 'own' = use a queen from within the colony (e.g. from a supersedure cell) — no cost */
 
-  /* Small chance of rejection */
-  const rejectionChance = source === 'bought' ? 0.12 : source === 'reared' ? 0.08 : 0.15;
+  /* Acceptance depends on colony state:
+     - Queenless (no queen or absent): most receptive. Base rate.
+     - Virgin present: bees already have a queen-like pheromone source.
+       They are much more likely to reject a foreign queen. +20% rejection.
+     - Queenright (laying queen present): bees are satisfied. High rejection. +30%.
+     Laying workers present: chaotic; rejection risk is very high. +35%.
+  */
+  const isQueenless = !colony.queen || !colony.queen.present || colony.queen.state === 'absent';
+  const hasVirgin   = colony.queen && colony.queen.present && colony.queen.virgin;
+  const isQueenright = colony.queen && colony.queen.present && colony.queen.state === 'laying';
+
+  if (isQueenright && source !== 'own') {
+    /* Warn: requeening a queenright colony is wasteful and risky.
+       Allow it (the player may want to improve genetics) but inform them. */
+  }
+
+  /* Base rejection chance by source */
+  let rejectionChance = source === 'bought' ? 0.12 : source === 'reared' ? 0.08 : 0.15;
+
+  /* State modifiers */
+  if (colony.layingWorkers)  rejectionChance += 0.35;
+  else if (hasVirgin)        rejectionChance += 0.20; // virgin's pheromones compete
+  else if (isQueenright)     rejectionChance += 0.30; // satisfied colony
+
+  rejectionChance = Math.min(rejectionChance, 0.90); // cap at 90%
+
   if (Math.random() < rejectionChance) {
-    /* Queen rejected and killed */
-    const msg = `The bees rejected the new queen and balled her. ${colony.name} is now queenless. Give them a few days to calm down before trying again.`;
+    /* Queen rejected and balled — she is lost. If bought, money is also lost. */
+    const msg = `The bees rejected the new queen and balled her. ${colony.name} is now queenless.` +
+      (hasVirgin ? ' A virgin queen was already present — the bees would not accept a rival.' :
+       isQueenright ? ' The colony already had a laying queen and had no reason to accept a replacement.' :
+       colony.layingWorkers ? ' Laying workers make it very difficult to introduce any queen.' :
+       ' Give them a few days to calm down before trying again.');
     logEvent('👑', msg, 'bad');
     toast('Queen rejected.', 'bad');
     render();
@@ -1358,10 +1534,17 @@ function uniteColonies(weak, strong) {
   strong.pollen     = strong.pollen + weak.pollen * 0.7;
   strong.varroa     = strong.varroa + Math.round(weak.varroa * 0.85);
 
-  /* Return the weak colony's super boxes to the equipment pool. The supers
-     cannot be transferred to the strong colony during uniting — the newspaper
-     sheet sits across both hive bodies. They are treated as empty boxes. */
+  /* Return the weak colony's super boxes to the equipment pool. The newspaper
+     sheet sits between the two hive bodies, so the weak colony's supers cannot
+     be transferred live to the strong colony — they are removed as empty boxes.
+     Any honey in them is credited to the player's extracted honey total rather
+     than silently destroyed. */
   if ((weak.supers || 0) > 0) {
+    const rescuedHoney = weak.superHoney || 0;
+    if (rescuedHoney > 0) {
+      Game.inventory.honey = (Game.inventory.honey || 0) + rescuedHoney;
+      Game.stats.honeyHarvested = (Game.stats.honeyHarvested || 0) + rescuedHoney;
+    }
     if (!Game.inventory.spareHives) Game.inventory.spareHives = 0;
     Game.inventory.spareHives += weak.supers;
     weak.supers = 0;
@@ -1406,6 +1589,102 @@ function markQueen(colony) {
   logEvent('🎨', msg, 'good');
   render();
   return { ok: true, msg };
+}
+
+/**
+ * cageQueen(colony) -> {ok, msg}
+ *
+ * Place the queen in a travelling cage. Used for swarm control (Demaree variant)
+ * or to hold the old queen while a replacement is being accepted.
+ *
+ * Biology: queen pheromone (QMP) suppresses emergency cell construction.
+ * With the queen caged, QMP stops circulating within hours. Within 48-72 hours
+ * the colony acts as if queenless and begins raising emergency cells from any
+ * larvae under three days old. The caged queen is alive but not laying.
+ *
+ * Mechanic: sets colony.queen.caged = true. Each weekly tick in colony.js,
+ * the colony raises emergency cells while the queen remains caged. The player
+ * must call introduceQueen() to release her after at least 2 game weeks.
+ */
+function cageQueen(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+  if (!colony.queen || !colony.queen.present) {
+    return { ok: false, msg: 'No queen present to cage.' };
+  }
+  if (colony.queen.caged) {
+    return { ok: false, msg: 'The queen is already caged.' };
+  }
+  if (colony.queen.virgin) {
+    return { ok: false, msg: 'Do not cage a virgin queen — she needs to complete her mating flights.' };
+  }
+  if (!colony.known || !colony.known.queenSeen) {
+    return { ok: false, msg: 'You need to find the queen before you can cage her — inspect the hive first and locate her.' };
+  }
+
+  colony.queen.caged = true;
+  colony._cagedWeeks = 0;
+
+  addXp(5);
+  const cageMsg = `Queen caged on ${colony.name}. Without her pheromones circulating, the colony will begin raising emergency cells within a few days. Return in about 2 weeks to release her and destroy all cells but one, or remove her permanently if you are requeening.`;
+  logEvent('🔒', cageMsg, 'plain');
+  render();
+  return { ok: true, msg: cageMsg };
+}
+
+/**
+ * introduceQueen(colony) -> {ok, msg}
+ *
+ * Release the caged queen after at least 2 game weeks (approx. 10-14 days).
+ * Warns if emergency cells are still present — a competing virgin will kill
+ * the released queen. Blocks if fewer than 2 weeks have elapsed.
+ *
+ * After release, queen.caged is cleared and she resumes laying the next tick.
+ */
+function introduceQueen(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+  if (!colony.queen || !colony.queen.present) {
+    return { ok: false, msg: 'No queen to release — the colony has no queen.' };
+  }
+  if (!colony.queen.caged) {
+    return { ok: false, msg: 'The queen is not currently caged.' };
+  }
+
+  const weeksInCage = colony._cagedWeeks || 0;
+  if (weeksInCage < 2) {
+    return {
+      ok: false,
+      msg: `The queen has only been caged ${weeksInCage} week${weeksInCage === 1 ? '' : 's'}. Wait at least 2 weeks before releasing — releasing too early risks the bees balling her.`
+    };
+  }
+
+  const hasCells = colony.queenCells.type !== 'none' && colony.queenCells.count > 0;
+  let iWarning = '';
+  if (hasCells) {
+    iWarning = ` Warning: there are still ${colony.queenCells.type} queen cells in the colony. A virgin will emerge and kill the released queen. Knock down all cells first, or accept a queen change.`;
+  }
+
+  /* Small chance of balling even after the correct introduction period */
+  const rejectionChance = hasCells ? 0.55 : 0.08;
+  if (Math.random() < rejectionChance) {
+    colony.queen.caged   = false;
+    colony.queen.present = false;
+    colony.queen.state   = 'absent';
+    colony._cagedWeeks   = 0;
+    const rejMsg = `The bees balled the released queen on ${colony.name} — she has been lost.${iWarning} The colony is now queenless.`;
+    logEvent('👑', rejMsg, 'bad');
+    render();
+    return { ok: false, msg: rejMsg };
+  }
+
+  colony.queen.caged = false;
+  colony._cagedWeeks  = 0;
+  /* queen.state resets to 'laying' on the next weekly tick via colony.js section 11g */
+
+  addXp(6);
+  const releaseMsg = `Queen released on ${colony.name}. She should begin laying again within a few days.${iWarning}`;
+  logEvent('🔓', releaseMsg, iWarning ? 'bad' : 'good');
+  render();
+  return { ok: true, msg: releaseMsg };
 }
 
 /**
@@ -1490,9 +1769,31 @@ function heftColony(colony) {
     heavy:    'reassuringly heavy — plenty in reserve.',
   }[perceivedBand];
 
-  /* Update known.stores only if a known snapshot already exists. Hefting
-     gives a rough read but does not count as a full inspection. */
-  if (colony.known) {
+  /* Update known.stores.
+     If no known snapshot exists yet (colony never opened), create a minimal
+     stub so the stores reading is not silently discarded. Hefting does not
+     count as a full inspection — the stub is clearly marked as heft-only so
+     the UI can show "Not yet inspected" rather than a full known panel. */
+  if (!colony.known) {
+    colony.known = {
+      week: Game.week,
+      heftOnly: true,        /* flag: this snapshot came from hefting, not inspection */
+      status: 'unknown',
+      populationBand: null,
+      queenSeen: false,
+      eggsSeen: false,
+      queenStatus: 'unknown',
+      brood: null,
+      queenCells: 'none',
+      stores: perceivedBand,
+      varroaSign: 'unchecked',
+      disease: null,
+      pests: [],
+      temper: null,
+      space: null,
+      note: 'Stores checked by hefting only — hive not opened.',
+    };
+  } else {
     colony.known.stores = perceivedBand;
   }
 

@@ -449,6 +449,7 @@ function makeColony(opts){
     productionThisYear: 0,
     _starvingWeeks: 0,
     _highVarroaWeeks: 0,
+    _hopelessWeeks: 0,
 
     hiveLayout: null,
   };
@@ -488,7 +489,7 @@ function colonyWeeklyUpdate(colony, ctx){
   let eggsLaid = 0;
   const currentBrood = colony.eggs + colony.larvae + colony.capped;
 
-  if (queen && queen.present && !queen.virgin && queen.state !== 'absent'){
+  if (queen && queen.present && !queen.virgin && queen.state !== 'absent' && queen.state !== 'caged'){
     const baseLay = SIM.peakLayPerWeek
       * (_colony_LAY_CURVE[wkIdx] || 0)
       * queen.layQuality;
@@ -817,20 +818,60 @@ function colonyWeeklyUpdate(colony, ctx){
     colony._starvingWeeks = 0;
   }
 
+  // --- 8 (near-zero). CRITICAL LOW STORES MORTALITY (winter) -------
+  // A colony with very little honey (1-3 kg) in deep or mid-winter is
+  // effectively starving in slow motion: bees cannot leave the cluster
+  // to find food, brood is not being fed, the queen stops laying.
+  // Model the accelerating death spiral before stores reach absolute zero:
+  // apply progressive population loss so the colony dies around the 2-3 kg
+  // mark rather than only at exactly 0 kg — matching what beekeepers observe.
+  // Only in winter (low consumption makes this irrelevant in summer).
+  if (season === 'winter' && colony.honey > 0 && colony.honey < 3
+      && (colony.superHoney || 0) <= 0) {
+    // Mortality fraction scales with how close to zero stores are:
+    // at 2.9 kg: ~5% extra loss per week; at 0.5 kg: ~25% extra loss per week.
+    var _nearZeroMortFrac = 0.05 + (1 - colony.honey / 3) * 0.20;
+    colony.population = Math.round(colony.population * (1 - _nearZeroMortFrac));
+    if (!colony._nearZeroStarvingWeeks) colony._nearZeroStarvingWeeks = 0;
+    colony._nearZeroStarvingWeeks++;
+    events.push({ type: 'starved', colony: colony });
+    // After 2 consecutive near-zero weeks the colony collapses
+    if (colony._nearZeroStarvingWeeks >= 2) {
+      colony.alive      = false;
+      colony.deadReason = 'starvation';
+      colony.deadWeek   = week;
+      events.push({ type: 'died', colony: colony, reason: 'starvation' });
+      return events;
+    }
+  } else {
+    colony._nearZeroStarvingWeeks = 0;
+  }
+
   // --- 8a. ISOLATION STARVATION (deep winter) ----------------------
   // A small winter cluster cannot move across cold frames to reach honey
-  // stored away from the cluster. If the cluster has fewer than ~5,000 bees
-  // and stores are low (< 5 kg), the bees may be physically isolated from
-  // remaining honey — the classic "starved with full frames on the outside".
-  // Fondant placed directly on the top bars resolves this; syrup cannot
-  // (too cold for bees to take it down). Only applies deep winter:
-  // December (wkIdx 44-51) and January-February (wkIdx 0-7).
+  // stored away from the cluster — the classic "starved with full frames
+  // on the outside". Fondant placed directly on the top bars resolves this;
+  // syrup cannot (too cold for bees to take it down).
+  //
+  // The reachable-stores threshold scales with cluster size:
+  //   pop < 3,000 bees: cluster spans ~2-3 frames; cannot reach stores more
+  //     than 3-4 frames away. Only ~10 kg or less is truly adjacent.
+  //   pop 3,000-5,000: a slightly larger cluster; up to ~5 kg in adjacent frames.
+  //   pop >= 5,000: cluster large enough to bridge to most in-box stores.
+  //
+  // Only applies deep winter: December (wkIdx 44-51) and Jan-Feb (wkIdx 0-7).
   var _deepWinterWeek = (wkIdx <= 7 || wkIdx >= 44);
-  if (_deepWinterWeek && colony.honey > 0 && colony.honey < 5 && colony.population < 5000){
+  // Isolation threshold: stores that a cluster of this size can physically reach
+  var _isolationThreshold = (colony.population < 3000) ? 10 : 5;
+  if (_deepWinterWeek && colony.honey > 0
+      && colony.honey < _isolationThreshold && colony.population < 5000){
     colony._isolationRisk = (colony._isolationRisk || 0) + 1;
     if (colony._isolationRisk >= 2){
-      // After two consecutive weeks of isolation risk, the cluster may fail
-      var _isolationDie = _colony_rand() < (0.25 + (1 - colony.winterBeeHealth) * 0.35);
+      // After two consecutive weeks of isolation risk, the cluster may fail.
+      // A tiny cluster (< 3,000) has a much higher die chance — it cannot
+      // maintain cluster temperature while bridging to distant stores.
+      var _isolationBaseDie = (colony.population < 3000) ? 0.45 : 0.25;
+      var _isolationDie = _colony_rand() < (_isolationBaseDie + (1 - colony.winterBeeHealth) * 0.35);
       if (_isolationDie){
         colony.alive      = false;
         colony.deadReason = 'isolation starvation — cluster too small to reach stores';
@@ -843,7 +884,7 @@ function colonyWeeklyUpdate(colony, ctx){
       colony.population = Math.round(colony.population * 0.88);
       events.push({ type: 'starved', colony: colony });
     }
-  } else if (!_deepWinterWeek || colony.honey >= 5 || colony.population >= 5000) {
+  } else if (!_deepWinterWeek || colony.honey >= _isolationThreshold || colony.population >= 5000) {
     colony._isolationRisk = 0;
   }
 
@@ -875,10 +916,18 @@ function colonyWeeklyUpdate(colony, ctx){
   } else {
     dis.nosema = Math.max(0, dis.nosema - 0.06);
   }
-  // Chalkbrood and sacbrood: strong hygienic colonies suppress them; weak ones worsen
+  // Chalkbrood and sacbrood: strong hygienic colonies suppress them; weak ones worsen.
+  // _ventilationBoost (set by improveVentilation in actions.js) lifts the effective
+  // suppressionFactor for 4 weeks — modelling the benefit of reduced hive humidity.
   const hygieneStr = queen ? queen.hygieneGene : 0.3;
   const colonyStrength = _colony_clamp(colony.population / 20000, 0, 1);
-  const suppressionFactor = hygieneStr * colonyStrength;
+  const ventBoostActive = (colony._ventilationBoost || 0) > 0;
+  if (ventBoostActive) {
+    colony._ventilationBoost = Math.max(0, (colony._ventilationBoost || 0) - 1);
+  }
+  // Ventilation boost raises effective suppression by 0.25, capped at 1.0
+  const suppressionFactor = _colony_clamp(
+    hygieneStr * colonyStrength + (ventBoostActive ? 0.25 : 0), 0, 1);
 
   if (dis.chalkbrood > 0){
     dis.chalkbrood = suppressionFactor > 0.55
@@ -924,12 +973,38 @@ function colonyWeeklyUpdate(colony, ctx){
   }
   colony._knownDiseaseEvents = _knownDis;
 
-  // AFB crisis kills the colony
+  // AFB crisis kills the colony AND destroys all equipment (no cure; must be burned)
   if (dis.afb > 0.7){
     colony.alive      = false;
     colony.deadReason = 'American Foul Brood';
     colony.deadWeek   = week;
+    // All equipment in an AFB colony must be destroyed — it cannot be reused or returned.
+    // We zero out supers and brood boxes here; simulation.js/_sim_resolveEvent handles
+    // the player-facing consequences (no refund, equipment condemned).
+    colony._afbEquipmentLost = {
+      supers:     colony.supers     || 0,
+      broodBoxes: colony.broodBoxes || 1,
+    };
+    colony.supers     = 0;
+    colony.superHoney = 0;
+    colony.honey      = 0;
+    if (colony.hiveLayout) {
+      colony.hiveLayout.supers    = [];
+      colony.hiveLayout.broodBoxes = [];
+    }
+    events.push({ type: 'afbDestroy', colony: colony,
+                  supers: colony._afbEquipmentLost.supers,
+                  broodBoxes: colony._afbEquipmentLost.broodBoxes });
     events.push({ type: 'died', colony: colony, reason: 'American Foul Brood' });
+    return events;
+  }
+
+  // EFB at very high severity — colony too weak to recover without intervention
+  if (dis.efb > 0.75){
+    colony.alive      = false;
+    colony.deadReason = 'European Foul Brood (colony collapsed)';
+    colony.deadWeek   = week;
+    events.push({ type: 'died', colony: colony, reason: 'European Foul Brood (colony collapsed)' });
     return events;
   }
 
@@ -968,6 +1043,22 @@ function colonyWeeklyUpdate(colony, ctx){
   }
 
   // --- 11. SWARMING ------------------------------------------------
+  // Edge 5 fix — defensive normalisation: ensure queenCells always has all
+  // required fields. Missing age/state (e.g. from a manually-crafted save or
+  // a split that forgot to set them) causes NaN propagation in age++, which
+  // means cells never cap and never fire a swarm. Normalise once here.
+  if (!colony.queenCells || typeof colony.queenCells !== 'object') {
+    colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
+  } else {
+    if (colony.queenCells.age === undefined || colony.queenCells.age === null
+        || typeof colony.queenCells.age !== 'number' || isNaN(colony.queenCells.age)) {
+      colony.queenCells.age = 0;
+    }
+    if (!colony.queenCells.state) colony.queenCells.state = 'none';
+    if (!colony.queenCells.type)  colony.queenCells.type  = 'none';
+    if (!colony.queenCells.count) colony.queenCells.count = 0;
+  }
+
   // Accumulate swarm pressure from congestion, queen age, and conditions
   if (_colony_inSwarmWindow(week)){
     const cong      = colonyCongestion(colony);
@@ -1038,7 +1129,23 @@ function colonyWeeklyUpdate(colony, ctx){
   //   wkIdx 19+   → risk += 1 each week
   //   osrRisk 1   → fire osrWarning  (still extractable, urgent)
   //   osrRisk >= 2 → fire osrCrystal (honey setting, most extraction lost)
-  if (colony.superHoney > 0 && colony.superHoneyType === 'oilseed') {
+  //
+  // FIX (Issue G): colony.superHoneyType is overwritten every week that
+  // any honey flows in, so from week 20 onward (spring clover/bramble) it
+  // flips to 'spring' even if OSR honey is still sitting in the supers.
+  // Guard must also check per-super honeyType so crystallisation continues
+  // counting after the OSR flow ends and mixed honey begins arriving.
+  var _hasOsrInSupers = colony.superHoneyType === 'oilseed';
+  if (!_hasOsrInSupers && colony.hiveLayout && colony.hiveLayout.supers) {
+    for (var _osi = 0; _osi < colony.hiveLayout.supers.length; _osi++) {
+      if (colony.hiveLayout.supers[_osi].honeyType === 'oilseed' &&
+          colony.hiveLayout.supers[_osi].honeyKg > 0) {
+        _hasOsrInSupers = true;
+        break;
+      }
+    }
+  }
+  if (colony.superHoney > 0 && _hasOsrInSupers) {
     // The farmland 1.55× multiplier in simulation.js pushes ctx.nectar above
     // 0.60 during weeks 14-19 on farmland sites. The 0.50 threshold ensures
     // only genuine OSR-site colonies enter the crystallisation path.
@@ -1241,6 +1348,16 @@ function colonyWeeklyUpdate(colony, ctx){
         colony.queen           = _colony_virginFromParent(colony.queen, year);
         colony.layingWorkers   = false;
         colony._queenlessWeeks = 0;
+      } else {
+        // Queen is alive (e.g. missed Demaree check — real queen in bottom box,
+        // top box raised emergency cells). A virgin has emerged from the top-box
+        // cells and cannot stay in a colony that already has a mated queen.
+        // She leads a cast swarm — a real population loss the player needs to see.
+        const castFrac = _colony_randRange(0.18, 0.28);
+        events.push({ type: 'castSwarm', colony: colony });
+        colony.population      = Math.round(colony.population * (1 - castFrac));
+        colony.swarmedThisYear = true;
+        colony.swarmPressure   = _colony_clamp(colony.swarmPressure - 0.10, 0, 1);
       }
       colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
     }
@@ -1285,7 +1402,7 @@ function colonyWeeklyUpdate(colony, ctx){
     // not in swarm mode; an ageing or failing queen prompts it.
     if (colony.queenCells.type === 'none' && colony.swarmPressure < 0.45){
       const failing = queen.state === 'failing'
-        || queen.age > 95
+        || queen.age > 156   // 3 game years — earlier threshold was ~1.8yr, biologically too soon
         || queen.layQuality < 0.60;
       if (failing && _colony_rand() < 0.18){
         colony.queenCells = { type: 'supersedure', count: 2, age: 0, state: 'larvae' };
@@ -1300,6 +1417,30 @@ function colonyWeeklyUpdate(colony, ctx){
         events.push({ type: 'supersede', colony: colony });
       }
     }
+  }
+
+  // --- 11g. CAGED QUEEN — pheromone deprivation -----------------------
+  // When the queen is caged (e.g. for Demaree variant or queen introduction),
+  // her pheromones do not circulate. The colony detects the absence within
+  // hours and begins raising emergency queen cells from any suitable larvae.
+  // The queen continues to exist but is not laying (cage blocks her).
+  // After the player calls introduceQueen(), colony.queen.caged is cleared,
+  // emergency cells should be destroyed manually before release.
+  if (queen && queen.present && queen.caged) {
+    queen.state = 'caged';
+    // Track how many weeks caged (for the introduce-queen action's release check)
+    colony._cagedWeeks = (colony._cagedWeeks || 0) + 1;
+    // After 1 week without queen pheromone, bees start emergency cells
+    if (colony.queenCells.type === 'none' && colony.eggs + colony.larvae > 200) {
+      colony.queenCells = { type: 'emergency', count: _colony_randInt(3, 8), age: 0, state: 'larvae' };
+      events.push({ type: 'queencells', colony: colony });
+    }
+  } else if (queen && queen.present && !queen.caged && queen.state === 'caged') {
+    // Queen just released — restore laying state and reset cage counter
+    queen.state        = queen.mated ? 'laying' : 'virgin';
+    colony._cagedWeeks = 0;
+  } else if (!queen || !queen.caged) {
+    colony._cagedWeeks = 0;
   }
 
   // --- 12. QUEEN AGEING --------------------------------------------

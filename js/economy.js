@@ -304,8 +304,17 @@ function harvestColony(colony) {
   Game.inventory.honey[type] = _econ_roundPrice(Game.inventory.honey[type] + kg);
 
   // Reset the colony — all supers come off together for extraction.
+  // The drawn comb is returned to the spare equipment pool (one super's worth
+  // of drawn frames is more valuable than an empty box — the bees have waxed
+  // every cell). Give the player credit for one spare hive to represent the
+  // empty-but-drawn super they can reuse next season.
   colony.superHoney = 0;
+  var supersRemoved = colony.supers;
   colony.supers = 0;
+  if (supersRemoved > 0) {
+    if (!Game.inventory.spareHives) Game.inventory.spareHives = 0;
+    Game.inventory.spareHives += supersRemoved;
+  }
   // Keep hiveLayout in sync immediately so the frame cross-section does not
   // show honey-filled supers after a harvest (the weekly sync would fix this
   // next tick, but we render() right after the harvest action).
@@ -322,6 +331,11 @@ function harvestColony(colony) {
   var honeyName = (HONEY_TYPES[type] && HONEY_TYPES[type].name) ? HONEY_TYPES[type].name : type;
   var baseMsg = 'Harvested ' + kg.toFixed(1) + ' kg of ' + honeyName + ' from ' + colony.name + '.';
   if (msgs.length) baseMsg += ' ' + msgs.join(' ');
+  if (supersRemoved > 0) {
+    baseMsg += ' The super box' + (supersRemoved > 1 ? 'es have' : ' has') +
+      ' been returned to your equipment stock — you can put ' +
+      (supersRemoved > 1 ? 'them' : 'it') + ' back on next season.';
+  }
 
   logEvent('🍯', baseMsg, 'good');
   toast(kg.toFixed(1) + ' kg of ' + honeyName + ' in the tank.', 'good');
@@ -344,8 +358,13 @@ function harvestSuperAt(colony, superIdx) {
   var type = colony.superHoneyType || 'summer';
 
   if (layout && layout.supers && layout.supers[superIdx]) {
-    superKg = layout.supers[superIdx].honeyKg || 0;
+    /* Edge 4 fix — cap honeyKg to physical maximum: a National super holds at most
+       SIM.honeyPerSuper (18 kg extracted). An overfull value (e.g. from direct state
+       manipulation or a migration bug) would yield impossible harvest numbers. */
+    superKg = Math.min(layout.supers[superIdx].honeyKg || 0, SIM.honeyPerSuper);
     type = layout.supers[superIdx].honeyType || type;
+    /* Also correct the stored value so the layout stays consistent */
+    layout.supers[superIdx].honeyKg = superKg;
   } else {
     superKg = colony.superHoney / Math.max(colony.supers, 1);
   }
@@ -419,6 +438,7 @@ function _colony_emptySuperAt(colony, idx) {
     var sup = layout.supers[idx];
     removedKg = sup.honeyKg || 0;
     sup.honeyKg = 0;
+    sup._prevHoneyKg = 0; /* reset tracking so honeyType is re-stamped on next refill */
     sup.honeyType = 'summer'; /* reset type ready for next flow */
     /* Empty all frames but mark them as drawn (comb remains) */
     if (sup.frames) {
@@ -468,11 +488,18 @@ function extractAndBottle(honeyType, jarCount) {
   var kgNeeded = _econ_roundPrice(jarCount * KG_PER_JAR);
 
   _econ_ensureKey(Game.inventory.honey, honeyType, 0);
-  if (Game.inventory.honey[honeyType] < kgNeeded) {
-    var available = Math.floor(Game.inventory.honey[honeyType] / KG_PER_JAR);
+  // For heather honey, bulk stock needed is kgNeeded / 0.70 (30% pressing loss).
+  var kgStockNeeded = (honeyType === 'heather')
+    ? _econ_roundPrice(kgNeeded / 0.70)
+    : kgNeeded;
+  if (Game.inventory.honey[honeyType] < kgStockNeeded) {
+    var available = (honeyType === 'heather')
+      ? Math.floor(Game.inventory.honey[honeyType] * 0.70 / KG_PER_JAR)
+      : Math.floor(Game.inventory.honey[honeyType] / KG_PER_JAR);
+    var availNote = (honeyType === 'heather') ? ' (after ~30% pressing loss)' : '';
     return {
       ok: false,
-      msg: 'You only have ' + Game.inventory.honey[honeyType].toFixed(2) + ' kg of that honey — enough for about ' + available + ' jar' + (available === 1 ? '' : 's') + '.'
+      msg: 'You only have ' + Game.inventory.honey[honeyType].toFixed(2) + ' kg of that honey — enough for about ' + available + ' jar' + (available === 1 ? '' : 's') + availNote + '.'
     };
   }
 
@@ -491,16 +518,36 @@ function extractAndBottle(honeyType, jarCount) {
 
   // Extractor: own it or hire the association's.
   var isHeather = (honeyType === 'heather');
+
+  // Heather honey is thixotropic — pressing loses ~30% vs centrifuge.
+  // kgNeeded is the theoretical amount for jarCount jars at full yield.
+  // We deduct MORE bulk honey (kgNeeded / 0.70) to account for press waste,
+  // while the jar count stays the same — you are paying in lost bulk honey.
+  var heatherPressLoss = 0;
+  var kgToDeduct = kgNeeded;
+  if (isHeather) {
+    kgToDeduct       = _econ_roundPrice(kgNeeded / 0.70); // bulk needed before 30% press loss
+    heatherPressLoss = _econ_roundPrice(kgToDeduct - kgNeeded);
+    // Re-check bulk stock after recalculating the true deduction.
+    if (Game.inventory.honey[honeyType] < kgToDeduct) {
+      var availJars = Math.floor(Game.inventory.honey[honeyType] * 0.70 / KG_PER_JAR);
+      return {
+        ok: false,
+        msg: 'After pressing losses (~30% for heather honey) you only have enough for about ' + availJars + ' jar' + (availJars === 1 ? '' : 's') + '.'
+      };
+    }
+  }
+
   if (!Game.inventory.tools.extractor) {
     if (isHeather) {
       // Heather honey is thixotropic — it must be pressed, not spun.
-      msgs.push('Heather honey cannot be spun in a conventional extractor; it must be pressed. The association\'s press costs the same hire fee.');
+      msgs.push('Heather honey cannot be spun in a conventional extractor; it must be pressed. The association\'s press costs the same hire fee. Pressing loses about 30% — ' + heatherPressLoss.toFixed(2) + ' kg stays in the comb as residue.');
     } else {
       msgs.push('You hired the association extractor for ' + fmtMoney(COSTS.extractorHire) + '.');
     }
     extraCost += COSTS.extractorHire;
   } else if (isHeather) {
-    msgs.push('Heather honey is thixotropic and must be pressed rather than spun. Make sure you have a press or loosener to hand.');
+    msgs.push('Heather honey is thixotropic and must be pressed rather than spun. About 30% stays in the comb (' + heatherPressLoss.toFixed(2) + ' kg lost) — this is normal for pressed heather honey.');
   }
 
   // Extractor hire is a service (if applicable) — spend that now.
@@ -524,7 +571,8 @@ function extractAndBottle(honeyType, jarCount) {
   }
 
   // Deduct honey and empty jars; add filled jars to inventory.
-  Game.inventory.honey[honeyType] = _econ_roundPrice(Game.inventory.honey[honeyType] - kgNeeded);
+  // For heather, kgToDeduct > kgNeeded — the extra goes as pressing waste.
+  Game.inventory.honey[honeyType] = _econ_roundPrice(Game.inventory.honey[honeyType] - kgToDeduct);
   Game.inventory.emptyJars = (Game.inventory.emptyJars || 0) - jarCount;
   _econ_ensureKey(Game.inventory.jars, honeyType, 0);
   Game.inventory.jars[honeyType] += jarCount;

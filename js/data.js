@@ -83,7 +83,7 @@ const SIM = {
 
 /* contextual one-off costs (£) */
 const COSTS = {
-  superAdd: 32, broodBoxAdd: 36, queenExcluder: 9,
+  superAdd: 44, broodBoxAdd: 52, queenExcluder: 9,
   sugarPerKg: 1.25, fondantPerKg: 3.20,
   jar: 0.55, marketStall: 18, extractorHire: 15,
   newApiary: 95, beeBaseReg: 0, foodHygieneReg: 0,
@@ -147,12 +147,12 @@ const FORAGE = {
     0.62,0.74,0.83,0.85,0.80,0.66,0.50,       // wk 14-20 Apr-mid May (OSR/spring peak)
     0.22,0.14,0.16,0.24,                      // wk 21-24 June gap — clover barely started
     0.50,0.68,0.82,0.88,0.85,0.78,0.66,0.54,  // wk 25-32 summer flow (lime/clover/bramble)
-    0.46,0.40,0.36,0.42,0.50,                 // wk 33-37 late summer; ivy builds wk 36-37
-    0.56,0.52,0.38,0.20,0.10,                 // wk 38-42 ivy peak wk 38-39, fading Oct
+    0.46,0.40,0.36,0.34,0.30,                 // wk 33-37 late summer declining; ivy not yet open
+    0.36,0.40,0.38,0.22,0.12,                 // wk 38-42 ivy peak wk 39 (Sep), sharp Oct fade
     0.04,0.02,0,0,0,0,0,0,0,0,                // wk 43-52 Nov-Dec
   ],
   pollen: [
-    0,0,0,0.02,0.05,0.10,0.16,0.22,0.30,      // wk 1-9
+    0,0,0,0,0.05,0.10,0.16,0.22,0.30,          // wk 1-9  (wk4 = 0: nothing flowers late Jan)
     0.42,0.55,0.66,0.74,                      // wk 10-13
     0.82,0.88,0.90,0.88,0.84,0.78,0.72,       // wk 14-20
     0.62,0.56,0.58,0.62,                      // wk 21-24
@@ -189,14 +189,15 @@ function honeyTypeForWeek(week, siteType){
     return 'spring';
   }
   if (wk>=20 && wk<=25) return 'spring';
-  if (wk>=26 && wk<=32){
+  if (wk>=26 && wk<=30){
     if (site.heather) return 'summer';
     return Math.random()<0.3 ? 'lime' : 'summer';
   }
-  if (wk>=33 && wk<=37){
+  if (wk>=31 && wk<=35){
     if (site.heather) return 'heather';
     return 'summer';
   }
+  if (wk>=36 && wk<=39) return 'summer';  // late summer/ivy transition — not heather
   return 'ivy';
 }
 
@@ -222,9 +223,9 @@ const TREATMENTS = {
                 tempMin:15, tempMax:32, harvestSafe:false,
                 note:'Thymol gel. Needs warmth (15°C+). The standard late-summer treatment once the crop is off.' },
   formic:     { name:'Formic acid strips', price:23, weeks:2, efficacy:0.82,
-                tempMin:10, tempMax:29, harvestSafe:false, throughCappings:true, queenRisk:0.10,
-                note:'Acts through the cappings, so it hits mites in sealed brood. Can harm the queen in hot weather.' },
-  apivar:     { name:'Apivar (amitraz strips)', price:13, weeks:8, efficacy:0.95,
+                tempMin:10, tempMax:29, harvestSafe:true, throughCappings:true, queenRisk:0.10,
+                note:'Acts through the cappings, so it hits mites in sealed brood. The only UK-approved treatment that can be used with honey supers on. Can harm the queen in hot weather.' },
+  apivar:     { name:'Apivar (amitraz strips)', price:18, weeks:8, efficacy:0.95,
                 tempMin:6, tempMax:36, harvestSafe:false,
                 note:'Amitraz strips left in for 6–10 weeks. Very effective. Rotate it to limit resistance.' },
   oxalicVap:  { name:'Oxalic acid — vaporised', price:9, weeks:1, efficacy:0.94, broodlessOnly:true,
@@ -267,23 +268,33 @@ const PESTS = {
 };
 
 /* --- Weather --------------------------------------------------------- */
+/* tempC: representative mid-week temperature in Celsius for this weather
+   type in a typical UK week.  Used by treatment temperature checks
+   (tempMin / tempMax in TREATMENTS) and shown to the player.
+   warmth remains the continuous 0..1 biology / forage scale used inside
+   colony.js and actions.js. */
 
 const WEATHER = {
-  fine:     { label:'Fine and warm', icon:'☀️', fly:1.0, inspect:true, warmth:1.0 },
-  mixed:    { label:'Sun and cloud',  icon:'⛅', fly:0.85, inspect:true, warmth:0.7 },
-  cool:     { label:'Cool and grey',  icon:'☁️', fly:0.55, inspect:false, warmth:0.4 },
-  wet:      { label:'Wet',            icon:'🌧️', fly:0.26, inspect:false, warmth:0.35 },
-  cold:     { label:'Cold',           icon:'❄️', fly:0.04, inspect:false, warmth:0.1 },
-  storm:    { label:'Stormy',         icon:'🌬️', fly:0.0, inspect:false, warmth:0.3, hazard:'storm' },
-  heatwave: { label:'Heatwave',       icon:'🔥', fly:0.7, inspect:true, warmth:1.3, hazard:'heat' },
+  fine:     { label:'Fine and warm', icon:'☀️', fly:1.0,  inspect:true,  warmth:1.0,  tempC:19 },
+  mixed:    { label:'Sun and cloud', icon:'⛅', fly:0.85, inspect:true,  warmth:0.7,  tempC:15 },
+  cool:     { label:'Cool and grey', icon:'☁️', fly:0.55, inspect:false, warmth:0.4,  tempC:11 },
+  wet:      { label:'Wet',           icon:'🌧️', fly:0.26, inspect:false, warmth:0.35, tempC:10 },
+  cold:     { label:'Cold',          icon:'❄️', fly:0.04, inspect:false, warmth:0.1,  tempC:4  },
+  storm:    { label:'Stormy',        icon:'🌬️', fly:0.0,  inspect:false, warmth:0.3,  tempC:9,  hazard:'storm' },
+  heatwave: { label:'Heatwave',      icon:'🔥', fly:0.7,  inspect:true,  warmth:1.3,  tempC:31, hazard:'heat'  },
 };
 
-/* base weighting of weather types per season; year quality tilts these */
+/* base weighting of weather types per season; year quality tilts these.
+   Winter weights push cold harder (fine/mixed trimmed vs old values) to
+   keep inspect:true weeks rare but not impossible Nov-Feb.
+   The June gap (wks 21-24) and spring cold snaps get an additional push
+   inside generateWeather() in simulation.js; these base tables cover the
+   broader seasonal shape only. */
 const WEATHER_TABLE = {
-  spring: { fine:3.0, mixed:4.0, cool:3.8, wet:3.0, cold:1.0, storm:0.5, heatwave:0.1 },
+  spring: { fine:3.0, mixed:4.0, cool:3.8, wet:3.0, cold:1.2, storm:0.5, heatwave:0.1 },
   summer: { fine:5.0, mixed:4.2, cool:1.8, wet:2.2, cold:0.1, storm:0.7, heatwave:1.1 },
   autumn: { fine:2.0, mixed:3.2, cool:4.2, wet:3.8, cold:1.4, storm:1.1, heatwave:0.1 },
-  winter: { fine:0.6, mixed:1.2, cool:3.0, wet:2.8, cold:5.0, storm:1.3, heatwave:0.0 },
+  winter: { fine:0.5, mixed:1.0, cool:3.0, wet:2.8, cold:5.5, storm:1.3, heatwave:0.0 },
 };
 
 /* --- Sales channels -------------------------------------------------- */

@@ -8,7 +8,7 @@ window.ENCYCLOPEDIA = [
     title: 'Welcome to Beekeeping',
     body: `Beekeeping is one of the most rewarding hobbies you can take on, but it is a genuine responsibility. You are caring for living creatures, and they depend on you for their health and survival.
 
-During swarm season, roughly April to August, you will need to inspect your colony every seven to ten days. Outside that window the commitment eases off considerably. Overall, expect to spend a few hours a week during the busy months, much less in winter.
+During swarm season, roughly April to July, you will need to inspect your colony every seven to nine days. Outside that window the commitment eases off considerably. Overall, expect to spend a few hours a week during the busy months, much less in winter.
 
 The best thing you can do before you spend a penny on equipment is to join your local beekeeping association. Most run beginner courses and, crucially, can pair you with an experienced mentor who will stand beside you at the hive and answer questions that no book ever quite covers.
 
@@ -114,7 +114,11 @@ Around day eight or nine, worker bees cap the cell with a flat wax capping. Insi
 - Queen: 16 days
 - Drone: 24 days
 
-The queen's short development time is relevant to swarm control: a new queen can emerge just 16 days after the egg was laid, so delays in acting on swarm cells carry a real cost.`
+The queen's short development time is relevant to swarm control: a new queen can emerge just 16 days after the egg was laid, so delays in acting on swarm cells carry a real cost.
+
+## Practical implications
+
+When a colony loses its queen and raises an emergency replacement from a young larva, allow at least five to six weeks before you expect to see new worker brood: roughly three days for the remaining larva to be capped as a queen cell, plus up to 16 days to emergence, plus five to ten days for mating flights, plus three days before the first eggs hatch. During that gap the colony population is falling -- all the current bees are ageing and none are being replaced. This is why queenlessness in summer costs more than it looks at first glance.`
   },
 
   {
@@ -416,7 +420,7 @@ A good brood pattern is solid and concentric. Eggs sit in the very centre of the
 
 ## Warning signs
 
-- Pepperpot or shotgun pattern: many empty or mismatched cells scattered through the brood. This suggests a failing or failing queen, inbreeding, or disease.
+- Pepperpot or shotgun pattern: many empty or mismatched cells scattered through the brood. This suggests a failing or ageing queen, inbreeding, or disease.
 - Sunken, greasy-looking or perforated cappings: classic signs of American Foul Brood. Treat as an emergency.
 - Discoloured or twisted larvae: could indicate European Foul Brood.
 - Hard white or chalky mummies: chalkbrood, a fungal disease.
@@ -466,6 +470,10 @@ A dot of paint on the thorax -- never the abdomen -- makes her visible at a glan
 ## Nectar
 
 Nectar is a sugary liquid secreted by flowers to attract pollinators. Foragers collect it in their honey stomach and bring it back to the hive. House bees take it and begin processing: they evaporate the water content from roughly 80% down to below 18-20%, and add enzymes that break down the sugars and inhibit bacterial growth. When a cell is ripe, the bees cap it with wax. The result is honey, which can last indefinitely if correctly stored.
+
+## Capped versus uncapped honey
+
+The distinction matters when you harvest. Uncapped cells still hold unripe nectar -- the water content is too high (above 20%) and jarring it will cause fermentation within weeks. Capped cells, sealed with a flat, slightly domed wax layer with a dry, matte appearance, contain ripe honey safe to extract. As a practical rule, do not harvest a super unless at least three-quarters of its cells are capped. The exception is oilseed rape, where you harvest earlier -- before crystallisation -- even if capping is incomplete.
 
 ## Pollen
 
@@ -927,7 +935,7 @@ If significant numbers remain, the escape may be blocked -- check before removin
 
 ## Crystallisation
 
-All honey crystallises eventually; it is a natural process, not spoilage. Oilseed rape honey sets rock-hard very quickly and must be extracted promptly. Soft-set honey is made by seeding with fine-crystal honey and controlling the temperature until smooth.`
+All honey crystallises eventually; it is a natural process, not spoilage. Oilseed rape honey sets rock-hard faster than any other common UK honey -- its high glucose content means it can begin to granulate in the comb within 10-14 days of the flow ending. Extract it immediately once the flow tails off; do not wait for the super to be fully capped. Soft-set honey is made by seeding with fine-crystal honey and controlling the temperature until smooth.`
   },
 
   {

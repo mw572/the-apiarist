@@ -752,12 +752,13 @@ function _ui_buildHiveCard(colony) {
   var known = colony.known;
   var dotCls;
   if (!colony.alive) dotCls = 'dead';
-  else if (!known) dotCls = 'unknown';
+  else if (!known || known.heftOnly) dotCls = 'unknown';
   else dotCls = known.status || 'unknown';
 
   var statusLine;
   if (!colony.alive) statusLine = colony.deadReason ? ('Lost — ' + colony.deadReason) : 'Colony lost';
   else if (!known) statusLine = 'Not yet inspected';
+  else if (known.heftOnly) statusLine = 'Not yet inspected';
   else statusLine = (known.populationBand
     ? known.populationBand.charAt(0).toUpperCase() + known.populationBand.slice(1)
     : (known.note || 'Inspected'));
@@ -1604,6 +1605,11 @@ function openHiveDetail(colony) {
 
   if (!known) {
     infoNode.appendChild(h('div', { class: 'colony-known-note', text: 'This colony has not been inspected yet. You know nothing of its interior state.' }));
+  } else if (known.heftOnly) {
+    /* Heft stub — stores only, hive not opened */
+    var storesLabel = { critical: 'critically low — feed fondant now', low: 'running light — consider fondant', ok: 'adequate', heavy: 'plenty in reserve', unknown: 'unknown' }[known.stores] || known.stores;
+    infoNode.appendChild(h('div', { class: 'colony-known-note' },
+      'Stores checked by hefting (week ' + known.week + '): ' + storesLabel + '. The hive has not been opened — inspect to see the full picture.'));
   } else {
     if (weeksAgo >= 3) {
       infoNode.appendChild(h('div', { class: 'colony-known-note' },
@@ -1700,12 +1706,23 @@ function _ui_buildHiveCross(colony) {
   var queenFrameIdx = _ui_estimateQueenFrameIdx(colony);
   var qcellFrameIdx = _ui_estimateQCellFrameIdx(colony);
 
-  /* Queen cell state for visual overlays */
+  /* Queen cell state for visual overlays.
+     Fog-of-war rule: the cross-section must show what was OBSERVED at the
+     last inspection, not the live colony state. If the player has never
+     inspected (no known, or heft-only stub) or their known snapshot shows
+     no cells, suppress the overlay even if cells exist in the live model.
+     Only show cells when colony.known.queenCells matches the live type —
+     i.e., the player actually saw them at the last inspection.
+     Exception: isImminent (swarm-capped urgency badge on the hive CARD) is
+     allowed to read live state for the card's urgency dot, but the peanut
+     overlay inside the cross-section detail respects fog-of-war. */
   var qc = colony.queenCells || { type: 'none', count: 0, age: 0, state: 'none' };
   var qcType  = qc.type  || 'none';
   var qcState = qc.state || 'none';
   var qcCount = qc.count || 0;
-  var hasQCells = (qcType !== 'none' && qcState !== 'none');
+  var knownCells = (colony.known && !colony.known.heftOnly) ? (colony.known.queenCells || 'none') : 'none';
+  /* Only show the peanut overlay if the player observed these cells */
+  var hasQCells = (qcType !== 'none' && qcState !== 'none' && knownCells !== 'none');
   var isImminent = (qcType === 'swarm' && qcState === 'capped');
 
   for (var b = broodCount - 1; b >= 0; b--) {
@@ -2226,6 +2243,16 @@ function _ui_buildKnownSummary(known) {
   ]);
 }
 
+/* Returns the honey kg in the top super (for remove-super disable logic) */
+function _ui_topSuperHoney(colony) {
+  if (!colony || (colony.supers || 0) === 0) return 0;
+  if (colony.hiveLayout && colony.hiveLayout.supers && colony.hiveLayout.supers.length > 0) {
+    var top = colony.hiveLayout.supers[colony.hiveLayout.supers.length - 1];
+    return top ? (top.honeyKg || 0) : 0;
+  }
+  return (colony.superHoney || 0) / Math.max(colony.supers, 1);
+}
+
 function _ui_buildActionButtons(colony) {
   var dead = !colony.alive;
 
@@ -2257,15 +2284,28 @@ function _ui_buildActionButtons(colony) {
   var core = h('div', { class: 'btn-row' }, [
     inspectBtn,
     abtn('Feed', '', 'feed', dead, 'This colony has died'),
-    abtn('Treat varroa', '', 'treat', dead, 'This colony has died'),
+    abtn('Treat varroa', '', 'treat',
+      dead || !!(colony.treatment && colony.treatment.weeksLeft > 0),
+      dead ? 'This colony has died' : 'Treatment already active — wait for it to finish'),
     abtn('Monitor varroa', '', 'monitorVarroa', dead, 'This colony has died'),
     abtn('Add super', '', 'addSuper', dead || (colony.supers || 0) >= 5,
       dead ? 'This colony has died' : 'Plenty of supers on already'),
+    abtn('Remove super', '', 'removeSuper',
+      dead || (colony.supers || 0) === 0 || _ui_topSuperHoney(colony) >= 0.5,
+      dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers to remove' : 'Top super still has honey — harvest it first'),
     abtn('Add brood box', '', 'addBroodBox', dead || colony.broodBoxes >= 2,
       dead ? 'This colony has died' : 'Already on double brood'),
     abtn('Entrance', '', 'entrance', dead, 'This colony has died'),
-    abtn('Harvest honey', 'btn-leaf', 'harvest', dead || (colony.supers || 0) === 0,
-      dead ? 'This colony has died' : 'No supers on the hive to harvest')
+    abtn('Fit clearer board', '', 'fitClearerBoard',
+      dead || (colony.supers || 0) === 0 || !!colony.clearerFitted,
+      dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers on the hive' : 'Clearer board already fitted — harvest when ready'),
+    abtn('Harvest honey (box stays)', 'btn-leaf', 'harvest',
+      dead || (colony.supers || 0) === 0 || (colony.superHoney || 0) === 0,
+      dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers on the hive to harvest' : 'Nothing in the supers yet'),
+    abtn('Heft colony', '', 'heftColony', dead, 'This colony has died'),
+    abtn('Move hive', '', 'moveHive',
+      dead || !Game.apiaries || Game.apiaries.length < 2,
+      dead ? 'This colony has died' : 'Only one apiary — add another to move hives between them')
   ]);
 
   var swarm = h('div', { class: 'action-group' }, [
@@ -2276,7 +2316,13 @@ function _ui_buildActionButtons(colony) {
       abtn('Split colony', '', 'split', dead, 'This colony has died'),
       abtn('Remove queen cells', '', 'removeQueenCells', dead, 'This colony has died'),
       abtn('Clip queen', '', 'clipQueen', dead || !(colony.queen && colony.queen.present),
-        'No queen present to clip')
+        'No queen present to clip'),
+      abtn('Demaree method', '', 'demareeMethod',
+        dead || !!colony.demaree,
+        dead ? 'This colony has died' : 'Demaree already in progress'),
+      colony.demaree && !colony.demaree.checked
+        ? abtn('Demaree check', colony.demaree.age >= 1 ? 'btn-danger' : '', 'demareeCheck', dead, 'This colony has died')
+        : null
     ])
   ]);
 
@@ -2287,6 +2333,7 @@ function _ui_buildActionButtons(colony) {
       abtn('Mark queen', '', 'markQueen',
         dead || !(colony.queen && colony.queen.present && !colony.queen.marked),
         'No unmarked queen to mark'),
+      abtn('Rear queens', '', 'rearQueens', dead, 'This colony has died'),
       abtn('Unite colonies', '', 'unite',
         dead || (typeof aliveColonies === 'function' && aliveColonies().length < 2),
         'No other colony to unite with'),
@@ -2339,7 +2386,24 @@ function _ui_openHarvestDialog(colony) {
     var cb = h('input', { type: 'checkbox', class: 'harv-cb', id: 'harv-cb-' + si });
     cb.checked = checked[si];
     (function(idx, checkbox) {
-      checkbox.addEventListener('change', function() { checked[idx] = checkbox.checked; });
+      checkbox.addEventListener('change', function() {
+        checked[idx] = checkbox.checked;
+        /* Update jar yield estimate dynamically */
+        var yieldEl = document.getElementById('harv-yield-note');
+        if (yieldEl) {
+          var tot = 0;
+          for (var k = 0; k < checked.length; k++) {
+            if (checked[k]) {
+              var s2 = (layout.supers && layout.supers[k]) || { honeyKg: colony.superHoney / colony.supers };
+              tot += (s2.honeyKg || 0);
+            }
+          }
+          var jars = Math.floor(tot * 1000 / 454);
+          yieldEl.textContent = jars > 0
+            ? '~ ' + jars + ' standard 1 lb jar' + (jars !== 1 ? 's' : '') + ' estimated from selected supers.'
+            : 'Select a super above to see estimated jar yield.';
+        }
+      });
     })(si, cb);
 
     var row = h('div', { class: 'harv-super-row' }, [
@@ -2355,13 +2419,33 @@ function _ui_openHarvestDialog(colony) {
     rows.push(row);
   }
 
+  /* Jar yield estimate: 454 g per lb jar, ~340 g per 12 oz jar. Use 454 g (1 lb) as standard. */
+  var totalSelectedKg = 0;
+  for (var ci = 0; ci < checked.length; ci++) {
+    if (checked[ci]) {
+      var csup = (layout.supers && layout.supers[ci]) || { honeyKg: colony.superHoney / colony.supers };
+      totalSelectedKg += (csup.honeyKg || 0);
+    }
+  }
+  var jarYield = Math.floor(totalSelectedKg * 1000 / 454);
+
+  var yieldNote = h('div', { class: 'harv-note', id: 'harv-yield-note' },
+    jarYield > 0
+      ? '~ ' + jarYield + ' standard 1 lb jar' + (jarYield !== 1 ? 's' : '') + ' estimated from selected supers.'
+      : 'Select a super above to see estimated jar yield.');
+
+  var boxStaysNote = h('div', { class: 'harv-note' },
+    '🍯 Box stays on hive — frames are emptied and left for the bees to refill. Use "Remove super" to take a box off completely.');
+
   var note = hasClearer
     ? h('div', { class: 'harv-note' }, '✓ You have a clearer board — bees cleared cleanly, no honey loss.')
     : h('div', { class: 'harv-note warn' }, '⚠ No clearer board — you\'ll brush bees off and lose ~8% of the honey.');
 
   var body = h('div', { class: 'harv-body' }, [
-    h('div', { class: 'harv-intro' }, 'Select which supers to take off and extract:'),
+    h('div', { class: 'harv-intro' }, 'Select which supers to harvest. The box stays on the hive — only the honey is taken:'),
     h('div', { class: 'harv-rows' }, rows),
+    boxStaysNote,
+    yieldNote,
     note
   ]);
 
@@ -2503,7 +2587,17 @@ function _ui_actionCost(key, colony) {
         : 'You have no treatments in stock. Buy one from the Market (the Supplies tab) first.' };
   }
   if (key === 'monitorVarroa') return { amount: 0, note: 'Free — it costs only a small sample of bees.' };
-  if (key === 'harvest') return { amount: 0, note: 'Free to take the supers off. Extracting and bottling the honey costs a little later.' };
+  if (key === 'harvest') return { amount: 0, note: 'The box stays on the hive after harvest. Extracting and bottling the honey costs a little later.' };
+  if (key === 'removeSuper') return { amount: 0, note: 'Free — takes the empty box off the hive and returns it to your equipment stock.' };
+  if (key === 'heftColony') return { amount: 0, note: 'Free — just lift the back of the hive to feel its weight.' };
+  if (key === 'fitClearerBoard') {
+    var cbCost = !(Game.inventory && Game.inventory.tools && Game.inventory.tools.clearerBoard) ? 8 : 0;
+    return { amount: cbCost, note: cbCost ? 'Hire a clearer board for one night (£8). Fit it this evening and harvest tomorrow morning.' : 'You own a clearer board — fit it tonight and harvest tomorrow.' };
+  }
+  if (key === 'demareeMethod') return { amount: 35, note: 'Uses a spare brood box (£35). The colony stays intact and no hive is used for a new colony.' };
+  if (key === 'demareeCheck') return { amount: 0, note: 'Free — just open the top box and destroy the emergency cells.' };
+  if (key === 'moveHive') return { amount: typeof COSTS !== 'undefined' ? COSTS.movehive : 25, note: 'Transport and strapping. Foragers may return to the old site — expect a short-term drop in numbers.' };
+  if (key === 'rearQueens') return { amount: 0, note: 'Free, but needs a strong colony (18,000+ bees) and skill level 5 or above.' };
   if (key === 'markQueen' || key === 'clipQueen' || key === 'removeQueenCells' ||
       key === 'entrance' || key === 'unite') {
     return { amount: 0, note: 'Free — this costs only your time at the hive.' };
@@ -2561,16 +2655,31 @@ function _ui_actionControls(key, colony) {
     ] };
   }
 
+  if (key === 'moveHive') {
+    var otherApiaries = (Game.apiaries || []).filter(function(a) { return a.id !== colony.apiaryId; });
+    if (!otherApiaries.length) return { run: function() { return { ok: false, msg: 'No other apiary to move to.' }; }, confirmLabel: 'Move' };
+    return { options: otherApiaries.map(function(ap) {
+      return opt('Move to ' + ap.name, 'Costs £' + (typeof COSTS !== 'undefined' ? COSTS.movehive : 25) + ' — foragers may return to old site.',
+        function() { return moveHive(colony, ap.id); });
+    }) };
+  }
+
   var runners = {
     addSuper: function() { return addSuper(colony); },
     addBroodBox: function() { return addBroodBox(colony); },
+    removeSuper: function() { return removeSuper(colony); },
+    fitClearerBoard: function() { return fitClearerBoard(colony); },
+    heftColony: function() { return heftColony(colony); },
     artificialSwarm: function() { return artificialSwarm(colony); },
     nucleusMethod: function() { return nucleusMethod(colony); },
     split: function() { return splitColony(colony); },
     removeQueenCells: function() { return removeQueenCells(colony); },
     clipQueen: function() { return clipQueen(colony); },
+    demareeMethod: function() { return demareeMethod(colony); },
+    demareeCheck: function() { return demareeCheck(colony); },
     requeen: function() { return requeen(colony, 'bought'); },
     markQueen: function() { return markQueen(colony); },
+    rearQueens: function() { return rearQueens(colony); },
     monitorVarroa: function() { return monitorVarroa(colony, 'sugar'); },
     harvest: function() { return harvestColony(colony); },
     sellColony: function() { return sellColony(colony, false); },
@@ -2583,10 +2692,15 @@ function _ui_actionControls(key, colony) {
   };
   var labels = {
     addSuper: 'Add the super', addBroodBox: 'Add the brood box',
+    removeSuper: 'Remove the super', fitClearerBoard: 'Fit the clearer board',
+    heftColony: 'Heft the hive',
     artificialSwarm: 'Carry out the artificial swarm', nucleusMethod: 'Make up the nucleus',
     split: 'Make the split', removeQueenCells: 'Knock the cells down',
-    clipQueen: 'Clip the queen', requeen: 'Buy and introduce a new queen',
-    markQueen: 'Mark the queen', monitorVarroa: 'Take a sugar-roll sample',
+    clipQueen: 'Clip the queen',
+    demareeMethod: 'Carry out the Demaree', demareeCheck: 'Destroy the emergency cells',
+    requeen: 'Buy and introduce a new queen',
+    markQueen: 'Mark the queen', rearQueens: 'Start queen rearing',
+    monitorVarroa: 'Take a sugar-roll sample',
     harvest: 'Take the honey off', sellColony: 'Sell this colony',
     unite: 'Unite into the strongest colony'
   };
@@ -2641,6 +2755,45 @@ function _ui_actionContext(key, colony) {
   }
   if (key === 'unite') {
     return 'this will merge ' + colony.name + ' into your strongest other colony; ' + colony.name + '\'s queen will be lost.';
+  }
+  if (key === 'heftColony') {
+    var wkInYr = ((Game.week - 1) % 52) + 1;
+    var isWinter = (wkInYr <= 8 || wkInYr >= 44);
+    return isWinter
+      ? 'it is deep winter — hefting is the safe way to check stores without breaking the cluster.'
+      : 'hefting gives a rough stores reading at any time of year without opening the hive.';
+  }
+  if (key === 'removeSuper') {
+    var ts = _ui_topSuperHoney(colony);
+    if (ts >= 0.5) return 'the top super still has ' + ts.toFixed(1) + ' kg of honey — harvest it before removing the box.';
+    return 'the top super is nearly empty and ready to come off.';
+  }
+  if (key === 'fitClearerBoard') {
+    return colony.clearerFitted
+      ? 'the clearer board is already fitted — the bees should have cleared overnight. Ready to harvest.'
+      : 'fit it tonight and the super should be bee-free by morning.';
+  }
+  if (key === 'demareeMethod') {
+    if (!colony.queenExcluder) return 'a queen excluder must be fitted first before you can carry out a Demaree.';
+    if (!colony.known || !colony.known.queenSeen) return 'you need to find the queen at inspection before you can carry out a Demaree.';
+    return 'swarm pressure is ' + (colony.swarmPressure > 0.5 ? 'high — a Demaree would relieve it without losing any bees.' : 'moderate. Consider this if cells appear.');
+  }
+  if (key === 'demareeCheck') {
+    if (!colony.demaree) return 'no Demaree in progress.';
+    var dAge = colony.demaree.age || 0;
+    return dAge >= 1
+      ? 'the Demaree is ' + dAge + ' week(s) old — emergency cells in the top box must be destroyed now before a virgin emerges.'
+      : 'the Demaree was carried out this week. Return in 7 days to destroy the emergency cells.';
+  }
+  if (key === 'moveHive') {
+    var curApiary = (Game.apiaries || []).find(function(a) { return a.id === colony.apiaryId; });
+    return 'currently at ' + (curApiary ? curApiary.name : 'unknown apiary') + '. Moving costs foragers — the colony will rebuild.';
+  }
+  if (key === 'rearQueens') {
+    var sl2 = (typeof skillLevel === 'function') ? skillLevel(Game.skillXp) : 1;
+    if (sl2 < 5) return 'queen rearing requires skill level 5 — you are at level ' + sl2 + '. Keep practising inspections and swarm control.';
+    if (colony.population < 18000) return 'the colony needs to be at peak summer strength (18,000+ bees). Currently around ' + Math.round((colony.population || 0) / 1000) + 'k bees.';
+    return 'the colony is strong enough to act as a cell raiser.';
   }
   return null;
 }
