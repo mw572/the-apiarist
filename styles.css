@@ -328,6 +328,41 @@ button { font-family: var(--sans); cursor: pointer; }
 .bait-hive-label { font-weight: 700; font-size: 13px; color: var(--ink-soft); }
 .bait-hive-sub { font-size: 11px; color: var(--ink-faint); text-align: center; padding: 0 6px; }
 
+/* Spare hive slot — empty hive box awaiting a colony */
+.spare-hive-slot {
+  width: 132px; min-height: 120px; border: 2px dashed rgba(100,120,80,0.5);
+  border-radius: 10px; display: flex; flex-direction: column; gap: 5px;
+  align-items: center; justify-content: center; cursor: pointer;
+  color: var(--ink-soft); background: rgba(180,200,140,0.15); font-size: 12px;
+  transition: background .15s, border-color .15s;
+}
+.spare-hive-slot:hover { background: rgba(180,200,140,0.28); border-color: rgba(100,120,80,0.75); }
+.spare-hive-icon { font-size: 32px; line-height: 1; }
+.spare-hive-label { font-weight: 700; font-size: 13px; color: var(--ink-soft); }
+.spare-hive-sub { font-size: 11px; color: var(--ink-faint); text-align: center; padding: 0 6px; }
+
+/* ====================================================================
+   STATUSBAR — persistent bottom resource strip
+   ==================================================================== */
+.statusbar {
+  display: flex; align-items: center; gap: 0; flex: none;
+  height: 42px; padding: 0 16px;
+  background: linear-gradient(180deg, #3a2c18, #2a1e10);
+  border-top: 2px solid var(--honey-dk);
+  z-index: 20;
+}
+.sb-stat {
+  display: flex; align-items: center; gap: 5px;
+  padding: 0 12px; height: 100%;
+  border-right: 1px solid rgba(180,140,60,0.2);
+}
+.sb-stat:last-child { border-right: none; }
+.sb-icon { font-size: 16px; line-height: 1; }
+.sb-val { font-size: 13px; font-weight: 700; color: var(--wax); letter-spacing: .3px; }
+.sb-lbl { font-size: 10px; color: var(--honey); text-transform: uppercase; letter-spacing: .6px; }
+.sb-has .sb-val { color: #b8e890; }
+.sb-divider { width: 1px; height: 24px; background: rgba(180,140,60,0.35); margin: 0 4px; }
+
 /* advisor sidebar */
 .apiary-side {
   width: 326px; flex: none; background: var(--paper);
@@ -501,9 +536,19 @@ button { font-family: var(--sans); cursor: pointer; }
    HIVE DETAIL — cross-section with real frame content
    ==================================================================== */
 
-.hive-detail { display: flex; gap: 18px; }
-.hive-cross  { flex: none; width: 248px; display: flex; flex-direction: column; }
-.hive-info   { flex: 1; min-width: 0; }
+.hive-detail { display: flex; gap: 20px; min-height: 0; }
+.hive-cross  { flex: none; width: 260px; display: flex; flex-direction: column; overflow-y: auto; max-height: 72vh; }
+.hive-info   { flex: 1; min-width: 0; overflow-y: auto; max-height: 72vh; }
+
+/* Primary action row — big buttons at the top of the actions panel */
+.action-primary-row {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+  padding-bottom: 12px; border-bottom: 2px solid var(--honey);
+}
+.action-primary-row .btn { font-size: 14px; padding: 10px 16px; }
+.btn-action {
+  background: var(--paper-2); border-color: var(--line-dk);
+}
 
 .cross-section-title {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
@@ -1327,9 +1372,26 @@ button { font-family: var(--sans); cursor: pointer; }
   .modal-head h3 { font-size: 16px; }
   .modal-foot { padding: 10px 14px; }
 
+  /* --- hive detail: stack on mobile --- */
+  .hive-detail { flex-direction: column; }
+  .hive-cross, .hive-info { max-height: none; overflow-y: visible; }
+
   /* --- inspection: frames scroll sideways, detail stacks --- */
   .inspect-box-inner { justify-content: flex-start; overflow-x: auto; padding-bottom: 4px; }
   .inspect-detail { flex-direction: column; }
+
+  /* --- statusbar: compact on mobile --- */
+  .statusbar { height: 36px; padding: 0 8px; gap: 0; }
+  .sb-stat { padding: 0 6px; }
+  .sb-lbl { display: none; }
+  .sb-val { font-size: 12px; }
+  .sb-divider { margin: 0 2px; }
+
+  /* --- spare hive slot: match hive card width on mobile --- */
+  .spare-hive-slot { width: 100px; min-height: 104px; }
+  .spare-hive-icon { font-size: 24px; }
+  .spare-hive-label { font-size: 11px; }
+  .spare-hive-sub { font-size: 9px; }
 
   /* --- roomier tap targets --- */
   .btn { padding: 10px 15px; }

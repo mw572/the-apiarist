@@ -476,6 +476,40 @@ function render() {
   else if (view === 'journal')  stage.appendChild(_ui_buildJournalView());
 
   app.appendChild(stage);
+  app.appendChild(_ui_buildStatusbar());
+}
+
+/* ====================================================================
+   STATUSBAR — persistent bottom resource bar
+   ==================================================================== */
+
+function _ui_buildStatusbar() {
+  var inv = (Game && Game.inventory) || {};
+  var cash      = (Game && Game.cash != null) ? Game.cash : 0;
+  var honeyKg   = inv.honeyKg   || 0;
+  var sugarKg   = inv.sugarKg   || 0;
+  var jars      = inv.jars      || 0;
+  var spare     = inv.spareHives || 0;
+  var bait      = inv.baitHives  || 0;
+
+  function stat(icon, val, label, cls) {
+    return h('div', { class: 'sb-stat ' + (cls || '') }, [
+      h('span', { class: 'sb-icon' }, icon),
+      h('span', { class: 'sb-val' }, val),
+      h('span', { class: 'sb-lbl' }, label)
+    ]);
+  }
+
+  return h('div', { class: 'statusbar' }, [
+    stat('💷', '£' + cash.toFixed(0), 'Cash'),
+    h('div', { class: 'sb-divider' }),
+    stat('🍯', honeyKg.toFixed(1) + ' kg', 'Honey'),
+    stat('🧂', sugarKg.toFixed(1) + ' kg', 'Sugar'),
+    stat('🫙', String(jars), 'Jars'),
+    h('div', { class: 'sb-divider' }),
+    stat('📦', String(spare), 'Spare hives', spare > 0 ? 'sb-has' : ''),
+    stat('🪤', String(bait), 'Bait hives', bait > 0 ? 'sb-has' : '')
+  ]);
 }
 
 /* ====================================================================
@@ -708,6 +742,19 @@ function _ui_buildApiaryView() {
   var hiveNodes = colonies.map(function(col) {
     return _ui_buildHiveCard(col);
   });
+
+  // Spare hive slots — one card per empty hive box waiting to be populated
+  var spareCount = (Game.inventory && Game.inventory.spareHives) || 0;
+  for (var si2 = 0; si2 < spareCount; si2++) {
+    hiveNodes.push(h('div', {
+      class: 'spare-hive-slot',
+      onclick: function() { Game.ui.view = 'market'; render(); }
+    }, [
+      h('div', { class: 'spare-hive-icon' }, '📦'),
+      h('span', { class: 'spare-hive-label' }, 'Empty hive'),
+      h('span', { class: 'spare-hive-sub' }, 'Ready for a colony — visit Market')
+    ]));
+  }
 
   // Bait hive slots — one visible card per bait hive in inventory
   var baitCount = (Game.inventory && Game.inventory.baitHives) || 0;
@@ -1627,7 +1674,7 @@ function openHiveDetail(colony) {
   openModal({
     title: colony.name + (colony.alive ? '' : ' (Dead)'),
     body: bodyNode,
-    wide: true,
+    xwide: true,
     buttons: [{ label: 'Close', act: closeModal }]
   });
 }
@@ -2281,33 +2328,42 @@ function _ui_buildActionButtons(colony) {
   });
   if (dead) inspectBtn.disabled = true;
 
-  var core = h('div', { class: 'btn-row' }, [
+  /* === Primary actions === */
+  var primary = h('div', { class: 'action-primary-row' }, [
     inspectBtn,
-    abtn('Feed', '', 'feed', dead, 'This colony has died'),
-    abtn('Treat varroa', '', 'treat',
-      dead || !!(colony.treatment && colony.treatment.weeksLeft > 0),
-      dead ? 'This colony has died' : 'Treatment already active — wait for it to finish'),
-    abtn('Monitor varroa', '', 'monitorVarroa', dead, 'This colony has died'),
-    abtn('Add super', '', 'addSuper', dead || (colony.supers || 0) >= 5,
-      dead ? 'This colony has died' : 'Plenty of supers on already'),
-    abtn('Remove super', '', 'removeSuper',
-      dead || (colony.supers || 0) === 0 || _ui_topSuperHoney(colony) >= 0.5,
-      dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers to remove' : 'Top super still has honey — harvest it first'),
-    abtn('Add brood box', '', 'addBroodBox', dead || colony.broodBoxes >= 2,
-      dead ? 'This colony has died' : 'Already on double brood'),
-    abtn('Entrance', '', 'entrance', dead, 'This colony has died'),
-    abtn('Fit clearer board', '', 'fitClearerBoard',
-      dead || (colony.supers || 0) === 0 || !!colony.clearerFitted,
-      dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers on the hive' : 'Clearer board already fitted — harvest when ready'),
-    abtn('Harvest honey (box stays)', 'btn-leaf', 'harvest',
+    abtn('🍯 Harvest', 'btn-leaf', 'harvest',
       dead || (colony.supers || 0) === 0 || (colony.superHoney || 0) === 0,
       dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers on the hive to harvest' : 'Nothing in the supers yet'),
-    abtn('Heft colony', '', 'heftColony', dead, 'This colony has died'),
-    abtn('Move hive', '', 'moveHive',
-      dead || !Game.apiaries || Game.apiaries.length < 2,
-      dead ? 'This colony has died' : 'Only one apiary — add another to move hives between them')
+    abtn('🌿 Feed', 'btn-action', 'feed', dead, 'This colony has died'),
+    abtn('💊 Treat varroa', 'btn-action', 'treat',
+      dead || !!(colony.treatment && colony.treatment.weeksLeft > 0),
+      dead ? 'This colony has died' : 'Treatment already active — wait for it to finish'),
+    abtn('📦 Add super', 'btn-action', 'addSuper', dead || (colony.supers || 0) >= 5,
+      dead ? 'This colony has died' : 'Plenty of supers on already')
   ]);
 
+  /* === Management actions === */
+  var mgmt = h('div', { class: 'action-group' }, [
+    h('div', { class: 'action-group-title' }, 'Hive management'),
+    h('div', { class: 'btn-row' }, [
+      abtn('Clearer board', '', 'fitClearerBoard',
+        dead || (colony.supers || 0) === 0 || !!colony.clearerFitted,
+        dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers on the hive' : 'Clearer board already fitted — harvest when ready'),
+      abtn('Remove super', '', 'removeSuper',
+        dead || (colony.supers || 0) === 0 || _ui_topSuperHoney(colony) >= 0.5,
+        dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers to remove' : 'Top super still has honey — harvest it first'),
+      abtn('Add brood box', '', 'addBroodBox', dead || colony.broodBoxes >= 2,
+        dead ? 'This colony has died' : 'Already on double brood'),
+      abtn('Entrance', '', 'entrance', dead, 'This colony has died'),
+      abtn('Monitor varroa', '', 'monitorVarroa', dead, 'This colony has died'),
+      abtn('Heft colony', '', 'heftColony', dead, 'This colony has died'),
+      abtn('Move hive', '', 'moveHive',
+        dead || !Game.apiaries || Game.apiaries.length < 2,
+        dead ? 'This colony has died' : 'Only one apiary — add another to move hives between them')
+    ])
+  ]);
+
+  /* === Swarm control === */
   var swarm = h('div', { class: 'action-group' }, [
     h('div', { class: 'action-group-title' }, '🐝 Swarm control'),
     h('div', { class: 'btn-row' }, [
@@ -2326,6 +2382,7 @@ function _ui_buildActionButtons(colony) {
     ])
   ]);
 
+  /* === Queen & colony === */
   var queen = h('div', { class: 'action-group' }, [
     h('div', { class: 'action-group-title' }, '👑 Queen and colony'),
     h('div', { class: 'btn-row' }, [
@@ -2341,7 +2398,7 @@ function _ui_buildActionButtons(colony) {
     ])
   ]);
 
-  return h('div', {}, [core, swarm, queen]);
+  return h('div', {}, [primary, mgmt, swarm, queen]);
 }
 
 /* ====================================================================
