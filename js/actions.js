@@ -1195,7 +1195,7 @@ function artificialSwarm(colony) {
      fall back to emergency cells — but in practice artificial swarm requires
      swarm cells or high pressure, so cells should exist. */
   if (!colony.queenCells || colony.queenCells.type === 'none' || colony.queenCells.count === 0) {
-    colony.queenCells = { type: 'emergency', count: 3, age: 0, state: 'larvae' };
+    colony.queenCells = { type: 'emergency', count: 3, age: -1, state: 'larvae' };
   }
   /* If cells are already capped they will yield a virgin queen on schedule.
      Mark the colony so the UI can hint the player a virgin is expected. */
@@ -1254,7 +1254,11 @@ function splitColony(colony) {
   newColony.larvae = splitLarvae;
   newColony.capped = splitCapped;
   newColony.queen  = null; /* One part will raise a queen */
-  newColony.queenCells = { type: 'emergency', count: _act_randInt(3, 6), age: 0, state: 'larvae' };
+  newColony.queenCells = { type: 'emergency', count: _act_randInt(3, 6), age: -1, state: 'larvae' };
+
+  /* A split relieves congestion — reduce swarm pressure significantly.
+     The colony loses 30% of bees and 25% of brood, so the impulse drops sharply. */
+  colony.swarmPressure = _act_clamp(colony.swarmPressure - 0.45, 0, 1);
 
   Game.colonies.push(newColony);
   Game.stats.splitsMade++;
@@ -1313,7 +1317,7 @@ function nucleusMethod(colony) {
 
   /* Original loses its queen and raises an emergency queen */
   colony.queen = null;
-  colony.queenCells = { type: 'emergency', count: _act_randInt(4, 8), age: 0, state: 'larvae' };
+  colony.queenCells = { type: 'emergency', count: _act_randInt(4, 8), age: -1, state: 'larvae' };
   colony.swarmPressure = _act_clamp(colony.swarmPressure - 0.4, 0, 1);
 
   Game.colonies.push(newColony);

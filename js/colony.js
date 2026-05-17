@@ -355,15 +355,16 @@ function makeColony(opts){
     pollen  = opts.pollen  !== undefined ? opts.pollen  : 0.6;
     varroa  = opts.varroa  !== undefined ? opts.varroa  : SIM.varroaStart;
   } else {
-    // Default: newly hived nucleus
+    // Default: newly hived nucleus (5-frame nuc transferred to an 11-frame box)
+    // Real nucs arrive with a tight brood nest and light stores — 6 frames are empty foundation
     population = opts.population !== undefined ? opts.population : SIM.nucPopulation;
-    eggs    = 4000;
-    larvae  = 5000;
-    capped  = 7000;
-    drones  = 250;
-    honey   = 3;
+    eggs    = 1500;   // ~1 frame centre eggs
+    larvae  = 2500;   // partial frame larvae around brood nest
+    capped  = 4000;   // ~1 frame capped brood
+    drones  = 100;
+    honey   = 1;      // light stores — outer nuc frames have a small honey arch
     superHoney = 0;
-    pollen  = 0.8;
+    pollen  = 0.4;
     varroa  = opts.varroa !== undefined ? opts.varroa : SIM.varroaStart;
   }
 
@@ -1091,7 +1092,7 @@ function colonyWeeklyUpdate(colony, ctx){
       // Day-7 check missed: top box raises emergency cells from youngest larvae.
       // Player must now deal with these or a virgin may emerge and cast.
       if (colony.queenCells.type === 'none') {
-        colony.queenCells = { type: 'emergency', count: 5, age: 0, state: 'larvae' };
+        colony.queenCells = { type: 'emergency', count: 5, age: -1, state: 'larvae' };
         events.push({ type: 'demareeUnchecked', colony: colony });
       }
     }
@@ -1232,7 +1233,11 @@ function colonyWeeklyUpdate(colony, ctx){
     // If colony hasn't been inspected this week during swarm season,
     // cells may already be capped by the time the player discovers them.
     const weeksSinceInspect = week - (colony.lastInspected || 0);
-    const startAge = (weeksSinceInspect >= 2) ? 1 : 0;  // already capped if overdue
+    // startAge accounts for same-tick increment in section 11d:
+    //   Fresh (< 2 weeks): age -1 → tick makes 0 → larvae visible to player
+    //   Overdue (2 weeks): age 0  → tick makes 1 → capped, SWARM IMMINENT
+    //   Very overdue (3+): age 1  → tick makes 2 → swarm fires this tick (neglected)
+    const startAge = (weeksSinceInspect >= 3) ? 1 : (weeksSinceInspect >= 2 ? 0 : -1);
     colony.queenCells = {
       type:  'swarm',
       count: 5 + _colony_randInt(0, 15),   // 5-20 cells (realistic range)
@@ -1259,11 +1264,12 @@ function colonyWeeklyUpdate(colony, ctx){
         // NO bees are lost. BUT the cells are still capped and NOT destroyed.
         // Next tick: first virgin emerges and CAN fly → she leads the delayed swarm.
         events.push({ type: 'swarmAborted', colony: colony });
-        // Cells continue as postSwarm — virgin emerges next tick
+        // Cells continue as postSwarm — virgin emerges NEXT tick (age -1 so same-tick
+        // increment brings it to 0, emergence requires >= 1)
         colony.queenCells = {
           type:  'postSwarm',
           count: colony.queenCells.count,
-          age:   0,
+          age:   -1,
           state: 'capped',
           clippedAbort: true     // old (clipped) queen still present
         };
@@ -1277,11 +1283,12 @@ function colonyWeeklyUpdate(colony, ctx){
         colony.swarmedThisYear = true;
         colony.swarmPressure   = 0;
         colony.queen           = null;  // old queen departs with the swarm
-        // Cells remain capped — first virgin emerges next tick
+        // Cells remain capped — virgin emerges NEXT week (age -1 so same-tick
+        // increment to 0; emergence fires when age reaches 1)
         colony.queenCells = {
           type:  'postSwarm',
           count: colony.queenCells.count,
-          age:   0,
+          age:   -1,
           state: 'capped',
           clippedAbort: false
         };
@@ -1364,8 +1371,9 @@ function colonyWeeklyUpdate(colony, ctx){
   }
 
   // Handle virgin queens — mating flight resolution
+  // NOTE: queen.age is already incremented for ALL queens (including virgins) in section 1.
+  // Do NOT increment again here — that was causing virgins to age at 2x speed.
   if (queen && queen.present && queen.virgin){
-    queen.age++;
     if (queen.age >= 2){
       // Needs flyable weather over the mating period
       const flyScore   = ctx.weather.fly;
@@ -1432,7 +1440,7 @@ function colonyWeeklyUpdate(colony, ctx){
     colony._cagedWeeks = (colony._cagedWeeks || 0) + 1;
     // After 1 week without queen pheromone, bees start emergency cells
     if (colony.queenCells.type === 'none' && colony.eggs + colony.larvae > 200) {
-      colony.queenCells = { type: 'emergency', count: _colony_randInt(3, 8), age: 0, state: 'larvae' };
+      colony.queenCells = { type: 'emergency', count: _colony_randInt(3, 8), age: -1, state: 'larvae' };
       events.push({ type: 'queencells', colony: colony });
     }
   } else if (queen && queen.present && !queen.caged && queen.state === 'caged') {
