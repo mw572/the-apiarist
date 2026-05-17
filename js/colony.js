@@ -659,7 +659,7 @@ function colonyWeeklyUpdate(colony, ctx){
   } else if (season === 'spring'){
     baseMort = 0.085;
   } else if (season === 'summer'){
-    baseMort = 0.13;  // high summer turnover is normal
+    baseMort = 0.11;  // summer turnover — ~9-week lifespan; allows post-swarm recovery
   } else {
     // Autumn: graduated mortality by week index (wkIdx 35=Sep through 47=Nov)
     if (wkIdx <= 38) {

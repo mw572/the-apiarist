@@ -488,7 +488,7 @@ function _ui_buildStatusbar() {
   var cash      = (Game && Game.cash != null) ? Game.cash : 0;
   var honeyKg   = inv.honeyKg   || 0;
   var sugarKg   = inv.sugarKg   || 0;
-  var jars      = inv.jars      || 0;
+  var jars      = inv.jars ? Object.values(inv.jars).reduce(function(s,v){ return s+(v||0); }, 0) : 0;
   var spare     = inv.spareHives || 0;
   var bait      = inv.baitHives  || 0;
 
