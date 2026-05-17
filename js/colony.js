@@ -608,7 +608,8 @@ function colonyWeeklyUpdate(colony, ctx){
   {
     const wkIdxR = ((week - 1) % 52);
     // Summer (wk 14-35): high forager drift and robbing → higher reinfestation pressure
-    const driftRate = (wkIdxR >= 13 && wkIdxR <= 34) ? 0.003 : 0.001;
+    // Reduced from 0.003/0.001 — prior rates compounded to colony-killing levels by yr 3
+    const driftRate = (wkIdxR >= 13 && wkIdxR <= 34) ? 0.0018 : 0.0005;
     // Each colony in the apiary adds a small contribution (capped at a multiplier of 2.0)
     const apiaryColonyCount = typeof Game !== 'undefined'
       ? Math.min(10, (Game.colonies || []).filter(function(c){ return c.alive && c.apiaryId === colony.apiaryId; }).length)

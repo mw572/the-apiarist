@@ -1846,6 +1846,16 @@ function _ui_buildHiveCross(colony) {
     osrWarn = h('div', { class: 'cross-osr-notice' }, '⚠ OSR honey at risk of crystallisation');
   }
 
+  /* --- Autumn supers warning ----------------------------------------- */
+  var autumnSuperWarn = null;
+  if ((colony.supers || 0) > 0 && typeof Game !== 'undefined') {
+    var _wk = ((Game.week - 1) % 52) + 1;
+    if (_wk >= 35 && _wk <= 48) {
+      autumnSuperWarn = h('div', { class: 'cross-osr-warn' },
+        '📦 Supers still on — take them off before treating for varroa');
+    }
+  }
+
   /* --- Demaree info block ------------------------------------------- */
   var demareeInfo = null;
   if (colony.demaree) {
@@ -1892,6 +1902,7 @@ function _ui_buildHiveCross(colony) {
     swarmBar
   ];
   if (osrWarn) crossChildren.push(osrWarn);
+  if (autumnSuperWarn) crossChildren.push(autumnSuperWarn);
   if (demareeInfo) crossChildren.push(demareeInfo);
   if (qcMeta) crossChildren.push(qcMeta);
   crossChildren.push(h('div', { class: 'cross-meta-line' }, queenParts.join(' · ')));
@@ -2401,7 +2412,7 @@ function _ui_buildActionButtons(colony) {
       abtn('Clearer board', '', 'fitClearerBoard',
         dead || (colony.supers || 0) === 0 || !!colony.clearerFitted,
         dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers on the hive' : 'Clearer board already fitted — harvest when ready'),
-      abtn('Remove super', '', 'removeSuper',
+      abtn('Take box off', '', 'removeSuper',
         dead || (colony.supers || 0) === 0 || _ui_topSuperHoney(colony) >= 0.5,
         dead ? 'This colony has died' : (colony.supers || 0) === 0 ? 'No supers to remove' : 'Top super still has honey — harvest it first'),
       abtn('Add brood box', '', 'addBroodBox', dead || colony.broodBoxes >= 2,
@@ -2546,7 +2557,7 @@ function _ui_openHarvestDialog(colony) {
       : 'Select a super above to see estimated jar yield.');
 
   var boxStaysNote = h('div', { class: 'harv-note' },
-    '🍯 Box stays on hive — frames are emptied and left for the bees to refill. Use "Remove super" to take a box off completely.');
+    '🍯 Box stays on hive — frames are emptied and left for the bees to refill. Use "Take box off" to physically remove an empty box.');
 
   var note = hasClearer
     ? h('div', { class: 'harv-note' }, '✓ You have a clearer board — bees cleared cleanly, no honey loss.')
@@ -2803,7 +2814,7 @@ function _ui_actionControls(key, colony) {
   };
   var labels = {
     addSuper: 'Add the super', addBroodBox: 'Add the brood box',
-    removeSuper: 'Remove the super', fitClearerBoard: 'Fit the clearer board',
+    removeSuper: 'Take the box off', fitClearerBoard: 'Fit the clearer board',
     heftColony: 'Heft the hive',
     artificialSwarm: 'Carry out the artificial swarm', nucleusMethod: 'Make up the nucleus',
     split: 'Make the split', removeQueenCells: 'Knock the cells down',

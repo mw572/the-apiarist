@@ -1191,6 +1191,8 @@ function artificialSwarm(colony) {
   colony.population = remainPop;
   colony.swarmPressure = 0; /* The swarming impulse is resolved */
   colony.queen = null; /* The old queen has gone to the new hive */
+  colony.queenExcluder = false; /* No queen left to exclude */
+  if (colony.hiveLayout) colony.hiveLayout.queenExcluder = false;
   /* Keep existing swarm cells intact. If there were no cells yet (edge case),
      fall back to emergency cells — but in practice artificial swarm requires
      swarm cells or high pressure, so cells should exist. */
@@ -1317,6 +1319,8 @@ function nucleusMethod(colony) {
 
   /* Original loses its queen and raises an emergency queen */
   colony.queen = null;
+  colony.queenExcluder = false; /* No queen left to exclude */
+  if (colony.hiveLayout) colony.hiveLayout.queenExcluder = false;
   colony.queenCells = { type: 'emergency', count: _act_randInt(4, 8), age: -1, state: 'larvae' };
   colony.swarmPressure = _act_clamp(colony.swarmPressure - 0.4, 0, 1);
 
