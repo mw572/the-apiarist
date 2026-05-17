@@ -1623,12 +1623,12 @@ function colonyCongestion(colony){
   return _colony_clamp(used / totalFrames, 0, 1);
 }
 
-/* Human-readable population band */
+/* Human-readable population band — calibrated to the 0–80,000 range */
 function populationBand(n){
-  if (n < 1500)  return 'a handful';
-  if (n < 6000)  return 'small';
-  if (n < 13000) return 'building';
-  if (n < 22000) return 'strong';
+  if (n < 2000)  return 'a handful';
+  if (n < 9000)  return 'small';
+  if (n < 22000) return 'building';
+  if (n < 45000) return 'strong';
   return 'huge';
 }
 

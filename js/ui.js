@@ -2033,7 +2033,29 @@ function _ui_openBoxDetail(colony, boxType, boxIdx) {
   while (frames.length < FRAMES) frames.push({ drawn: false, combAge: 0, content: { empty: 1 } });
 
   var selectedFrame = Math.floor(FRAMES / 2);
+  var showFaceB = false;  /* false = face A (toward you), true = face B (after rotation) */
   var bodyWrap = h('div', { class: 'frame-mgmt-body' });
+
+  /* Compute the 'other side' of a frame. Edge frames store more honey on the outer face;
+     central brood frames look nearly identical on both sides. */
+  function _faceBContent(content, frameIdx) {
+    var c = {};
+    Object.keys(content || {}).forEach(function(k) { c[k] = content[k]; });
+    var center = (FRAMES - 1) / 2;
+    var distFromCenter = Math.abs(frameIdx - center) / center;
+    /* Outer face of edge frames has more capped honey, less fresh brood */
+    var shift = distFromCenter * 0.12;
+    var available = Math.min(shift, c.empty || 0);
+    c.honey = Math.min(1, (c.honey || 0) + available);
+    c.empty = Math.max(0, (c.empty || 0) - available);
+    /* Central frames: face B has slightly fewer eggs — queen laid there a day earlier */
+    if (distFromCenter < 0.3) {
+      var delta = (c.eggs || 0) * 0.18;
+      c.eggs   = Math.max(0, (c.eggs   || 0) - delta);
+      c.larvae = Math.min(1, (c.larvae || 0) + delta);
+    }
+    return c;
+  }
 
   function buildPanel() {
     bodyWrap.innerHTML = '';
@@ -2053,7 +2075,7 @@ function _ui_openBoxDetail(colony, boxType, boxIdx) {
       strip.title = 'Frame ' + (fi + 1) + ' — ' + _act_frameLabel(fi, FRAMES);
       strip.appendChild(h('div', { class: 'fm-frame-num' }, String(fi + 1)));
       (function(idx) {
-        strip.addEventListener('click', function() { selectedFrame = idx; buildPanel(); });
+        strip.addEventListener('click', function() { selectedFrame = idx; showFaceB = false; buildPanel(); });
       })(fi);
       thumbRow.appendChild(strip);
     });
@@ -2069,23 +2091,46 @@ function _ui_openBoxDetail(colony, boxType, boxIdx) {
     var isQCFr = selectedFrame === qcFrame && colony.queenCells && colony.queenCells.type !== 'none'
                  && colony.known && colony.known.queenCells !== 'none';
 
+    /* Face A = the side facing you when you lift the frame;
+       Face B = after rotating 180° (keeping the top at the top) */
+    var displayContent = showFaceB && fr.drawn
+      ? _faceBContent(fr.content, selectedFrame)
+      : (fr.content || { empty: 1 });
+    var queenOnThisFace = isQFr && !showFaceB;  /* queen seen on face A only */
+
     var detailRight = h('div', { class: 'fm-detail-right' });
-    detailRight.appendChild(h('div', { class: 'fm-frame-title' }, 'Frame ' + (selectedFrame + 1) + ' — ' + frLbl));
+
+    /* Face indicator + flip button */
+    var faceLabel = showFaceB ? 'Face B' : 'Face A';
+    var flipBtn = h('button', {
+      class: 'fm-flip-btn' + (showFaceB ? ' fm-flip-btn--b' : ''),
+      title: showFaceB ? 'Rotate back to face A' : 'Rotate frame to see the other side'
+    }, [
+      h('span', { class: 'fm-flip-icon' }, '🔄'),
+      h('span', {}, ' ' + faceLabel)
+    ]);
+    flipBtn.addEventListener('click', function() { showFaceB = !showFaceB; buildPanel(); });
+
+    detailRight.appendChild(h('div', { class: 'fm-frame-header' }, [
+      h('div', { class: 'fm-frame-title' }, 'Frame ' + (selectedFrame + 1) + ' — ' + frLbl),
+      flipBtn
+    ]));
 
     /* Frame state tags */
     var stateParts = [ fr.drawn ? 'Drawn comb' : 'Foundation — not yet drawn' ];
     if (fr.combAge > 0) {
       stateParts.push(['new','1 yr','2 yr','3 yr','4 yr','5+ yr'][Math.min(5, fr.combAge)] + ' old');
     }
-    if (isQFr)  stateParts.push('Queen here');
+    if (queenOnThisFace) stateParts.push('Queen seen');
+    if (isQFr && showFaceB)  stateParts.push('Queen on face A — flip back to confirm');
     if (isQCFr) stateParts.push('Queen cells (' + colony.queenCells.type + ')');
 
     var detailLeft;
     if (boxType === 'brood') {
-      /* Full hex comb on the left */
+      /* Full hex comb on the left — content varies by face */
       var synFrame = {
-        cells:         _ui_contentToCells(fr.content),
-        hasQueen:      isQFr,
+        cells:         _ui_contentToCells(displayContent),
+        hasQueen:      queenOnThisFace,
         queenCellType: (colony.queenCells && colony.queenCells.type) || 'none',
         label:         frLbl
       };

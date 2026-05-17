@@ -853,7 +853,20 @@ button { font-family: var(--sans); cursor: pointer; }
 
 .fm-detail-wrap { display: flex; gap: 16px; align-items: flex-start; }
 .fm-detail-right { flex: 1; }
-.fm-frame-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+.fm-frame-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.fm-frame-title { font-weight: 700; font-size: 14px; }
+.fm-flip-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border: 1.5px solid var(--honey-dk); border-radius: 20px;
+  background: var(--parch-2); color: var(--honey-dk);
+  font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.fm-flip-btn:hover { background: var(--honey-dk); color: white; }
+.fm-flip-btn--b {
+  background: var(--honey-dk); color: white;
+}
+.fm-flip-icon { font-size: 13px; }
 .fm-frame-state { font-size: 11px; color: var(--ink-soft); margin-top: 8px; }
 
 .fm-super-info {
