@@ -833,13 +833,24 @@ function _ui_buildHiveCard(colony) {
     } else if (colony.osrCrystallised) {
       /* P4: OSR crystallisation risk */
       showBadge = true; badgeGlyph = '🍯'; badgeCls = 'badge-bad';
+    } else if ((colony.honey || 0) < 1 && (colony._starvingWeeks || 0) > 0) {
+      /* P5: actively starving */
+      showBadge = true; badgeGlyph = '❗'; badgeCls = 'badge-bad';
+    } else if ((colony.honey || 0) < 3 && (colony._nearZeroStarvingWeeks || 0) > 0) {
+      /* P6: near-zero stores risk */
+      showBadge = true; badgeGlyph = '⚠️'; badgeCls = 'badge-warn';
     }
   }
 
-  /* Inspection urgency: days since last inspect, shown during swarm season.
-     Bug G fix: only fires when colony HAS been inspected (lastInspected > 0).
-     Never-inspected colonies show 'Not yet inspected' — no stale-inspection badge. */
+  /* Inspection urgency: shown during swarm season.
+     Never-inspected colonies get an 'Unopened' nudge in swarm season. */
   var inspectUrgency = null;
+  var _curWeek2 = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
+  var _inWin2   = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(_curWeek2) : false;
+  if (colony.alive && !colony.lastInspected && _inWin2) {
+    inspectUrgency = h('div', { class: 'hive-insp-badge insp-warn',
+      title: 'This colony has never been inspected — swarm season is underway' }, '!');
+  }
   if (colony.alive && colony.lastInspected > 0) {
     var _curWeek = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
     var _inWin   = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(_curWeek) : false;
@@ -2009,10 +2020,15 @@ function _ui_buildHiveCross(colony) {
     demareeInfo = h('div', { class: 'cross-demaree-info' + ((!dChecked2 && dAge2 >= 1) ? ' qc-urgent' : '') }, dMsg);
   }
 
-  /* --- Queen / entrance meta ---------------------------------------- */
+  /* --- Queen / entrance meta ----------------------------------------
+     Fog-of-war: only show queen details if the colony has been inspected.
+     Before first inspection (or heft-only) the player cannot know queen state. */
+  var _hasInspected = colony.known && !colony.known.heftOnly;
   var queen = colony.queen;
   var queenParts = [];
-  if (queen && queen.present) {
+  if (!_hasInspected) {
+    queenParts.push('Queen status unknown — inspect to find out');
+  } else if (queen && queen.present) {
     var qs = queen.virgin ? 'virgin, unmated'
            : queen.state === 'dronelayer' ? 'drone layer'
            : queen.state === 'failing' ? 'failing'
@@ -2059,13 +2075,22 @@ function _ui_buildCrossFrames(frames, type, queenFrame, qcellFrame, colony) {
   var fs = frames.slice();
   while (fs.length < FRAMES) fs.push({ drawn: false, combAge: 0, content: { empty: 1 } });
 
+  /* Fog-of-war: if colony has never been inspected (or heft-only), show
+     blank unknown frames so the player must inspect to learn what is inside */
+  var _fogOfWar = !(colony && colony.known && !colony.known.heftOnly);
+
   var wrap = h('div', { class: 'cross-frames' });
   for (var fi = 0; fi < FRAMES; fi++) {
-    var frame      = fs[fi] || { content: { empty: 1 } };
-    var isQueen    = (fi === queenFrame && colony && colony.queen && colony.queen.present && !colony.queen.virgin);
-    var isQCells   = (fi === qcellFrame && colony && colony.queenCells && colony.queenCells.type !== 'none'
-                     && colony.known && colony.known.queenCells && colony.known.queenCells !== 'none');
-    wrap.appendChild(_ui_buildFrameStrip(frame, type, isQueen, isQCells));
+    if (_fogOfWar) {
+      var unknownStrip = h('div', { class: 'cross-frame-strip cf-unknown', title: 'Inspect to reveal' });
+      wrap.appendChild(unknownStrip);
+    } else {
+      var frame      = fs[fi] || { content: { empty: 1 } };
+      var isQueen    = (fi === queenFrame && colony && colony.queen && colony.queen.present && !colony.queen.virgin);
+      var isQCells   = (fi === qcellFrame && colony && colony.queenCells && colony.queenCells.type !== 'none'
+                       && colony.known && colony.known.queenCells && colony.known.queenCells !== 'none');
+      wrap.appendChild(_ui_buildFrameStrip(frame, type, isQueen, isQCells));
+    }
   }
   return wrap;
 }
@@ -3363,7 +3388,11 @@ function _openInspectionModal(colony, report) {
     title: 'Inspecting ' + colony.name,
     body: modalBody,
     xwide: true,
-    buttons: [{ label: 'Done', cls: 'btn-primary', act: function() { closeModal(); render(); } }]
+    buttons: [{ label: 'Done', cls: 'btn-primary', act: function() {
+      /* Award inspection XP only when player finishes the modal */
+      if (report && report.xp) addXp(report.xp);
+      closeModal(); render();
+    } }]
   });
 }
 

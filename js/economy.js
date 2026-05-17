@@ -345,6 +345,12 @@ function harvestColony(colony) {
   colony.queenExcluder = false;
   // Clearer board is consumed by the harvest — reset for the next cycle.
   colony.clearerFitted = false;
+  // Sync stack — remove all supers, QX, and clearer board
+  if (colony.stack) {
+    colony.stack = colony.stack.filter(function(i) {
+      return i.type !== 'super' && i.type !== 'queenExcluder' && i.type !== 'clearerBoard';
+    });
+  }
 
   // Stats.
   Game.stats.honeyHarvested = _econ_roundPrice((Game.stats.honeyHarvested || 0) + kg);
@@ -361,6 +367,20 @@ function harvestColony(colony) {
 
   logEvent('🍯', baseMsg, 'good');
   toast(kg.toFixed(1) + ' kg of ' + honeyName + ' in the tank.', 'good');
+
+  /* First-harvest varroa reminder — fires once, at the teaching moment */
+  if (typeof Game !== 'undefined' && Game.flags && !Game.flags.seenExplainers['harvest_varroa_reminder']) {
+    Game.flags.seenExplainers['harvest_varroa_reminder'] = true;
+    var _wkInYr2 = ((Game.week - 1) % 52) + 1;
+    if (_wkInYr2 >= 28 && _wkInYr2 <= 44) {
+      Game.advisor = Game.advisor || [];
+      Game.advisor.push({
+        tone: 'warn',
+        text: 'Honey is off. Treat for varroa now — winter bees are being raised and mite damage is invisible until colonies collapse in January.',
+      });
+    }
+  }
+
   return { ok: true, msg: baseMsg, kg: kg, type: type };
 }
 
@@ -645,7 +665,10 @@ function marketPrice(honeyType, channelId) {
   if (!honeyData || !channelData) return 0;
 
   // Base: honey face value * channel multiplier * small reputation premium.
-  var price = honeyData.value * channelData.priceMul * (1 + Game.reputation / 200);
+  // yearQuality (0.5-0.75) shifts price ±15%: good years = slightly lower prices (bumper crop)
+  var _yq = (typeof Game !== 'undefined' && Game.yearQuality != null) ? Game.yearQuality : 0.65;
+  var _yearMul = 0.925 + _yq * 0.15; // 0.925..1.04 → bad year premium, good year slight discount
+  var price = honeyData.value * channelData.priceMul * (1 + Game.reputation / 200) * _yearMul;
   return _econ_roundPrice(price);
 }
 

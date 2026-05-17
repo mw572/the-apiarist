@@ -476,6 +476,9 @@ function _sim_resolveEvent(ev, week) {
       Game.stats.coloniesLost++;
       var reason = ev.reason || 'unknown cause';
       logEvent('💀', colony.name + ' has died (' + reason + ').', 'bad');
+      /* Push a persistent advisor item so the nav pip fires and the player notices */
+      Game.advisor = Game.advisor || [];
+      Game.advisor.push({ text: colony.name + ' has died — ' + reason + '.', tone: 'bad' });
 
       /* XP: real beekeepers say you learn more from a dead colony than a live one.
          5 "lesson learned" XP — small, but it acknowledges that failure teaches.
@@ -930,12 +933,18 @@ function buildAdvisor() {
       });
       badCount++;
     } else if (k.varroaSign === 'unchecked' && (wkInYear >= 28 && wkInYear <= 44)) {
+      /* After week 36 the winter bee cohort is already being raised — untreated
+         varroa now causes silent colony death in January. Escalate to 'bad'. */
+      var _varroaTone = wkInYear >= 36 ? 'bad' : 'warn';
       items.push({
-        tone: 'warn',
+        tone: _varroaTone,
         icon: '🔴',
-        text: col.name + ': varroa has not been monitored. Late summer is the critical window -- do a wash or drop count and treat if needed.',
+        text: col.name + ': varroa has not been monitored. '
+          + (wkInYear >= 36
+            ? 'URGENT — winter bees are being reared now. Treating late means they will be mite-damaged and the colony may die in January without warning.'
+            : 'Late summer is the critical window — do a wash or drop count and treat if needed.'),
       });
-      warnCount++;
+      if (_varroaTone === 'bad') badCount++; else warnCount++;
     }
 
     /* Known pests — wasps rob in late summer and autumn; they are gone

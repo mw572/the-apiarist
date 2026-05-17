@@ -607,6 +607,11 @@ button { font-family: var(--sans); cursor: pointer; }
 .cross-frame:hover { outline: 1.5px solid #7a5a28; z-index: 2; }
 .cross-frame.cf-has-queen { border-color: #b8880a; border-width: 1.5px; }
 .cross-frame.cf-has-qcell { border-color: #c02020; border-width: 1.5px; }
+.cross-frame-strip.cf-unknown {
+  flex: 1; min-height: 36px; border-radius: 1px; border: 1px solid rgba(139,90,43,0.15);
+  background: repeating-linear-gradient(135deg,#d8cdb0 0px,#d8cdb0 3px,#c8bcA0 3px,#c8bcA0 6px);
+  opacity: 0.55;
+}
 .cross-frame.cf-foundation {
   background: repeating-linear-gradient(
     45deg, #f2ede0 0px, #f2ede0 2px, #e0d8c4 2px, #e0d8c4 4px

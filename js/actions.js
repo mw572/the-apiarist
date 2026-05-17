@@ -448,7 +448,8 @@ function inspectColony(colony) {
   if (knownDisease) xp += 4; // spotted a disease problem
   if (qcellsVisible && colony.queenCells.type === 'swarm') xp += 5;
   report.xp = xp;
-  addXp(xp);
+  /* XP is awarded by the UI when the player completes the inspection modal —
+     not here, so instant-close cannot bank XP without engaging the frames. */
 
   /* ---- Write colony.known ------------------------------------------ */
   const knownStatus = _act_deriveStatus(colony, storesBand, diseaseVisible, qcellsVisible);
@@ -749,6 +750,14 @@ function addBroodBox(colony) {
     if (!colony.hiveLayout.broodBoxes) colony.hiveLayout.broodBoxes = [];
     colony.hiveLayout.broodBoxes.push(_colony_makeLayoutBox('brood'));
   }
+  /* Sync stack — insert second broodBox above the first */
+  if (colony.stack) {
+    var _lastBBIdx2 = -1;
+    for (var i = colony.stack.length - 1; i >= 0; i--) {
+      if (colony.stack[i].type === 'broodBox') { _lastBBIdx2 = i; break; }
+    }
+    colony.stack.splice(_lastBBIdx2 >= 0 ? _lastBBIdx2 + 1 : colony.stack.length, 0, { type: 'broodBox', id: 'bb' + Date.now() });
+  }
   const msg = `Second brood box added to ${colony.name} (£${COSTS.broodBoxAdd.toFixed(2)}). The queen now has more room to lay.`;
   logEvent('🪵', msg, 'good');
   render();
@@ -838,7 +847,7 @@ function placeNewspaper(colony) {
     var _firstBBIdx = colony.stack.findIndex(function(i) { return i.type === 'broodBox'; });
     var _insertAt = _firstBBIdx >= 0 ? _firstBBIdx + 1 : 0;
     colony.stack.splice(_insertAt, 0, { type: 'newspaper', id: 'np' + Date.now() });
-    colony.newspaperWeeksInPlace = 1;
+    colony.newspaperWeeksInPlace = 0;
   }
 
   addXp(4);
@@ -897,6 +906,10 @@ function demareeMethod(colony) {
   colony.broodBoxes = 2;
   if (colony.hiveLayout && colony.hiveLayout.broodBoxes.length < 2) {
     colony.hiveLayout.broodBoxes.push(_colony_makeLayoutBox('brood'));
+  }
+  /* Sync stack — push second broodBox above all existing content (Demaree top box) */
+  if (colony.stack) {
+    colony.stack.push({ type: 'broodBox', id: 'demaree-top-' + Date.now() });
   }
 
   /* Immediate relief: swarm pressure drops sharply, queen cells destroyed if any */
@@ -967,6 +980,13 @@ function fitClearerBoard(colony) {
   }
 
   colony.clearerFitted = true;
+  /* Sync stack — insert clearerBoard between top broodBox/QX and lowest super */
+  if (colony.stack) {
+    var _firstSuperIdx = colony.stack.findIndex(function(i) { return i.type === 'super'; });
+    if (_firstSuperIdx >= 0) {
+      colony.stack.splice(_firstSuperIdx, 0, { type: 'clearerBoard', id: 'cb' + Date.now() });
+    }
+  }
 
   const msg = `Clearer board fitted on ${colony.name}${cost ? ` (hired for £${cost})` : ''}. Leave it overnight — the bees will clear from the supers and you can harvest clean tomorrow.`;
   logEvent('🍯', msg, 'plain');
@@ -1646,6 +1666,8 @@ function requeen(colony, source) {
   };
   colony.layingWorkers = false;
   colony.swarmPressure = 0;
+  /* Clear any existing queen cells — stale cells must not supersede the new queen */
+  colony.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
 
   addXp(8);
   const sourceLabel = { bought: 'bought mated queen', reared: 'queen of your own rearing', own: 'queen raised within the colony' }[source] || source;

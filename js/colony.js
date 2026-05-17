@@ -670,6 +670,8 @@ function colonyWeeklyUpdate(colony, ctx){
 
   // --- 4. BROOD PIPELINE -------------------------------------------
   // Simplest 3-bucket model: eggs -> larvae -> capped -> emerge
+  // Drone-layer / laying-worker eggs are all drone brood — they produce no workers.
+  const isDroneLaying = (queen && queen.state === 'dronelayer') || colony.layingWorkers;
   const emergingRaw = colony.capped;
   colony.capped  = colony.larvae;
   colony.larvae  = colony.eggs;
@@ -689,7 +691,8 @@ function colonyWeeklyUpdate(colony, ctx){
       - (isStarving ? 0.5 : 0),
     0, 1);
 
-  const emerged = Math.round(emergingRaw * broodSurvival);
+  // Drone-layer brood emerges as drones, not workers — do not add to worker population
+  const emerged = isDroneLaying ? 0 : Math.round(emergingRaw * broodSurvival);
   colony.population += emerged;
 
   // Drone management
@@ -1263,7 +1266,7 @@ function colonyWeeklyUpdate(colony, ctx){
   // --- 11b. Newspaper uniting — bees chew through after ~1 week ------
   if (colony.stack && colony.stack.some(function(i) { return i.type === 'newspaper'; })) {
     colony.newspaperWeeksInPlace = (colony.newspaperWeeksInPlace || 0) + 1;
-    if (colony.newspaperWeeksInPlace >= 1) {
+    if (colony.newspaperWeeksInPlace >= 2) {
       /* Newspaper has been in place long enough — remove it from the stack.
          The actual colony merge is triggered by the player using uniteColonies
          (now possible once newspaper has been placed). */
@@ -1756,7 +1759,7 @@ function colonyTrueStatus(colony){
   if (inf > SIM.varroaCrisis)                      return 'bad';
 
   // Winter starvation risk
-  const season = seasonOfWeek(colony.established);  // use established as a proxy isn't perfect
+  const season = seasonOfWeek((typeof Game !== 'undefined' && Game.week) || colony.established);
   // Approximate: use the colony's internal _starvingWeeks as a signal
   if ((colony._starvingWeeks || 0) > 0)             return 'bad';
 
