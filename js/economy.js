@@ -91,6 +91,28 @@ function buySupply(id, qty) {
     return { ok: true, msg: 'You have ' + Game.inventory.treatStock[id] + ' x ' + treatment.name + ' in stock.' };
   }
 
+  if (id === 'queenExcluder') {
+    var cost = COSTS.queenExcluder * qty;
+    if (!spend(cost, qty + ' queen excluder' + (qty > 1 ? 's' : ''))) {
+      return { ok: false, msg: 'Not enough funds. A queen excluder costs £' + COSTS.queenExcluder + ' each.' };
+    }
+    Game.inventory.queenExcluders = (Game.inventory.queenExcluders || 0) + qty;
+    logEvent('🔲', 'Bought ' + qty + ' queen excluder' + (qty > 1 ? 's' : '') + ' for £' + cost + '.', 'plain');
+    toast(qty + ' queen excluder' + (qty > 1 ? 's' : '') + ' added to stock.', 'good');
+    return { ok: true, msg: 'You have ' + Game.inventory.queenExcluders + ' queen excluder' + (Game.inventory.queenExcluders !== 1 ? 's' : '') + ' in stock.' };
+  }
+
+  if (id === 'newspaper') {
+    var cost = 1 * qty;
+    if (!spend(cost, qty + ' newspaper sheet' + (qty > 1 ? 's' : ''))) {
+      return { ok: false, msg: 'Not enough funds. Newspaper costs £1 per sheet.' };
+    }
+    Game.inventory.newspaper = (Game.inventory.newspaper || 0) + qty;
+    logEvent('📰', 'Bought ' + qty + ' newspaper sheet' + (qty > 1 ? 's' : '') + ' for £' + cost + '.', 'plain');
+    toast('Newspaper added to stock — place it between hive bodies before uniting.', 'good');
+    return { ok: true, msg: 'You have ' + Game.inventory.newspaper + ' newspaper sheet' + (Game.inventory.newspaper !== 1 ? 's' : '') + ' in stock.' };
+  }
+
   return { ok: false, msg: 'Unknown supply.' };
 }
 
@@ -470,9 +492,33 @@ function _colony_removeSuperAt(colony, idx) {
   }
   colony.superHoney = Math.max(0, _econ_roundPrice((colony.superHoney || 0) - removedKg));
   colony.supers = Math.max(0, (colony.supers || 1) - 1);
+
+  /* Remove the corresponding super item from the stack */
+  if (colony.stack) {
+    var _superItems = colony.stack.filter(function(i) { return i.type === 'super'; });
+    var _removeId = _superItems.length > 0 ? _superItems[_superItems.length - 1].id : null;
+    if (_removeId) {
+      colony.stack = colony.stack.filter(function(i) { return i.id !== _removeId; });
+    }
+  }
+
   if (colony.supers === 0) {
     colony.superHoney = 0;
-    colony.queenExcluder = false; /* QX has no function with no supers */
+    /* QX has no function without supers — remove it from stack and return to inventory */
+    if (colony.queenExcluder) {
+      colony.queenExcluder = false;
+      if (colony.stack) {
+        var _hadQX = colony.stack.some(function(i) { return i.type === 'queenExcluder'; });
+        colony.stack = colony.stack.filter(function(i) { return i.type !== 'queenExcluder'; });
+        if (_hadQX && typeof Game !== 'undefined' && Game && Game.inventory) {
+          Game.inventory.queenExcluders = (Game.inventory.queenExcluders || 0) + 1;
+        }
+      }
+    }
+    if (colony.clearerFitted) {
+      colony.clearerFitted = false;
+      if (colony.stack) colony.stack = colony.stack.filter(function(i) { return i.type !== 'clearerBoard'; });
+    }
   }
 }
 

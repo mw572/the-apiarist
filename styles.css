@@ -537,7 +537,8 @@ button { font-family: var(--sans); cursor: pointer; }
    ==================================================================== */
 
 .hive-detail { display: flex; gap: 20px; min-height: 0; }
-.hive-cross  { flex: none; width: 260px; display: flex; flex-direction: column; overflow-y: auto; max-height: 72vh; }
+.hive-cross  { flex: none; width: 260px; display: flex; flex-direction: column; overflow-y: visible; max-height: none; }
+.hive-left-col > .hive-cross { width: 100%; }
 .hive-info   { flex: 1; min-width: 0; overflow-y: auto; max-height: 72vh; }
 
 /* Primary action row — big buttons at the top of the actions panel */
@@ -821,6 +822,79 @@ button { font-family: var(--sans); cursor: pointer; }
   font-size: 12px; color: var(--ink-soft); text-align: center;
   background: rgba(0,0,0,0.08); border-radius: 4px;
   padding: 4px 8px; line-height: 1.4;
+}
+
+/* ====================================================================
+   HIVE STACK EDITOR
+   ==================================================================== */
+
+.hive-left-col {
+  display: flex; flex-direction: column; gap: 12px;
+  flex: none; width: 260px;
+}
+
+.hive-stack-editor {
+  background: var(--paper-2); border: 1px solid var(--line-dk);
+  border-radius: 6px; padding: 10px 12px;
+  font-size: 12px;
+}
+
+.stack-editor-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--honey-dk); margin-bottom: 8px;
+}
+
+.stack-editor-list {
+  display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px;
+}
+
+.stack-item {
+  display: flex; align-items: center; gap: 6px;
+  background: #fff; border: 1px solid var(--line); border-radius: 4px;
+  padding: 4px 8px; min-height: 28px;
+}
+
+.stack-item-floor {
+  background: #e8dfc8; border-color: #b8a070; color: var(--ink-soft);
+  font-style: italic;
+}
+
+.stack-item-icon { font-size: 14px; flex: none; width: 20px; text-align: center; }
+.stack-item-label { flex: 1; color: var(--ink); }
+.stack-item-hint { font-size: 10px; color: var(--ink-faint); white-space: nowrap; }
+
+.stack-item-remove {
+  flex: none; font-size: 10px; padding: 2px 7px;
+  background: var(--paper-2); border-color: var(--line-dk);
+  color: var(--ink-soft);
+}
+.stack-item-remove:hover { background: #fde; border-color: #c88; color: #933; }
+
+.stack-editor-warnings {
+  margin-bottom: 8px;
+}
+
+.stack-item-warn {
+  font-size: 11px; color: #9a5c00; background: #fff3cd;
+  border: 1px solid #f0c060; border-radius: 4px;
+  padding: 4px 8px; margin-bottom: 4px; line-height: 1.4;
+}
+
+.stack-palette {
+  display: flex; flex-direction: column; gap: 4px;
+  border-top: 1px solid var(--line); padding-top: 8px;
+}
+
+.stack-palette-item {
+  font-size: 11px; padding: 5px 10px; text-align: left;
+  background: var(--paper); border-color: var(--honey);
+  color: var(--honey-dk); font-weight: 600;
+}
+.stack-palette-item:hover { background: var(--honey); color: #fff; }
+
+/* On mobile, left col stacks naturally with the rest */
+@media (max-width: 860px) {
+  .hive-left-col { width: 100%; }
 }
 
 /* ====================================================================

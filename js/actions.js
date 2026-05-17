@@ -651,28 +651,32 @@ function _act_knownNote(colony, queenFound, storesBand, disease, qcellsVisible) 
  */
 function addSuper(colony) {
   if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
-  let totalCost = COSTS.superAdd;
-  const needQx = !colony.queenExcluder;
-  if (needQx) {
-    totalCost += COSTS.queenExcluder;
-  }
-  if (!spend(totalCost, `Super added to ${colony.name}`)) {
-    return { ok: false, msg: `Not enough funds — this would cost £${totalCost.toFixed(2)}.` };
+  if (!spend(COSTS.superAdd, `Super added to ${colony.name}`)) {
+    return { ok: false, msg: `Not enough funds — a super costs £${COSTS.superAdd.toFixed(2)}.` };
   }
   colony.supers++;
-  let msg;
-  if (needQx) {
-    colony.queenExcluder = true;
-    msg = `Super added and queen excluder fitted on ${colony.name} (£${totalCost.toFixed(2)}).`;
-  } else {
-    msg = `Super added to ${colony.name} (£${COSTS.superAdd.toFixed(2)}).`;
+
+  /* Add super to the stack above the queen excluder (or at the top if none) */
+  if (colony.stack) {
+    colony.stack.push({ type: 'super', id: 'sup' + Date.now() });
   }
+
   /* Keep visual layout in sync immediately (sync also runs weekly) */
   if (colony.hiveLayout) {
     if (!colony.hiveLayout.supers) colony.hiveLayout.supers = [];
     colony.hiveLayout.supers.push(_colony_makeLayoutSuper());
   }
-  logEvent('📦', msg, 'plain');
+
+  let msg = `Super added to ${colony.name} (£${COSTS.superAdd.toFixed(2)}).`;
+
+  /* Warn if no queen excluder is fitted — queen can move up into the honey */
+  if (!colony.queenExcluder) {
+    msg += ' No queen excluder is fitted — the queen can access the supers and lay in the honey frames. Fit one from the Hive Assembly panel.';
+    logEvent('📦', msg, 'bad');
+  } else {
+    logEvent('📦', msg, 'plain');
+  }
+
   render();
   return { ok: true, msg };
 }
@@ -747,6 +751,99 @@ function addBroodBox(colony) {
   }
   const msg = `Second brood box added to ${colony.name} (£${COSTS.broodBoxAdd.toFixed(2)}). The queen now has more room to lay.`;
   logEvent('🪵', msg, 'good');
+  render();
+  return { ok: true, msg };
+}
+
+/**
+ * fitQueenExcluder(colony) -> {ok, msg}
+ * Place a queen excluder above the top brood box. Requires one in inventory (£9 to buy).
+ */
+function fitQueenExcluder(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+  if (colony.queenExcluder) return { ok: false, msg: 'A queen excluder is already fitted. Use the Hive Assembly panel to move or remove it.' };
+
+  /* Check inventory first; if none in stock, charge £9 to buy one */
+  if ((Game.inventory.queenExcluders || 0) < 1) {
+    if (!spend(COSTS.queenExcluder, `Queen excluder for ${colony.name}`)) {
+      return { ok: false, msg: `Not enough funds — a queen excluder costs £${COSTS.queenExcluder}.` };
+    }
+  } else {
+    Game.inventory.queenExcluders--;
+  }
+
+  colony.queenExcluder = true;
+
+  /* Insert QX above the last brood box in the stack */
+  if (colony.stack) {
+    var _lastBBIdx = -1;
+    for (var i = colony.stack.length - 1; i >= 0; i--) {
+      if (colony.stack[i].type === 'broodBox') { _lastBBIdx = i; break; }
+    }
+    var _insertAt = _lastBBIdx >= 0 ? _lastBBIdx + 1 : colony.stack.length;
+    colony.stack.splice(_insertAt, 0, { type: 'queenExcluder', id: 'qx' + Date.now() });
+  }
+
+  addXp(2);
+  const msg = `Queen excluder fitted on ${colony.name} — the queen is now locked below and cannot reach the honey supers.`;
+  logEvent('🔲', msg, 'good');
+  render();
+  return { ok: true, msg };
+}
+
+/**
+ * removeQueenExcluder(colony) -> {ok, msg}
+ * Take the queen excluder off and return it to inventory.
+ */
+function removeQueenExcluder(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+  if (!colony.queenExcluder) return { ok: false, msg: 'No queen excluder is currently fitted.' };
+
+  colony.queenExcluder = false;
+  if (colony.stack) {
+    colony.stack = colony.stack.filter(function(i) { return i.type !== 'queenExcluder'; });
+  }
+  /* Return to inventory */
+  Game.inventory.queenExcluders = (Game.inventory.queenExcluders || 0) + 1;
+
+  const msg = `Queen excluder removed from ${colony.name} and returned to stock. The queen now has full access to all boxes.`;
+  logEvent('🔲', msg, 'plain');
+  render();
+  return { ok: true, msg };
+}
+
+/**
+ * placeNewspaper(colony) -> {ok, msg}
+ * Place a sheet of newspaper between the two hive bodies as the first step
+ * of the newspaper uniting method. Requires a second brood box (a colony
+ * being united on top) and newspaper in inventory. After one week the bees
+ * chew through and uniteColonies becomes available.
+ */
+function placeNewspaper(colony) {
+  if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
+  if ((colony.broodBoxes || 1) < 2) {
+    return { ok: false, msg: 'Place a second hive body on top first — the newspaper goes between the two boxes.' };
+  }
+  if (colony.stack && colony.stack.some(function(i) { return i.type === 'newspaper'; })) {
+    return { ok: false, msg: 'Newspaper is already in place — wait for the bees to chew through (one week), then unite.' };
+  }
+  if ((Game.inventory.newspaper || 0) < 1) {
+    return { ok: false, msg: 'No newspaper in stock. Buy a sheet from the Market (Supplies tab) — it costs £1.' };
+  }
+
+  Game.inventory.newspaper--;
+
+  /* Insert newspaper between the first and second brood box in the stack */
+  if (colony.stack) {
+    var _firstBBIdx = colony.stack.findIndex(function(i) { return i.type === 'broodBox'; });
+    var _insertAt = _firstBBIdx >= 0 ? _firstBBIdx + 1 : 0;
+    colony.stack.splice(_insertAt, 0, { type: 'newspaper', id: 'np' + Date.now() });
+    colony.newspaperWeeksInPlace = 1;
+  }
+
+  addXp(4);
+  const msg = `Newspaper placed between the hive bodies on ${colony.name}. The bees will chew through it over the next week, mixing slowly to prevent fighting. Come back next week to complete the union.`;
+  logEvent('📰', msg, 'good');
   render();
   return { ok: true, msg };
 }
@@ -1205,7 +1302,12 @@ function artificialSwarm(colony) {
   colony.population = remainPop;
   colony.swarmPressure = 0; /* The swarming impulse is resolved */
   colony.queen = null; /* The old queen has gone to the new hive */
-  colony.queenExcluder = false; /* No queen left to exclude */
+  /* Return QX to inventory — no queen left to exclude */
+  if (colony.queenExcluder) {
+    colony.queenExcluder = false;
+    if (colony.stack) colony.stack = colony.stack.filter(function(i) { return i.type !== 'queenExcluder'; });
+    Game.inventory.queenExcluders = (Game.inventory.queenExcluders || 0) + 1;
+  }
   if (colony.hiveLayout) colony.hiveLayout.queenExcluder = false;
   /* Keep existing swarm cells intact. If there were no cells yet (edge case),
      fall back to emergency cells — but in practice artificial swarm requires
@@ -1343,7 +1445,12 @@ function nucleusMethod(colony) {
 
   /* Original loses its queen and raises an emergency queen */
   colony.queen = null;
-  colony.queenExcluder = false; /* No queen left to exclude */
+  /* Return QX to inventory — no queen left to exclude */
+  if (colony.queenExcluder) {
+    colony.queenExcluder = false;
+    if (colony.stack) colony.stack = colony.stack.filter(function(i) { return i.type !== 'queenExcluder'; });
+    Game.inventory.queenExcluders = (Game.inventory.queenExcluders || 0) + 1;
+  }
   if (colony.hiveLayout) colony.hiveLayout.queenExcluder = false;
   colony.queenCells = { type: 'emergency', count: _act_randInt(4, 8), age: -1, state: 'larvae' };
   colony.swarmPressure = _act_clamp(colony.swarmPressure - 0.4, 0, 1);

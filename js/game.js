@@ -91,6 +91,8 @@ function startNewGame(name, difficulty){
       sugar: 10,
       emptyJars: 0,
       treatStock: {},
+      queenExcluders: 0,   // physical QX items in stock (bought from Market → Supplies)
+      newspaper: 0,        // sheets of newspaper for the uniting method
     },
     skillXp: 0,
     reputation: 0,
@@ -173,7 +175,23 @@ function _migrateSave(g) {
     if (typeof c.osrRisk          !== 'number' || isNaN(c.osrRisk))          c.osrRisk          = 0;
     if (typeof c.osrBroodRisk     !== 'number' || isNaN(c.osrBroodRisk))     c.osrBroodRisk     = 0;
     if (typeof c.winterBeeHealth  !== 'number' || isNaN(c.winterBeeHealth))  c.winterBeeHealth  = 1;
+
+    /* Stack migration: build physical stack from legacy fields if absent */
+    if (!c.stack || !Array.isArray(c.stack)) {
+      if (typeof _colony_buildStackFromLegacy === 'function') {
+        c.stack = _colony_buildStackFromLegacy(c);
+      }
+    }
+    if (typeof c.newspaperWeeksInPlace !== 'number') c.newspaperWeeksInPlace = 0;
+    if (!Array.isArray(c._stackWarnings))            c._stackWarnings = [];
+    if (typeof c._isDemareeStackPattern !== 'boolean') c._isDemareeStackPattern = false;
   });
+
+  /* Inventory fields added with hive assembly mechanic */
+  if (g.inventory) {
+    if (typeof g.inventory.queenExcluders !== 'number') g.inventory.queenExcluders = 0;
+    if (typeof g.inventory.newspaper !== 'number')      g.inventory.newspaper = 0;
+  }
 }
 
 /* --- save / load ----------------------------------------------------- */

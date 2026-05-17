@@ -78,6 +78,121 @@ function _colony_matedQueen(sourceQueen, bornYear){
 }
 
 /* ====================================================================
+   HIVE STACK — physical component ordering
+   colony.stack is an ordered array (bottom→top) of component objects.
+   It is the source of truth for which components are fitted and how they
+   are arranged. The legacy boolean/count fields (broodBoxes, supers,
+   queenExcluder, clearerFitted) are DERIVED from the stack each tick.
+   ==================================================================== */
+
+/* Build a stack from legacy colony fields (used during migration and
+   when initialising a newly created colony). */
+function _colony_buildStackFromLegacy(c) {
+  var stack = [];
+  var broodCount  = c.broodBoxes || 1;
+  var superCount  = c.supers     || 0;
+  var hasQX       = !!(c.queenExcluder);
+  var hasClearer  = !!(c.clearerFitted);
+
+  for (var i = 0; i < broodCount; i++) {
+    stack.push({ type: 'broodBox', id: 'bb' + i });
+  }
+  /* QX sits above brood, below supers — only insert it if there are supers
+     or it was explicitly fitted (e.g. added before supers as prep). */
+  if (hasQX) {
+    stack.push({ type: 'queenExcluder', id: 'qx0' });
+  }
+  /* Clearer board sits above the QX, below the supers (one-way escape). */
+  if (hasClearer && superCount > 0) {
+    stack.push({ type: 'clearerBoard', id: 'cb0' });
+  }
+  for (var s = 0; s < superCount; s++) {
+    stack.push({ type: 'super', id: 'sup' + s });
+  }
+  return stack;
+}
+
+/* Update the legacy derived fields from the current stack contents.
+   Called at the start of every weekly tick and after any stack mutation.
+   Existing simulation code reads these fields unchanged — this keeps
+   the stack as the single source of truth without touching callers. */
+function _colony_deriveFromStack(colony) {
+  if (!colony.stack || !colony.stack.length) return;
+  var stack = colony.stack;
+
+  var broodBoxCount = 0;
+  var superCount    = 0;
+  var firstQXIdx    = -1;
+  var firstSuperIdx = -1;
+  var hasClearer    = false;
+  var hasNewspaper  = false;
+
+  for (var i = 0; i < stack.length; i++) {
+    var t = stack[i].type;
+    if (t === 'broodBox')        broodBoxCount++;
+    else if (t === 'super')    { superCount++; if (firstSuperIdx < 0) firstSuperIdx = i; }
+    else if (t === 'queenExcluder') { if (firstQXIdx < 0) firstQXIdx = i; }
+    else if (t === 'clearerBoard') hasClearer = true;
+    else if (t === 'newspaper')    hasNewspaper = true;
+  }
+
+  colony.broodBoxes = Math.max(1, broodBoxCount);
+  colony.supers     = superCount;
+
+  /* QX is "active" (blocking queen) only when it sits between the lowest
+     brood box and the first super. A QX above all supers does not protect them. */
+  colony.queenExcluder = (firstQXIdx !== -1 && (firstSuperIdx < 0 || firstQXIdx < firstSuperIdx));
+  colony.clearerFitted  = hasClearer;
+
+  if (!hasNewspaper) colony.newspaperWeeksInPlace = 0;
+}
+
+/* Return an array of warning strings about the current stack arrangement.
+   Also sets colony._stackWarnings for the UI to display. */
+function _colony_validateStack(colony) {
+  var warnings = [];
+  var stack = colony.stack || [];
+
+  var types        = stack.map(function(i) { return i.type; });
+  var broodBoxCount= types.filter(function(t) { return t === 'broodBox'; }).length;
+  var superCount   = types.filter(function(t) { return t === 'super'; }).length;
+  var qxIndices    = [];
+  var superIndices = [];
+  types.forEach(function(t, idx) {
+    if (t === 'queenExcluder') qxIndices.push(idx);
+    if (t === 'super')         superIndices.push(idx);
+  });
+
+  if (superCount > 0 && qxIndices.length === 0) {
+    warnings.push('No queen excluder between brood and supers — the queen may lay in the honey frames.');
+  }
+  /* QX exists but is above all supers — wrong position */
+  if (qxIndices.length > 0 && superIndices.length > 0) {
+    var lowestQX    = Math.min.apply(null, qxIndices);
+    var lowestSuper = Math.min.apply(null, superIndices);
+    if (lowestQX > lowestSuper) {
+      warnings.push('Queen excluder is above the supers — it needs to sit between the brood box and the lowest super.');
+    }
+  }
+  /* Newspaper without two brood boxes */
+  if (types.indexOf('newspaper') > -1 && broodBoxCount < 2) {
+    warnings.push('Newspaper in stack but only one brood box — you need two hive bodies for the newspaper method.');
+  }
+  /* Demaree pattern detection: broodBox, QX, super(s), QX, broodBox */
+  var isDemaree = (
+    broodBoxCount === 2 &&
+    qxIndices.length >= 2 &&
+    superCount > 0 &&
+    types[0] === 'broodBox' &&
+    types[types.length - 1] === 'broodBox'
+  );
+  colony._isDemareeStackPattern = isDemaree;
+
+  colony._stackWarnings = warnings;
+  return warnings;
+}
+
+/* ====================================================================
    HIVE LAYOUT — persistent visual frame data
    Each colony stores a hiveLayout object: arrays of box objects, each
    with 11 frame objects. Updated weekly by colonyWeeklyLayoutSync().
@@ -380,7 +495,7 @@ function makeColony(opts){
     ? opts.queenQuality
     : _colony_randRange(0.78, 1.15);
 
-  return {
+  var _colony = {
     id:          (opts.id !== undefined ? opts.id
                   : ((typeof Game !== 'undefined' && Game) ? Game.nextColonyId++ : 1)),
     name:        opts.name || 'Hive',
@@ -422,7 +537,7 @@ function makeColony(opts){
     honey:         honey,
     superHoney:    superHoney,
     superHoneyType: 'summer',
-    broodHoneyType:  'summer',  // tracks dominant nectar type stored in brood box
+    broodHoneyType:  'summer',
     pollen:        pollen,
 
     varroa:  varroa,
@@ -445,12 +560,12 @@ function makeColony(opts){
     lastInspected: 0,
     known:         null,
 
-    demaree:   null,     // { age, checked, topBroodFrames } — set by demareeMethod action
-    osrRisk:   0,        // weeks since OSR flow ended without harvesting (supers)
+    demaree:   null,
+    osrRisk:   0,
     osrCrystallised: false,
-    osrBroodRisk: 0,         // weeks since OSR flow ended (brood box tracking)
+    osrBroodRisk: 0,
     osrBroodCrystallised: false,
-    _osrLockedCells: 0,      // brood cells unavailable due to crystallised OSR honey
+    _osrLockedCells: 0,
 
     treatment: null,
     feeding:   0,
@@ -461,7 +576,18 @@ function makeColony(opts){
     _hopelessWeeks: 0,
 
     hiveLayout: null,
+
+    /* Physical stack — ordered array of components bottom→top.
+       Source of truth for broodBoxes, supers, queenExcluder, clearerFitted. */
+    stack: null,
+    newspaperWeeksInPlace: 0,
+    _stackWarnings: [],
+    _isDemareeStackPattern: false,
   };
+
+  /* Build the initial stack from the colony's starting state */
+  _colony.stack = _colony_buildStackFromLegacy(_colony);
+  return _colony;
 }
 
 /* ====================================================================
@@ -471,6 +597,14 @@ function makeColony(opts){
    ==================================================================== */
 function colonyWeeklyUpdate(colony, ctx){
   if (!colony.alive) return [];
+
+  /* Sync legacy derived fields from the stack so all downstream code
+     can read colony.broodBoxes / colony.supers / colony.queenExcluder
+     as-normal without knowing about the stack. */
+  if (colony.stack) {
+    _colony_deriveFromStack(colony);
+    _colony_validateStack(colony);
+  }
 
   const events  = [];
   const week    = ctx.week;
@@ -1109,15 +1243,38 @@ function colonyWeeklyUpdate(colony, ctx){
       // Top box brood all emerged — top box becomes stores, demaree complete
       events.push({ type: 'demareeComplete', colony: colony });
       colony.demaree = null;
-      // Remove the temporary second brood box added by demareeMethod
-      if (colony.broodBoxes > 1) colony.broodBoxes = 1;
+      // Remove the temporary second brood box from the stack and layout
+      if (colony.stack) {
+        var _lastBBIdx = -1;
+        for (var _si = colony.stack.length - 1; _si >= 0; _si--) {
+          if (colony.stack[_si].type === 'broodBox') { _lastBBIdx = _si; break; }
+        }
+        if (_lastBBIdx > 0) colony.stack.splice(_lastBBIdx, 1);
+        _colony_deriveFromStack(colony);
+      } else {
+        if (colony.broodBoxes > 1) colony.broodBoxes = 1;
+      }
       if (colony.hiveLayout && colony.hiveLayout.broodBoxes.length > 1) {
         colony.hiveLayout.broodBoxes.pop();
       }
     }
   }
 
-  // --- 11b. OSR crystallisation ------------------------------------
+  // --- 11b. Newspaper uniting — bees chew through after ~1 week ------
+  if (colony.stack && colony.stack.some(function(i) { return i.type === 'newspaper'; })) {
+    colony.newspaperWeeksInPlace = (colony.newspaperWeeksInPlace || 0) + 1;
+    if (colony.newspaperWeeksInPlace >= 1) {
+      /* Newspaper has been in place long enough — remove it from the stack.
+         The actual colony merge is triggered by the player using uniteColonies
+         (now possible once newspaper has been placed). */
+      colony.stack = colony.stack.filter(function(i) { return i.type !== 'newspaper'; });
+      colony.newspaperWeeksInPlace = 0;
+      _colony_deriveFromStack(colony);
+      events.push({ type: 'newspaperReady', colony: colony });
+    }
+  }
+
+  // --- 11c. OSR crystallisation ------------------------------------
   // Oilseed rape (OSR) honey has ~30% glucose — the highest of any common
   // UK honey type. It begins to set in the comb within 10-14 days of the
   // flow ending. Once set it cannot be extracted by centrifuge and will

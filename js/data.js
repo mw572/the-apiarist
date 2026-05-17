@@ -377,6 +377,10 @@ CATALOG.supplies = [
   { id:'jarpack', name:'Jars — pack of 24', icon:'🪧',
     price: Math.round(24 * COSTS.jar * 100) / 100, count: 24,
     desc:'Empty jars with lids and labels, ready for bottling your honey crop.' },
+  { id:'queenExcluder', name:'Queen excluder', icon:'🔲', price: 9,
+    desc:'A zinc grid that prevents the queen from moving up into the honey supers. Fit it between the brood box and the lowest super.' },
+  { id:'newspaper', name:'Newspaper (uniting)', icon:'📰', price: 1,
+    desc:'A sheet of newspaper placed between two hive bodies when uniting colonies using the newspaper method. Bees chew through it over 24–48 hours, mixing gradually to prevent fighting.' },
 ];
 
 /* expose to other scripts explicitly too */

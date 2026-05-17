@@ -1127,6 +1127,8 @@ function _ui_marketKitStrip() {
     ['Sugar', (inv.sugar || 0) + ' kg'],
     ['Empty jars', String(inv.emptyJars || 0)],
     ['Treatments', String(treatTotal)],
+    ['Queen excl.', String(inv.queenExcluders || 0)],
+    ['Newspaper', String(inv.newspaper || 0)],
     ['Jars to sell', String(_ui_totalJars(inv.jars))]
   ];
   return h('div', { class: 'kit-strip' }, items.map(function(p) {
@@ -1160,8 +1162,10 @@ function _ui_marketSuppliesTab() {
   }
 
   var feedRows = (CATALOG.supplies || []).map(function(item) {
-    var held = item.id === 'sugarbag' ? ((inv.sugar || 0) + ' kg of sugar')
-             : item.id === 'jarpack' ? ((inv.emptyJars || 0) + ' empty jars')
+    var held = item.id === 'sugarbag'       ? ((inv.sugar || 0) + ' kg of sugar')
+             : item.id === 'jarpack'        ? ((inv.emptyJars || 0) + ' empty jars')
+             : item.id === 'queenExcluder'  ? ((inv.queenExcluders || 0) + ' in stock')
+             : item.id === 'newspaper'      ? ((inv.newspaper || 0) + ' sheets in stock')
              : '0';
     return buyRow(item.icon, item.name, item.desc, held, item.price,
       (function(id) { return function() { return buySupply(id, 1); }; })(item.id));
@@ -1671,7 +1675,11 @@ function openHiveDetail(colony) {
   infoNode.appendChild(h('div', { style: { fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--honey-dk)', marginBottom: '8px' } }, 'Actions'));
   infoNode.appendChild(_ui_buildActionButtons(colony));
 
-  var bodyNode = h('div', { class: 'hive-detail' }, [crossSection, infoNode]);
+  /* Stack editor below cross-section */
+  var stackEditor = colony.alive ? _ui_buildStackEditor(colony) : null;
+  var leftCol = h('div', { class: 'hive-left-col' }, stackEditor ? [crossSection, stackEditor] : [crossSection]);
+
+  var bodyNode = h('div', { class: 'hive-detail' }, [leftCol, infoNode]);
 
   openModal({
     title: colony.name + (colony.alive ? '' : ' (Dead)'),
@@ -1679,6 +1687,112 @@ function openHiveDetail(colony) {
     xwide: true,
     buttons: [{ label: 'Close', act: closeModal }]
   });
+}
+
+/* ====================================================================
+   HIVE STACK EDITOR — physical assembly below cross-section
+   ==================================================================== */
+
+function _ui_buildStackEditor(colony) {
+  if (!colony || !colony.stack || !colony.stack.length) return null;
+
+  var inv = Game.inventory || {};
+  var hasQX = colony.stack.some(function(i) { return i.type === 'queenExcluder'; });
+  var hasNewspaper = colony.stack.some(function(i) { return i.type === 'newspaper'; });
+  var qxOwned = inv.queenExcluders || 0;
+  var newsOwned = inv.newspaper || 0;
+
+  function refresh() {
+    closeModal();
+    render();
+    if (colony.alive) openHiveDetail(colony);
+  }
+
+  var ICONS  = { broodBox: '🟫', super: '📦', queenExcluder: '🔲', clearerBoard: '🔳', newspaper: '📰' };
+  var LABELS = { broodBox: 'Brood box', super: 'Super', queenExcluder: 'Queen excluder', clearerBoard: 'Clearer board', newspaper: 'Newspaper (uniting)' };
+
+  /* Stack displayed top → bottom (highest index last in array = top of hive) */
+  var reversed = colony.stack.slice().reverse();
+  var stackRows = reversed.map(function(item) {
+    var icon  = ICONS[item.type]  || '▪';
+    var label = LABELS[item.type] || item.type;
+
+    var removeBtn = null;
+    if (item.type === 'queenExcluder') {
+      removeBtn = h('button', {
+        class: 'btn btn-xs stack-item-remove',
+        onclick: function() {
+          var r = removeQueenExcluder(colony);
+          toast(r.msg, r.ok ? 'good' : 'bad');
+          if (r.ok) refresh();
+        }
+      }, 'Remove');
+    } else if (item.type === 'newspaper') {
+      removeBtn = h('button', {
+        class: 'btn btn-xs stack-item-remove',
+        onclick: function() {
+          colony.stack = colony.stack.filter(function(i) { return i !== item; });
+          colony.newspaperWeeksInPlace = 0;
+          inv.newspaper = (inv.newspaper || 0) + 1;
+          if (typeof _colony_deriveFromStack === 'function') _colony_deriveFromStack(colony);
+          toast('Newspaper removed and returned to stock.', 'good');
+          refresh();
+        }
+      }, 'Remove');
+    } else if (item.type === 'super') {
+      removeBtn = h('span', { class: 'stack-item-hint', text: '(use Take box off)' });
+    }
+
+    return h('div', { class: 'stack-item' }, [
+      h('span', { class: 'stack-item-icon', text: icon }),
+      h('span', { class: 'stack-item-label', text: label }),
+      removeBtn
+    ]);
+  });
+
+  stackRows.push(h('div', { class: 'stack-item stack-item-floor' }, [
+    h('span', { class: 'stack-item-icon', text: '▬' }),
+    h('span', { class: 'stack-item-label', text: 'Floor / hive stand' })
+  ]));
+
+  /* Palette — what can be added */
+  var paletteItems = [];
+
+  if (!hasQX) {
+    var qxLabel = qxOwned > 0 ? '+ Queen excluder (stock: ' + qxOwned + ')' : '+ Queen excluder (£9)';
+    paletteItems.push(h('button', {
+      class: 'btn btn-sm stack-palette-item',
+      onclick: function() {
+        var r = fitQueenExcluder(colony);
+        toast(r.msg, r.ok ? 'good' : 'bad');
+        if (r.ok) refresh();
+      }
+    }, qxLabel));
+  }
+
+  if (!hasNewspaper && (colony.broodBoxes || 1) >= 2) {
+    var npLabel = newsOwned > 0 ? '+ Newspaper (stock: ' + newsOwned + ')' : '+ Newspaper (£1)';
+    paletteItems.push(h('button', {
+      class: 'btn btn-sm stack-palette-item',
+      onclick: function() {
+        var r = placeNewspaper(colony);
+        toast(r.msg, r.ok ? 'good' : 'bad');
+        if (r.ok) refresh();
+      }
+    }, npLabel));
+  }
+
+  var warnings = colony._stackWarnings || [];
+  var warnNodes = warnings.map(function(w) {
+    return h('div', { class: 'stack-item-warn', text: '⚠ ' + w });
+  });
+
+  return h('div', { class: 'hive-stack-editor' }, [
+    h('div', { class: 'stack-editor-title' }, 'Hive assembly'),
+    h('div', { class: 'stack-editor-list' }, stackRows),
+    warnNodes.length ? h('div', { class: 'stack-editor-warnings' }, warnNodes) : null,
+    paletteItems.length ? h('div', { class: 'stack-palette' }, paletteItems) : null
+  ]);
 }
 
 /* ====================================================================
@@ -2465,7 +2579,26 @@ function _ui_buildActionButtons(colony) {
     ])
   ]);
 
-  return h('div', {}, [primary, mgmt, swarm, queen]);
+  /* === Hive assembly === */
+  var _hasNp = colony.stack && colony.stack.some(function(i) { return i.type === 'newspaper'; });
+  var assembly = h('div', { class: 'action-group' }, [
+    h('div', { class: 'action-group-title' }, '🔲 Hive assembly'),
+    h('div', { class: 'btn-row' }, [
+      abtn('Fit queen excluder', '', 'fitQueenExcluder',
+        dead || !!colony.queenExcluder,
+        dead ? 'This colony has died' : 'Queen excluder already fitted'),
+      abtn('Remove queen excluder', '', 'removeQueenExcluder',
+        dead || !colony.queenExcluder,
+        dead ? 'This colony has died' : 'No queen excluder is fitted'),
+      abtn('Place newspaper', '', 'placeNewspaper',
+        dead || (colony.broodBoxes || 1) < 2 || !!_hasNp,
+        dead ? 'This colony has died'
+          : (colony.broodBoxes || 1) < 2 ? 'Need double brood to use newspaper'
+          : 'Newspaper already in place')
+    ])
+  ]);
+
+  return h('div', {}, [primary, mgmt, swarm, queen, assembly]);
 }
 
 /* ====================================================================
@@ -2668,10 +2801,23 @@ function _ui_actionDialog(key, colony) {
 /* What an action costs — money, or kit it consumes */
 function _ui_actionCost(key, colony) {
   if (key === 'addSuper') {
-    var amt = COSTS.superAdd + (colony.queenExcluder ? 0 : COSTS.queenExcluder);
-    return { amount: amt, note: colony.queenExcluder
-      ? 'A new super of frames for the bees to store honey in.'
-      : 'A new super of frames, plus a queen excluder to fit beneath it.' };
+    return { amount: COSTS.superAdd,
+      note: 'A new super of frames. Fit a queen excluder separately (Hive assembly section) if you need to keep the queen out of the supers.' };
+  }
+  if (key === 'fitQueenExcluder') {
+    var qxOwned = (Game.inventory.queenExcluders || 0) > 0;
+    return { amount: qxOwned ? 0 : COSTS.queenExcluder,
+      note: qxOwned ? 'Using a queen excluder from your stock.'
+                    : 'Buying a wire queen excluder (£' + COSTS.queenExcluder + '). Placed between the brood box and supers.' };
+  }
+  if (key === 'removeQueenExcluder') {
+    return { amount: 0, note: 'Free — removes the excluder and returns it to your equipment stock.' };
+  }
+  if (key === 'placeNewspaper') {
+    var npOwned = (Game.inventory.newspaper || 0) > 0;
+    return { amount: npOwned ? 0 : 1,
+      note: npOwned ? 'Using newspaper from your stock.'
+                    : '£1 for a sheet of newspaper. Placed between the two brood boxes for a slow unite.' };
   }
   if (key === 'addBroodBox') return { amount: COSTS.broodBoxAdd, note: 'A second brood box with a full set of frames.' };
   if (key === 'requeen') {
@@ -2807,6 +2953,9 @@ function _ui_actionControls(key, colony) {
     monitorVarroa: function() { return monitorVarroa(colony, 'sugar'); },
     harvest: function() { return harvestColony(colony); },
     sellColony: function() { return sellColony(colony, false); },
+    fitQueenExcluder: function() { return fitQueenExcluder(colony); },
+    removeQueenExcluder: function() { return removeQueenExcluder(colony); },
+    placeNewspaper: function() { return placeNewspaper(colony); },
     unite: function() {
       var others = aliveColonies().filter(function(c) { return c.id !== colony.id; })
         .sort(function(a, b) { return b.population - a.population; });
@@ -2826,6 +2975,9 @@ function _ui_actionControls(key, colony) {
     markQueen: 'Mark the queen', rearQueens: 'Start queen rearing',
     monitorVarroa: 'Take a sugar-roll sample',
     harvest: 'Take the honey off', sellColony: 'Sell this colony',
+    fitQueenExcluder: 'Fit the queen excluder',
+    removeQueenExcluder: 'Remove the queen excluder',
+    placeNewspaper: 'Place newspaper between brood boxes',
     unite: 'Unite into the strongest colony'
   };
   return {
@@ -2918,6 +3070,21 @@ function _ui_actionContext(key, colony) {
     if (sl2 < 5) return 'queen rearing requires skill level 5 — you are at level ' + sl2 + '. Keep practising inspections and swarm control.';
     if (colony.population < 18000) return 'the colony needs to be at peak summer strength (18,000+ bees). Currently around ' + Math.round((colony.population || 0) / 1000) + 'k bees.';
     return 'the colony is strong enough to act as a cell raiser.';
+  }
+  if (key === 'fitQueenExcluder') {
+    if (colony.queenExcluder) return 'a queen excluder is already fitted on this hive.';
+    if ((colony.supers || 0) === 0) return 'no supers are on the hive yet — fit the excluder before adding a super, or add the super first.';
+    return 'without a queen excluder the queen can move up into the supers and lay there, ruining the honey.';
+  }
+  if (key === 'removeQueenExcluder') {
+    if (!colony.queenExcluder) return 'no queen excluder is fitted.';
+    if ((colony.supers || 0) > 0) return 'supers are still on the hive — the queen can now access them. Remove supers first if this is not intentional.';
+    return 'returning the excluder to stock.';
+  }
+  if (key === 'placeNewspaper') {
+    if ((colony.broodBoxes || 1) < 2) return 'you need a double-brood hive to use newspaper uniting.';
+    if (colony.stack && colony.stack.some(function(i) { return i.type === 'newspaper'; })) return 'newspaper is already in place — wait for the bees to chew through it.';
+    return 'the bees from both boxes will chew through the newspaper over about a week, combining gradually and reducing fighting.';
   }
   return null;
 }
