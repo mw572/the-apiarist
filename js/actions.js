@@ -775,9 +775,15 @@ function demareeMethod(colony) {
     return { ok: false, msg: 'The Demaree method is a swarm-season manipulation — do it in late April to July when the colony is at risk of swarming.' };
   }
 
-  /* Must have found the queen at last inspection */
-  if (!colony.known || !colony.known.queenSeen) {
-    return { ok: false, msg: 'You need to find the queen before you can do a Demaree — inspect the hive first and locate her.' };
+  /* Queen must be confirmed present: directly spotted, eggs seen (proves laying queen
+     was recently here), or last inspection confirmed queenright status */
+  const _demareeQueenConfirmed = colony.known && (
+    colony.known.queenSeen ||
+    colony.known.eggsSeen ||
+    (colony.known.queenStatus && colony.known.queenStatus !== 'queenless' && colony.known.queenStatus !== 'unknown')
+  );
+  if (!_demareeQueenConfirmed) {
+    return { ok: false, msg: 'You need to confirm the queen is present before a Demaree — inspect the hive and find her (or see fresh eggs proving she is laying).' };
   }
 
   const boxCost = 35;
