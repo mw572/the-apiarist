@@ -652,9 +652,12 @@ function _act_knownNote(colony, queenFound, storesBand, disease, qcellsVisible) 
  */
 function addSuper(colony) {
   if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
-  if (!spend(COSTS.superAdd, `Super added to ${colony.name}`)) {
-    return { ok: false, msg: `Not enough funds — a super costs £${COSTS.superAdd.toFixed(2)}.` };
+
+  /* Check inventory first; if none in stock, block and direct to Market */
+  if ((Game.inventory.supers || 0) < 1) {
+    return { ok: false, msg: 'No supers in stock — buy one from the Market (Supplies tab) first. They cost £' + COSTS.superAdd + ' each.' };
   }
+  Game.inventory.supers--;
   colony.supers++;
 
   /* Add super to the stack above the queen excluder (or at the top if none) */
@@ -668,7 +671,7 @@ function addSuper(colony) {
     colony.hiveLayout.supers.push(_colony_makeLayoutSuper());
   }
 
-  let msg = `Super added to ${colony.name} (£${COSTS.superAdd.toFixed(2)}).`;
+  let msg = `Super added to ${colony.name} from stock (${Game.inventory.supers} remaining).`;
 
   /* Warn if no queen excluder is fitted — queen can move up into the honey */
   if (!colony.queenExcluder) {
@@ -724,11 +727,10 @@ function removeSuper(colony) {
     colony.queenExcluder = false;
   }
 
-  /* Return the box to the spare hive pool */
-  if (!Game.inventory.spareHives) Game.inventory.spareHives = 0;
-  Game.inventory.spareHives += 1;
+  /* Return the box to the super inventory pool */
+  Game.inventory.supers = (Game.inventory.supers || 0) + 1;
 
-  var msg = `Super removed from ${colony.name} and returned to equipment stock.` +
+  var msg = `Super removed from ${colony.name} and returned to stock (${Game.inventory.supers} now available).` +
     (colony.supers === 0 ? ' Queen excluder also removed — no supers left.' : '');
   logEvent('📦', msg, 'plain');
   render();

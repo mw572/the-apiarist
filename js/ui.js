@@ -1138,6 +1138,7 @@ function _ui_marketKitStrip() {
     ['Sugar', (inv.sugar || 0) + ' kg'],
     ['Empty jars', String(inv.emptyJars || 0)],
     ['Treatments', String(treatTotal)],
+    ['Supers', String(inv.supers || 0)],
     ['Queen excl.', String(inv.queenExcluders || 0)],
     ['Newspaper', String(inv.newspaper || 0)],
     ['Jars to sell', String(_ui_totalJars(inv.jars))]
@@ -1175,6 +1176,7 @@ function _ui_marketSuppliesTab() {
   var feedRows = (CATALOG.supplies || []).map(function(item) {
     var held = item.id === 'sugarbag'       ? ((inv.sugar || 0) + ' kg of sugar')
              : item.id === 'jarpack'        ? ((inv.emptyJars || 0) + ' empty jars')
+             : item.id === 'super'          ? ((inv.supers || 0) + ' in stock')
              : item.id === 'queenExcluder'  ? ((inv.queenExcluders || 0) + ' in stock')
              : item.id === 'newspaper'      ? ((inv.newspaper || 0) + ' sheets in stock')
              : '0';
@@ -2568,8 +2570,11 @@ function _ui_buildActionButtons(colony) {
     abtn('💊 Treat varroa', 'btn-action', 'treat',
       dead || !!(colony.treatment && colony.treatment.weeksLeft > 0),
       dead ? 'This colony has died' : 'Treatment already active — wait for it to finish'),
-    abtn('📦 Add super', 'btn-action', 'addSuper', dead || (colony.supers || 0) >= 5,
-      dead ? 'This colony has died' : 'Plenty of supers on already')
+    abtn('📦 Add super', 'btn-action', 'addSuper',
+      dead || (colony.supers || 0) >= 5 || (Game.inventory.supers || 0) < 1,
+      dead ? 'This colony has died'
+           : (colony.supers || 0) >= 5 ? 'Plenty of supers on already'
+           : 'No supers in stock — buy from Market → Supplies')
   ]);
 
   /* === Management actions === */
@@ -2833,8 +2838,11 @@ function _ui_actionDialog(key, colony) {
 /* What an action costs — money, or kit it consumes */
 function _ui_actionCost(key, colony) {
   if (key === 'addSuper') {
-    return { amount: COSTS.superAdd,
-      note: 'A new super of frames. Fit a queen excluder separately (Hive assembly section) if you need to keep the queen out of the supers.' };
+    var _supersOwned = (Game.inventory && Game.inventory.supers) || 0;
+    if (_supersOwned > 0) {
+      return { amount: 0, note: 'Using a super from your stock (' + _supersOwned + ' available). Fit a queen excluder separately if you need to keep the queen out of the supers.' };
+    }
+    return { amount: null, note: 'No supers in stock — buy one from the Market (Supplies tab) first. They cost £' + COSTS.superAdd + ' each.' };
   }
   if (key === 'fitQueenExcluder') {
     var qxOwned = (Game.inventory.queenExcluders || 0) > 0;

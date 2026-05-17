@@ -91,6 +91,17 @@ function buySupply(id, qty) {
     return { ok: true, msg: 'You have ' + Game.inventory.treatStock[id] + ' x ' + treatment.name + ' in stock.' };
   }
 
+  if (id === 'super') {
+    var cost = COSTS.superAdd * qty;
+    if (!spend(cost, qty + ' super box' + (qty > 1 ? 'es' : ''))) {
+      return { ok: false, msg: 'Not enough funds. A super costs £' + COSTS.superAdd + ' each.' };
+    }
+    Game.inventory.supers = (Game.inventory.supers || 0) + qty;
+    logEvent('📦', 'Bought ' + qty + ' super box' + (qty > 1 ? 'es' : '') + ' for £' + cost + '.', 'plain');
+    toast(qty + ' super' + (qty > 1 ? 's' : '') + ' added to stock.', 'good');
+    return { ok: true, msg: 'You have ' + Game.inventory.supers + ' super' + (Game.inventory.supers !== 1 ? 's' : '') + ' in stock.' };
+  }
+
   if (id === 'queenExcluder') {
     var cost = COSTS.queenExcluder * qty;
     if (!spend(cost, qty + ' queen excluder' + (qty > 1 ? 's' : ''))) {

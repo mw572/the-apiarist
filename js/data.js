@@ -377,6 +377,8 @@ CATALOG.supplies = [
   { id:'jarpack', name:'Jars — pack of 24', icon:'🪧',
     price: Math.round(24 * COSTS.jar * 100) / 100, count: 24,
     desc:'Empty jars with lids and labels, ready for bottling your honey crop.' },
+  { id:'super', name:'Super (honey box)', icon:'📦', price: 44,
+    desc:'A shallower box of frames that sits above the queen excluder for the bees to store surplus honey. Buy one before adding it to a hive.' },
   { id:'queenExcluder', name:'Queen excluder', icon:'🔲', price: 9,
     desc:'A zinc grid that prevents the queen from moving up into the honey supers. Fit it between the brood box and the lowest super.' },
   { id:'newspaper', name:'Newspaper (uniting)', icon:'📰', price: 1,
