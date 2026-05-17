@@ -94,15 +94,15 @@ const COSTS = {
 
 const CATALOG = {
   bees: [
-    { id:'nuc', name:'Nucleus colony (nuc)', icon:'📦', price:215,
+    { id:'nuc', name:'Nucleus colony (nuc)', icon:'📦', price:130,
       desc:'Five frames of bees, brood and a laying queen. The recommended way to start.' },
-    { id:'colony', name:'Full colony', icon:'🏠', price:300,
+    { id:'colony', name:'Full colony', icon:'🏠', price:180,
       desc:'An established colony on a full brood box. More bees sooner, more to go wrong.' },
     { id:'matedqueen', name:'Mated queen', icon:'👑', price:42,
       desc:'A laying queen of known stock, for requeening or making up a colony.' },
   ],
   hives: [
-    { id:'hive', name:'Complete National hive', icon:'🪵', price:165,
+    { id:'hive', name:'Complete National hive', icon:'🪵', price:110,
       desc:'Floor, brood box, queen excluder, a super, crown board, roof and frames. Empty — needs bees.' },
     { id:'nucbox', name:'Poly nucleus box', icon:'🧰', price:30,
       desc:'A small hive for splits, mating nuclei and housing caught swarms.' },
@@ -115,7 +115,7 @@ const CATALOG = {
     { id:'hiveTool', name:'Hive tool', icon:'🔧', price:8, desc:'Prises boxes apart and scrapes off propolis.' },
     { id:'gloves', name:'Gloves', icon:'🧤', price:10, desc:'Optional. Some prefer bare hands for dexterity.' },
     { id:'clearerBoard', name:'Clearer board', icon:'🚪', price:14, desc:'A one-way bee escape for clearing supers before harvest.' },
-    { id:'extractor', name:'Honey extractor', icon:'🛢️', price:190, desc:'Spins honey out of the comb. Or hire the association one per harvest.' },
+    { id:'extractor', name:'Honey extractor', icon:'🛢️', price:80, desc:'Spins honey out of the comb. Or hire the association one per harvest.' },
     { id:'settlingTank', name:'Settling tank', icon:'🫙', price:45, desc:'Lets air bubbles and wax rise before bottling. Cleaner jars.' },
     { id:'refractometer', name:'Refractometer', icon:'🔬', price:22, desc:'Measures honey moisture. Above ~20% it can ferment.' },
     { id:'uncappingKit', name:'Uncapping kit', icon:'🍴', price:28, desc:'Fork, knife and tray for opening cells before extraction.' },
@@ -204,15 +204,15 @@ function honeyTypeForWeek(week, siteType){
 /* --- Honey types ----------------------------------------------------- */
 
 const HONEY_TYPES = {
-  spring:  { name:'Spring blossom honey', value:7.2, note:'Light and floral, from the spring flow.' },
-  oilseed: { name:'Oilseed rape honey', value:6.0, setsFast:true,
+  spring:  { name:'Spring blossom honey', value:11.0, note:'Light and floral, from the spring flow.' },
+  oilseed: { name:'Oilseed rape honey', value:9.0, setsFast:true,
              note:'Sets rock hard within weeks — extract it promptly or it sets in the comb.' },
-  summer:  { name:'Summer wildflower honey', value:7.8, note:'The classic main-crop honey.' },
-  lime:    { name:'Lime honey', value:9.0, note:'Prized, with a fresh minty edge.' },
-  borage:  { name:'Borage honey', value:8.4, note:'Water-white and very mild.' },
-  heather: { name:'Heather honey', value:13.5, thixotropic:true,
+  summer:  { name:'Summer wildflower honey', value:12.0, note:'The classic main-crop honey.' },
+  lime:    { name:'Lime honey', value:14.0, note:'Prized, with a fresh minty edge.' },
+  borage:  { name:'Borage honey', value:13.0, note:'Water-white and very mild.' },
+  heather: { name:'Heather honey', value:20.0, thixotropic:true,
              note:'A jelly-like honey that must be pressed, not spun. The premium crop.' },
-  ivy:     { name:'Ivy honey', value:5.5, setsFast:true,
+  ivy:     { name:'Ivy honey', value:8.5, setsFast:true,
              note:'Strong, sets very hard and fast. Best left for the bees as winter stores.' },
 };
 
