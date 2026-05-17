@@ -213,6 +213,9 @@ function runWeek() {
 
       var events = colonyWeeklyUpdate(colony, ctx);
 
+      /* ---- Sync visual frame layout with new colony state ----------- */
+      colonyWeeklyLayoutSync(colony);
+
       /* ---- Resolve events ------------------------------------------ */
       for (var ei = 0; ei < events.length; ei++) {
         var ev = events[ei];
@@ -426,6 +429,15 @@ function _sim_resolveEvent(ev, week) {
           tone: 'bad',
         });
       }
+      break;
+
+    case 'swarmAborted':
+      logEvent('✂️', colony.name + ': the colony tried to swarm, but the clipped queen could not fly. The cluster returned to the hive. Swarm pressure is still high — act now.', 'warn');
+      out.push({
+        kind: 'toast',
+        text: colony.name + ': swarm aborted — clipped queen. The impulse is still there. Take swarm-control action this week.',
+        tone: 'warn',
+      });
       break;
 
     case 'starved':

@@ -308,6 +308,89 @@ function harvestColony(colony) {
   return { ok: true, msg: baseMsg, kg: kg, type: type };
 }
 
+/* ---- harvestSuperAt(colony, superIdx) -------------------------------- */
+/*
+ * Harvests a single super by index. Removes it from the colony and layout.
+ * Returns {ok, msg, kg, type}
+ */
+function harvestSuperAt(colony, superIdx) {
+  if (!colony || !colony.alive) return { ok: false, msg: 'Colony is not alive.', kg: 0 };
+  if (colony.supers < 1) return { ok: false, msg: 'No supers on this hive.', kg: 0 };
+
+  /* Get per-super honey from layout if available, else divide evenly */
+  var layout = colony.hiveLayout;
+  var superKg = 0;
+  var type = colony.superHoneyType || 'summer';
+
+  if (layout && layout.supers && layout.supers[superIdx]) {
+    superKg = layout.supers[superIdx].honeyKg || 0;
+    type = layout.supers[superIdx].honeyType || type;
+  } else {
+    superKg = colony.superHoney / Math.max(colony.supers, 1);
+  }
+
+  var msgs = [];
+
+  if (superKg < 0.5) {
+    /* Nearly empty — just take it off, nothing worth extracting */
+    _colony_removeSuperAt(colony, superIdx);
+    var emptyMsg = 'Super removed from ' + colony.name + ' — barely anything in it, left for the bees.';
+    logEvent('📦', emptyMsg, 'plain');
+    return { ok: true, msg: emptyMsg, kg: 0, type: null };
+  }
+
+  var kg = superKg;
+
+  /* Moisture note */
+  var season = (typeof seasonOfWeek === 'function') ? seasonOfWeek(Game.week) : 'summer';
+  var isHeightOfFlow = (season === 'summer' && (typeof forageNectar === 'function') && forageNectar(Game.week) > 0.7);
+  if (isHeightOfFlow) msgs.push('Some frames may have unripe honey — check moisture before bottling.');
+
+  /* No clearer board: brush-off loss ~8% */
+  if (!Game.inventory.tools.clearerBoard) {
+    var loss = _econ_roundPrice(kg * 0.08);
+    kg = _econ_roundPrice(kg - loss);
+    msgs.push('Without a clearer board you had to brush bees off, losing ' + loss.toFixed(2) + ' kg.');
+  }
+
+  /* Cappings wax */
+  Game.inventory.wax = _econ_roundPrice((Game.inventory.wax || 0) + _econ_roundPrice(kg * 0.013));
+
+  /* Move honey to inventory */
+  _econ_ensureKey(Game.inventory.honey, type, 0);
+  Game.inventory.honey[type] = _econ_roundPrice(Game.inventory.honey[type] + kg);
+
+  /* Stats */
+  Game.stats.honeyHarvested = _econ_roundPrice((Game.stats.honeyHarvested || 0) + kg);
+  colony.productionThisYear = _econ_roundPrice((colony.productionThisYear || 0) + kg);
+
+  /* Remove this super */
+  _colony_removeSuperAt(colony, superIdx);
+
+  var honeyName = (HONEY_TYPES[type] && HONEY_TYPES[type].name) ? HONEY_TYPES[type].name : type;
+  var baseMsg = 'Harvested ' + kg.toFixed(1) + ' kg of ' + honeyName + ' from ' + colony.name + '.';
+  if (msgs.length) baseMsg += ' ' + msgs.join(' ');
+
+  logEvent('🍯', baseMsg, 'good');
+  toast(kg.toFixed(1) + ' kg of ' + honeyName + ' in the tank.', 'good');
+  return { ok: true, msg: baseMsg, kg: kg, type: type };
+}
+
+/* ---- _colony_removeSuperAt(colony, idx) ------------------------------ */
+function _colony_removeSuperAt(colony, idx) {
+  /* Update per-super honey in aggregate */
+  var removedKg = 0;
+  if (colony.hiveLayout && colony.hiveLayout.supers && colony.hiveLayout.supers[idx]) {
+    removedKg = colony.hiveLayout.supers[idx].honeyKg || 0;
+    colony.hiveLayout.supers.splice(idx, 1);
+  } else if (colony.supers > 0) {
+    removedKg = colony.superHoney / Math.max(colony.supers, 1);
+  }
+  colony.superHoney = Math.max(0, _econ_roundPrice((colony.superHoney || 0) - removedKg));
+  colony.supers = Math.max(0, (colony.supers || 1) - 1);
+  if (colony.supers === 0) colony.superHoney = 0;
+}
+
 /* ---- extractAndBottle(honeyType, jarCount) -------------------------- */
 /*
  * Turns bulk honey kg into labelled jars.

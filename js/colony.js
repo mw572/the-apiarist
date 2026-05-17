@@ -78,6 +78,144 @@ function _colony_matedQueen(sourceQueen, bornYear){
 }
 
 /* ====================================================================
+   HIVE LAYOUT — persistent visual frame data
+   Each colony stores a hiveLayout object: arrays of box objects, each
+   with 11 frame objects. Updated weekly by colonyWeeklyLayoutSync().
+   ==================================================================== */
+
+function _colony_makeFrames(count, drawn, maxAge) {
+  var frames = [];
+  for (var i = 0; i < count; i++) {
+    frames.push({
+      drawn:   drawn,
+      combAge: drawn ? _colony_randInt(0, maxAge || 2) : 0,
+      content: { eggs:0, larvae:0, capped:0, honey:0, pollen:0, nectar:0, empty:1, drone:0 }
+    });
+  }
+  return frames;
+}
+
+function _colony_makeLayoutBox(type) {
+  return { type: type, frames: _colony_makeFrames(11, type === 'brood', 3) };
+}
+
+function _colony_makeLayoutSuper() {
+  return {
+    frames:      _colony_makeFrames(11, false, 0),
+    honeyKg:     0,
+    honeyType:   'summer',
+    clearerBoard: false
+  };
+}
+
+function _colony_initHiveLayout(broodBoxCount) {
+  var boxes = [];
+  for (var b = 0; b < (broodBoxCount || 1); b++) {
+    boxes.push(_colony_makeLayoutBox('brood'));
+  }
+  return { broodBoxes: boxes, supers: [] };
+}
+
+/* colonyWeeklyLayoutSync(colony)
+   Distribute aggregate colony data (eggs, honey, etc.) into the
+   persistent frame objects. Safe to call on any colony at any time —
+   creates the layout if it does not exist. */
+function colonyWeeklyLayoutSync(colony) {
+  if (!colony.hiveLayout) {
+    colony.hiveLayout = _colony_initHiveLayout(colony.broodBoxes || 1);
+  }
+  var layout  = colony.hiveLayout;
+  var FRAMES  = 11;
+
+  /* --- Sync box counts ----------------------------------------------- */
+  while (layout.broodBoxes.length < (colony.broodBoxes || 1)) {
+    layout.broodBoxes.push(_colony_makeLayoutBox('brood'));
+  }
+  while (layout.broodBoxes.length > (colony.broodBoxes || 1)) {
+    layout.broodBoxes.pop();
+  }
+  while (layout.supers.length < (colony.supers || 0)) {
+    layout.supers.push(_colony_makeLayoutSuper());
+  }
+  while (layout.supers.length > (colony.supers || 0)) {
+    layout.supers.pop();
+  }
+
+  /* --- Distribute brood and stores across brood box frames ----------- */
+  var totalBoxFrames = layout.broodBoxes.length * FRAMES;
+  var totalBrood = colony.eggs + colony.larvae + colony.capped;
+  var broodEquiv = totalBrood / 6500;
+  var broodReach = Math.max(0.8, (broodEquiv + 2) / 2);
+  var gMid = (totalBoxFrames - 1) / 2;
+
+  function _bW(d) { return Math.max(0, 1 - d / (broodReach + 0.35)); }
+  var bNorm = 0;
+  for (var g = 0; g < totalBoxFrames; g++) bNorm += _bW(Math.abs(g - gMid));
+  if (bNorm <= 0) bNorm = 1;
+
+  function _hW(d) { return 0.25 + d / (gMid + 1); }
+  var hNorm = 0;
+  for (var g2 = 0; g2 < totalBoxFrames; g2++) hNorm += _hW(Math.abs(g2 - gMid));
+  if (hNorm <= 0) hNorm = 1;
+
+  layout.broodBoxes.forEach(function(box, boxIdx) {
+    box.frames.forEach(function(frame, fi) {
+      var gfi  = boxIdx * FRAMES + fi;
+      var dist = Math.abs(gfi - gMid);
+
+      var broodFrac = totalBrood > 100
+        ? Math.min(0.85, _bW(dist) / bNorm * broodEquiv) : 0;
+
+      var c = { eggs:0, larvae:0, capped:0, honey:0, pollen:0, nectar:0, empty:0, drone:0 };
+      if (broodFrac > 0.01) {
+        var tb = Math.max(1, totalBrood);
+        c.eggs   = broodFrac * (colony.eggs   / tb);
+        c.larvae = broodFrac * (colony.larvae / tb);
+        c.capped = broodFrac * (colony.capped / tb);
+        c.drone  = (colony.drones > 2000 && dist > broodReach - 1.5 && dist < broodReach + 0.7) ? 0.05 : 0;
+      }
+      var broodUsed = c.eggs + c.larvae + c.capped + c.drone;
+      var free = Math.max(0, 1 - broodUsed);
+
+      /* Honey: edge-biased arch */
+      var honeyFrac = Math.min(0.9, _hW(dist) / hNorm * (colony.honey / Math.max(1, 2.3 * totalBoxFrames)));
+      c.honey = Math.min(free, honeyFrac);
+      free    = Math.max(0, free - c.honey);
+
+      /* Pollen: band flanking brood nest */
+      var nearNest = dist > broodReach - 1.4 && dist < broodReach + 1.3;
+      c.pollen = Math.min(free, (nearNest ? 0.20 : 0.05) * Math.min(1.4, 0.45 + colony.pollen / 700));
+      free     = Math.max(0, free - c.pollen);
+
+      c.nectar = Math.min(free, 0.06);
+      free     = Math.max(0, free - c.nectar);
+      c.empty  = Math.max(0, free);
+
+      frame.content = c;
+      if ((broodFrac > 0.05 || c.honey > 0.05) && !frame.drawn) frame.drawn = true;
+      /* slow natural comb darkening */
+      if (frame.drawn && _colony_rand() < 0.001) {
+        frame.combAge = Math.min(5, frame.combAge + 1);
+      }
+    });
+  });
+
+  /* --- Distribute superHoney across supers (fill from bottom up) ----- */
+  var remaining = colony.superHoney || 0;
+  layout.supers.forEach(function(sup) {
+    var cap  = SIM.honeyPerSuper;
+    sup.honeyKg  = Math.min(cap, remaining);
+    remaining    = Math.max(0, remaining - sup.honeyKg);
+    sup.honeyType = colony.superHoneyType || 'summer';
+    var fillFrac  = sup.honeyKg / cap;
+    sup.frames.forEach(function(frame) {
+      frame.content = { honey: fillFrac * 0.85, nectar: fillFrac * 0.10, empty: Math.max(0, 1 - fillFrac * 0.95) };
+      if (fillFrac > 0.05 && !frame.drawn) frame.drawn = true;
+    });
+  });
+}
+
+/* ====================================================================
    makeColony(opts) -> Colony
    opts: { name, apiaryId, source, id, week, year,
            population?, queenQuality?, varroa?, queenAge? }
@@ -220,6 +358,8 @@ function makeColony(opts){
 
     productionThisYear: 0,
     _starvingWeeks: 0,    // internal counter — not part of the public shape but stored on colony for persistence
+
+    hiveLayout: null,     // populated by colonyWeeklyLayoutSync on first weekly tick
   };
 }
 
@@ -655,20 +795,29 @@ function colonyWeeklyUpdate(colony, ctx){
   if (colony.queenCells.type === 'swarm'){
     colony.queenCells.age++;
     if (colony.queenCells.age >= 2){
-      // The swarm issues — old queen leaves with ~58% of the workforce
-      events.push({ type: 'swarm', colony: colony });
-      colony.population        = Math.round(colony.population * 0.42);
-      colony.swarmedThisYear   = true;
-      colony.swarmPressure     = 0;
+      if (queen && queen.clipped) {
+        // Clipped queen cannot fly — the prime swarm clusters briefly on the
+        // hive and returns. Buys one week but the impulse remains strong.
+        events.push({ type: 'swarmAborted', colony: colony });
+        colony.queenCells = { type: 'none', count: 0, age: 0 };
+        // Pressure drops a little but the colony will raise fresh cells soon
+        colony.swarmPressure = _colony_clamp(colony.swarmPressure - 0.25, 0, 1);
+      } else {
+        // The swarm issues — old queen leaves with ~58% of the workforce
+        events.push({ type: 'swarm', colony: colony });
+        colony.population      = Math.round(colony.population * 0.42);
+        colony.swarmedThisYear = true;
+        colony.swarmPressure   = 0;
 
-      // Afterswarm / cast: if many cells, chance of a secondary swarm (smaller)
-      if (colony.queenCells.count > 7 && _colony_rand() < 0.40){
-        colony.population = Math.round(colony.population * 0.70);
+        // Afterswarm / cast: if many cells, chance of a secondary swarm (smaller)
+        if (colony.queenCells.count > 7 && _colony_rand() < 0.40){
+          colony.population = Math.round(colony.population * 0.70);
+        }
+
+        // Leave a virgin queen in the hive (from the cells)
+        colony.queen      = _colony_virginFromParent(queen, year);
+        colony.queenCells = { type: 'none', count: 0, age: 0 };
       }
-
-      // Leave a virgin queen in the hive (from the cells)
-      colony.queen       = _colony_virginFromParent(queen, year);
-      colony.queenCells  = { type: 'none', count: 0, age: 0 };
     }
   }
 

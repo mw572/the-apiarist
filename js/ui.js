@@ -800,6 +800,22 @@ function _ui_buildHiveCard(colony) {
     }
   }
 
+  /* Swarm pressure strip — visible in swarm season when pressure is notable */
+  var swarmStrip = null;
+  if (colony.alive) {
+    var sp = colony.swarmPressure || 0;
+    var week = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
+    var inWin = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(week) : false;
+    if (inWin && sp > 0.2) {
+      var spColor = sp > 0.65 ? '#c03030' : sp > 0.4 ? '#d4820a' : '#4a9e5c';
+      swarmStrip = h('div', {
+        class: 'hive-swarm-strip',
+        title: 'Swarm pressure: ' + Math.round(sp * 100) + '%',
+        style: { '--sp': Math.round(sp * 100) + '%', '--spc': spColor }
+      });
+    }
+  }
+
   return h('div', {
     class: 'hive' + (colony.alive ? '' : ' is-dead'),
     onclick: function() { openHiveDetail(colony); }
@@ -809,6 +825,7 @@ function _ui_buildHiveCard(colony) {
     h('div', { class: 'hive-bees' }, beeNodes),
     h('div', { class: 'hive-roof' }),
     h('div', { class: 'hive-stack' }, boxes),
+    swarmStrip,
     h('div', { class: 'hive-floor' }),
     h('div', { class: 'hive-stand' }),
     h('div', { class: 'hive-plaque' }, [
@@ -1546,54 +1563,397 @@ function openHiveDetail(colony) {
   });
 }
 
+/* ====================================================================
+   HIVE CROSS-SECTION — shows real frame content per box
+   ==================================================================== */
+
 function _ui_buildHiveCross(colony) {
+  /* Ensure layout exists — sync from colony state if needed */
+  if (!colony.hiveLayout && typeof colonyWeeklyLayoutSync === 'function') {
+    colonyWeeklyLayoutSync(colony);
+  }
+  var layout     = colony.hiveLayout || { broodBoxes: [], supers: [] };
+  var superCount = colony.supers || 0;
+  var broodCount = colony.broodBoxes || 1;
+
   var stack = h('div', { class: 'cross-stack' });
 
-  var superCount = colony.supers || 0;
-  for (var s = 0; s < superCount; s++) {
-    (function(idx) {
+  /* --- Supers (top to bottom = highest index first) ------------------ */
+  for (var s = superCount - 1; s >= 0; s--) {
+    (function(sidx) {
+      var sup      = (layout.supers && layout.supers[sidx]) || { honeyKg: 0, frames: [], honeyType: 'summer' };
+      var fillFrac = Math.min(1, sup.honeyKg / SIM.honeyPerSuper);
+      var fillPct  = (fillFrac * 100).toFixed(0);
+      var ht       = (typeof HONEY_TYPES !== 'undefined' && HONEY_TYPES[sup.honeyType]) || {};
+      var lbl      = 'Super ' + (sidx + 1) + ' — ' + sup.honeyKg.toFixed(1) + ' kg / ' + SIM.honeyPerSuper + ' kg';
+      if (ht.name) lbl += ' (' + ht.name + ')';
+
+      var framesEl = _ui_buildCrossFrames(sup.frames || [], 'super', -1, -1, colony);
+
+      var fillColor = fillFrac > 0.75 ? '#c87010' : fillFrac > 0.35 ? '#e8a020' : '#f0c060';
+
       stack.appendChild(h('div', {
-        class: 'cross-box super clickable',
-        title: 'Super ' + (idx + 1) + ' -- harvest honey here'
-      }, 'Super'));
+        class: 'cross-box cross-super clickable',
+        title: lbl + ' — click to manage frames',
+        onclick: function() { _ui_openBoxDetail(colony, 'super', sidx); }
+      }, [
+        h('div', { class: 'cross-box-label' }, lbl),
+        framesEl,
+        h('div', { class: 'cross-fill-bar' }, [
+          h('div', { class: 'cross-fill-fill', style: { width: fillPct + '%', background: fillColor } })
+        ])
+      ]));
     })(s);
   }
 
+  /* --- Queen excluder ----------------------------------------------- */
   if (colony.queenExcluder) {
-    stack.appendChild(h('div', { class: 'cross-box excluder', title: 'Queen excluder' }));
+    stack.appendChild(h('div', { class: 'cross-box cross-excluder', title: 'Queen excluder' }, [
+      h('span', { class: 'cross-excluder-label' }, 'QX')
+    ]));
   }
 
-  var broodCount = colony.broodBoxes || 1;
-  for (var b = 0; b < broodCount; b++) {
-    stack.appendChild(h('div', {
-      class: 'cross-box brood clickable',
-      title: 'Brood box -- contains the nest'
-    }, 'Brood'));
+  /* --- Brood boxes (top box first, bottom box last) ----------------- */
+  var queenFrameIdx = _ui_estimateQueenFrameIdx(colony);
+  var qcellFrameIdx = _ui_estimateQCellFrameIdx(colony);
+
+  for (var b = broodCount - 1; b >= 0; b--) {
+    (function(bidx) {
+      var box    = (layout.broodBoxes && layout.broodBoxes[bidx]) || { frames: [] };
+      var lbl    = broodCount > 1 ? ('Brood box ' + (bidx + 1)) : 'Brood box';
+      /* Queen lives in bottom box (bidx 0) */
+      var qFrame = (bidx === 0) ? queenFrameIdx : -1;
+      var qcFrame = (bidx === 0) ? qcellFrameIdx : -1;
+
+      var framesEl = _ui_buildCrossFrames(box.frames || [], 'brood', qFrame, qcFrame, colony);
+
+      stack.appendChild(h('div', {
+        class: 'cross-box cross-brood clickable',
+        title: lbl + ' — click to manage frames',
+        onclick: function() { _ui_openBoxDetail(colony, 'brood', bidx); }
+      }, [
+        h('div', { class: 'cross-box-label' }, lbl),
+        framesEl
+      ]));
+    })(b);
   }
 
+  /* --- Hive floor ---------------------------------------------------- */
+  var entranceLabel = { open: 'Open entrance', reduced: 'Reduced entrance', mouseguard: 'Mouse guard' }[colony.entrance] || colony.entrance;
+  stack.appendChild(h('div', { class: 'cross-floor' }, [
+    h('div', { class: 'cross-entrance-tab', title: entranceLabel })
+  ]));
+
+  /* --- Swarm pressure bar ------------------------------------------- */
+  var swarmBar = _ui_buildSwarmPressureBar(colony);
+
+  /* --- Queen / entrance meta ---------------------------------------- */
   var queen = colony.queen;
-  var queenLine = '';
-  if (queen) {
-    if (queen.present) {
-      queenLine = 'Queen: ' + queen.state;
-      if (queen.marked) queenLine += ' (marked ' + queen.marked + ')';
+  var queenParts = [];
+  if (queen && queen.present) {
+    var qs = queen.virgin ? 'virgin, unmated'
+           : queen.state === 'dronelayer' ? 'drone layer'
+           : queen.state === 'failing' ? 'failing'
+           : 'laying';
+    queenParts.push('Queen: ' + qs);
+    if (queen.marked) queenParts.push('marked ' + queen.marked);
+    if (queen.clipped) queenParts.push('clipped ✂');
+    queenParts.push('yr ' + (queen.bornYear || 1));
+  } else {
+    queenParts.push('No queen');
+  }
+
+  return h('div', { class: 'hive-cross' }, [
+    h('div', { class: 'cross-section-title' }, 'Hive cross-section'),
+    stack,
+    swarmBar,
+    h('div', { class: 'cross-meta-line' }, queenParts.join(' · ')),
+    h('div', { class: 'cross-meta-line' }, entranceLabel),
+    h('div', { class: 'cross-click-hint' }, 'Click any box to manage frames')
+  ]);
+}
+
+/* Build a row of 11 frame strips for one box */
+function _ui_buildCrossFrames(frames, type, queenFrame, qcellFrame, colony) {
+  var FRAMES = 11;
+  /* pad to 11 if layout not fully synced yet */
+  var fs = frames.slice();
+  while (fs.length < FRAMES) fs.push({ drawn: false, combAge: 0, content: { empty: 1 } });
+
+  var wrap = h('div', { class: 'cross-frames' });
+  for (var fi = 0; fi < FRAMES; fi++) {
+    var frame      = fs[fi] || { content: { empty: 1 } };
+    var isQueen    = (fi === queenFrame && colony && colony.queen && colony.queen.present && !colony.queen.virgin);
+    var isQCells   = (fi === qcellFrame && colony && colony.queenCells && colony.queenCells.type !== 'none'
+                     && colony.known && colony.known.queenCells && colony.known.queenCells !== 'none');
+    wrap.appendChild(_ui_buildFrameStrip(frame, type, isQueen, isQCells));
+  }
+  return wrap;
+}
+
+/* Single frame strip — a narrow vertical slice coloured by content */
+function _ui_buildFrameStrip(frame, type, isQueenFrame, isQCellFrame) {
+  var content = frame.content || { empty: 1 };
+  var cls = 'cross-frame'
+    + (isQueenFrame ? ' cf-has-queen' : '')
+    + (isQCellFrame ? ' cf-has-qcell' : '');
+  var strip = h('div', { class: cls });
+
+  /* Bands rendered top→bottom in the strip */
+  var bands;
+  if (type === 'super') {
+    bands = [
+      { k: 'empty',  v: content.empty  || 0 },
+      { k: 'nectar', v: content.nectar || 0 },
+      { k: 'honey',  v: content.honey  || 0 }
+    ];
+  } else {
+    bands = [
+      { k: 'honey',    v: content.honey  || 0 },
+      { k: 'pollen',   v: content.pollen || 0 },
+      { k: 'capped',   v: content.capped || 0 },
+      { k: 'larva',    v: content.larvae || 0 },
+      { k: 'eggs',     v: content.eggs   || 0 },
+      { k: 'drone',    v: content.drone  || 0 },
+      { k: 'nectar',   v: content.nectar || 0 },
+      { k: 'empty',    v: content.empty  || 0 }
+    ];
+  }
+
+  var y = 0;
+  bands.forEach(function(band) {
+    if (band.v < 0.01) return;
+    var pct  = Math.min(100 - y, band.v * 100);
+    if (pct < 0.5) return;
+    var div  = document.createElement('div');
+    div.style.cssText = 'position:absolute;left:0;right:0;top:' + y.toFixed(1) + '%;height:' + pct.toFixed(1) + '%;';
+    div.className     = 'cf-band cf-' + band.k;
+    strip.appendChild(div);
+    y += pct;
+  });
+
+  if (isQueenFrame) strip.appendChild(h('div', { class: 'cf-queen-dot', title: 'Queen' }));
+  if (isQCellFrame) strip.appendChild(h('div', { class: 'cf-qcell-dot', title: 'Queen cells' }));
+
+  return strip;
+}
+
+/* Swarm pressure bar — shown below the hive stack */
+function _ui_buildSwarmPressureBar(colony) {
+  var p    = colony.swarmPressure || 0;
+  var week = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
+  var inWindow = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(week) : false;
+  if (!inWindow && p < 0.15) return null;
+
+  var pct   = Math.round(p * 100);
+  var color = p < 0.4 ? '#4a9e5c' : p < 0.65 ? '#d4820a' : '#c03030';
+  var level = p < 0.3 ? 'low' : p < 0.5 ? 'building' : p < 0.65 ? 'high' : 'critical';
+  var hasQC = colony.queenCells && colony.queenCells.type === 'swarm';
+  var labelText = pct + '% — ' + level + (hasQC ? ' ⚠️ cells present' : '');
+
+  return h('div', { class: 'cross-swarm-bar' }, [
+    h('div', { class: 'csb-header' }, [
+      h('span', { class: 'csb-label' }, 'Swarm pressure'),
+      h('span', { class: 'csb-pct', style: { color: color } }, labelText)
+    ]),
+    h('div', { class: 'csb-track' }, [
+      h('div', { class: 'csb-fill', style: { width: pct + '%', background: color } })
+    ])
+  ]);
+}
+
+/* Estimate which frame index (0-10) the queen is on */
+function _ui_estimateQueenFrameIdx(colony) {
+  if (!colony.queen || !colony.queen.present || colony.queen.virgin) return -1;
+  /* Queen tends toward the centre of the brood nest */
+  return 5;
+}
+
+/* Estimate which frame index (0-10) queen cells are on */
+function _ui_estimateQCellFrameIdx(colony) {
+  if (!colony.queenCells || colony.queenCells.type === 'none') return -1;
+  /* Swarm cells — lower-edge of brood frames, slightly off-centre */
+  return colony.queenCells.type === 'swarm' ? 4 : 5;
+}
+
+/* ====================================================================
+   BOX DETAIL MODAL — frame-by-frame management
+   ==================================================================== */
+
+function _ui_openBoxDetail(colony, boxType, boxIdx) {
+  /* Ensure layout exists */
+  if (!colony.hiveLayout && typeof colonyWeeklyLayoutSync === 'function') {
+    colonyWeeklyLayoutSync(colony);
+  }
+  var layout = colony.hiveLayout || { broodBoxes: [], supers: [] };
+  var box, titleText;
+
+  if (boxType === 'super') {
+    box = layout.supers && layout.supers[boxIdx];
+    if (!box) { toast('Super data not available — advance the week first.', 'bad'); return; }
+    var ht = (typeof HONEY_TYPES !== 'undefined' && HONEY_TYPES[box.honeyType]) || {};
+    titleText = 'Super ' + (boxIdx + 1) + ' — ' + box.honeyKg.toFixed(1) + ' kg'
+              + (ht.name ? ' (' + ht.name + ')' : '');
+  } else {
+    box = layout.broodBoxes && layout.broodBoxes[boxIdx];
+    if (!box) { toast('Brood box data not available — advance the week first.', 'bad'); return; }
+    titleText = colony.broodBoxes > 1 ? ('Brood box ' + (boxIdx + 1)) : 'Brood box';
+  }
+
+  var FRAMES   = 11;
+  var frames   = box.frames ? box.frames.slice() : [];
+  while (frames.length < FRAMES) frames.push({ drawn: false, combAge: 0, content: { empty: 1 } });
+
+  var selectedFrame = Math.floor(FRAMES / 2);
+  var bodyWrap = h('div', { class: 'frame-mgmt-body' });
+
+  function buildPanel() {
+    bodyWrap.innerHTML = '';
+
+    /* ---- Frame strip row ------------------------------------------ */
+    var qFrame  = (boxType === 'brood' && boxIdx === 0) ? _ui_estimateQueenFrameIdx(colony) : -1;
+    var qcFrame = (boxType === 'brood' && boxIdx === 0) ? _ui_estimateQCellFrameIdx(colony) : -1;
+
+    var thumbRow = h('div', { class: 'fm-thumbs-row' });
+    frames.forEach(function(fr, fi) {
+      var isQ   = fi === qFrame;
+      var isQC  = fi === qcFrame && colony.queenCells && colony.queenCells.type !== 'none'
+                  && colony.known && colony.known.queenCells !== 'none';
+      var strip = _ui_buildFrameStrip(fr, boxType, isQ, isQC);
+      strip.classList.add('fm-frame-thumb');
+      if (fi === selectedFrame) strip.classList.add('fm-frame-selected');
+      strip.title = 'Frame ' + (fi + 1) + ' — ' + _act_frameLabel(fi, FRAMES);
+      strip.appendChild(h('div', { class: 'fm-frame-num' }, String(fi + 1)));
+      (function(idx) {
+        strip.addEventListener('click', function() { selectedFrame = idx; buildPanel(); });
+      })(fi);
+      thumbRow.appendChild(strip);
+    });
+    bodyWrap.appendChild(h('div', { class: 'fm-frames-section' }, [
+      h('div', { class: 'fm-section-label' }, 'Frames — click to inspect'),
+      thumbRow
+    ]));
+
+    /* ---- Selected frame detail ------------------------------------- */
+    var fr     = frames[selectedFrame];
+    var frLbl  = _act_frameLabel(selectedFrame, FRAMES);
+    var isQFr  = selectedFrame === qFrame;
+    var isQCFr = selectedFrame === qcFrame && colony.queenCells && colony.queenCells.type !== 'none'
+                 && colony.known && colony.known.queenCells !== 'none';
+
+    var detailRight = h('div', { class: 'fm-detail-right' });
+    detailRight.appendChild(h('div', { class: 'fm-frame-title' }, 'Frame ' + (selectedFrame + 1) + ' — ' + frLbl));
+
+    /* Frame state tags */
+    var stateParts = [ fr.drawn ? 'Drawn comb' : 'Foundation — not yet drawn' ];
+    if (fr.combAge > 0) {
+      stateParts.push(['new','1 yr','2 yr','3 yr','4 yr','5+ yr'][Math.min(5, fr.combAge)] + ' old');
+    }
+    if (isQFr)  stateParts.push('Queen here');
+    if (isQCFr) stateParts.push('Queen cells (' + colony.queenCells.type + ')');
+
+    var detailLeft;
+    if (boxType === 'brood') {
+      /* Full hex comb on the left */
+      var synFrame = {
+        cells:         _ui_contentToCells(fr.content),
+        hasQueen:      isQFr,
+        queenCellType: colony.queenCells.type,
+        label:         frLbl
+      };
+      if (!isQCFr) synFrame.cells.qcell = 0;
+      else synFrame.cells.qcell = Math.min(colony.queenCells.count || 0, 4);
+      detailLeft = h('div', { class: 'fm-comb-col' }, [
+        _ui_buildComb(synFrame)
+      ]);
     } else {
-      queenLine = 'Queen not present';
+      /* Super frame: hex comb showing honey cells */
+      var fillFrac = (fr.content.honey || 0) + (fr.content.nectar || 0);
+      var S = 99; /* cell scale (11 cols × 9 rows = 99 cells) */
+      var cappedN  = Math.round(fillFrac * 0.75 * S);
+      var nectarN  = Math.round(fillFrac * 0.25 * S);
+      var emptyN   = Math.max(0, S - cappedN - nectarN);
+      var superCombFrame = {
+        cells: {
+          honey: cappedN, nectar: nectarN, empty: emptyN,
+          eggs: 0, larva: 0, capbrood: 0, dronebr: 0, pollen: 0,
+          qcell: 0, disease: 0, mite: 0, found: 0
+        },
+        hasQueen: false, queenCellType: 'none', label: frLbl
+      };
+      var pctLabel = h('div', { class: 'fm-sfv-pct' }, (fillFrac * 100).toFixed(0) + '% full');
+      detailLeft = h('div', { class: 'fm-comb-col' }, [
+        h('div', { class: 'fm-super-comb-wrap' }, [
+          _ui_buildComb(superCombFrame),
+          pctLabel
+        ])
+      ]);
+    }
+
+    var detailSide = h('div', { class: 'fm-comb-side' }, [
+      h('div', { class: 'fm-frame-state' }, stateParts.join(' · ')),
+      boxType === 'brood' ? _ui_buildCombLegend() : null,
+      boxType === 'brood' ? h('div', { class: 'fm-comb-tip' }, [
+        h('b', {}, 'Reading the comb: '),
+        'The brood nest sits centrally — eggs (pale) at the heart, larvae around them, capped brood (brown) on the outer ring. Pollen bands hug the brood; honey arches over the top and fills the outer frames.'
+      ]) : null
+    ]);
+
+    bodyWrap.appendChild(h('div', { class: 'fm-detail-wrap' }, [detailLeft, detailSide]));
+
+    /* ---- Super summary (supers only) ------------------------------- */
+    if (boxType === 'super') {
+      var cap    = SIM.honeyPerSuper;
+      var filPct = Math.round(box.honeyKg / cap * 100);
+      var ht2    = (typeof HONEY_TYPES !== 'undefined' && HONEY_TYPES[box.honeyType]) || {};
+      var advice = '';
+      if (filPct >= 80)            advice = '✓ This super is nearly full — add another or harvest soon.';
+      else if (filPct > 0 && filPct < 20) advice = '⚠ Only a small amount so far — check back when the flow is on.';
+
+      bodyWrap.appendChild(h('div', { class: 'fm-super-info' }, [
+        h('div', { class: 'fm-si-row' }, [
+          h('span', {}, 'Total honey: '),
+          h('b', {}, box.honeyKg.toFixed(1) + ' kg / ' + cap + ' kg (' + filPct + '% full)')
+        ]),
+        ht2.name ? h('div', { class: 'fm-si-row' }, [
+          h('span', {}, 'Honey type: '),
+          h('b', {}, ht2.name),
+          ht2.note ? h('span', { class: 'fm-si-note' }, ' — ' + ht2.note) : null
+        ]) : null,
+        advice ? h('div', { class: 'fm-si-advice ' + (filPct >= 80 ? 'good' : 'warn') }, advice) : null
+      ]));
     }
   }
 
-  var entranceLabel = {
-    open: 'Open entrance',
-    reduced: 'Reduced entrance',
-    mouseguard: 'Mouse guard fitted'
-  }[colony.entrance] || colony.entrance;
+  buildPanel();
 
-  return h('div', { class: 'hive-cross' }, [
-    h('div', { style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '.5px', color: 'var(--honey-dk)', marginBottom: '8px' } }, 'Hive layout'),
-    stack,
-    queenLine ? h('div', { style: { fontSize: '12px', marginTop: '8px', color: 'var(--ink-soft)' }, text: queenLine }) : null,
-    h('div', { style: { fontSize: '12px', marginTop: '4px', color: 'var(--ink-soft)' }, text: entranceLabel })
-  ]);
+  function _backToHive() { closeModal(); if (colony.alive) openHiveDetail(colony); }
+  var buttons = [{ label: '← Back', act: _backToHive }];
+  if (boxType === 'super' && colony.alive) {
+    buttons.unshift({ label: '🍯 Harvest honey', cls: 'btn-leaf', act: function() {
+      closeModal();
+      _ui_openHarvestDialog(colony);
+    } });
+  }
+
+  openModal({ title: titleText, body: bodyWrap, wide: true, buttons: buttons });
+}
+
+/* Convert layout content fractions to inspection-style cell counts (0..200) */
+function _ui_contentToCells(content) {
+  var S = 200;
+  var c = content || {};
+  return {
+    eggs:     Math.round((c.eggs   || 0) * S),
+    larva:    Math.round((c.larvae || 0) * S),
+    capbrood: Math.round((c.capped || 0) * S),
+    dronebr:  Math.round((c.drone  || 0) * S),
+    honey:    Math.round((c.honey  || 0) * S),
+    nectar:   Math.round((c.nectar || 0) * S),
+    pollen:   Math.round((c.pollen || 0) * S),
+    empty:    Math.round((c.empty  || 0) * S),
+    qcell: 0, disease: 0, mite: 0, found: 0
+  };
 }
 
 /* The fog-of-war panel: every observed state value, explained and colour-coded
@@ -1770,7 +2130,97 @@ function _ui_buildActionButtons(colony) {
    then confirms. It teaches as you go, and re-reads as a reminder.
    ==================================================================== */
 
+/* ====================================================================
+   HARVEST DIALOG — per-super selection
+   ==================================================================== */
+function _ui_openHarvestDialog(colony) {
+  if (!colony || !colony.alive) { toast('Colony is not alive.', 'bad'); return; }
+  if ((colony.supers || 0) === 0) { toast('No supers on this hive to harvest.', 'bad'); return; }
+
+  /* Ensure layout is synced */
+  if (!colony.hiveLayout && typeof colonyWeeklyLayoutSync === 'function') colonyWeeklyLayoutSync(colony);
+  var layout = colony.hiveLayout || { supers: [] };
+
+  var cap = (typeof SIM !== 'undefined' && SIM.honeyPerSuper) ? SIM.honeyPerSuper : 13;
+  var hasClearer = !!(Game.inventory && Game.inventory.tools && Game.inventory.tools.clearerBoard);
+
+  /* Build one row per super */
+  var checked = []; /* which supers are ticked for harvest */
+  var rows = [];
+
+  for (var si = 0; si < colony.supers; si++) {
+    var sup = (layout.supers && layout.supers[si]) || { honeyKg: colony.superHoney / colony.supers, honeyType: 'summer' };
+    var kg  = sup.honeyKg || 0;
+    var pct = Math.round(kg / cap * 100);
+    var ht  = (typeof HONEY_TYPES !== 'undefined' && HONEY_TYPES[sup.honeyType]) || {};
+
+    /* Default: tick supers that are ≥ 60% full */
+    checked[si] = pct >= 60;
+
+    var fillColor = pct >= 80 ? '#4a9e5c' : pct >= 40 ? '#d4901f' : '#b03f24';
+    var fillBar = h('div', { class: 'harv-fill-bar' }, [
+      h('div', { class: 'harv-fill-fill', style: { width: pct + '%', background: fillColor } })
+    ]);
+
+    var cb = h('input', { type: 'checkbox', class: 'harv-cb', id: 'harv-cb-' + si });
+    cb.checked = checked[si];
+    (function(idx, checkbox) {
+      checkbox.addEventListener('change', function() { checked[idx] = checkbox.checked; });
+    })(si, cb);
+
+    var row = h('div', { class: 'harv-super-row' }, [
+      h('label', { class: 'harv-super-label', 'for': 'harv-cb-' + si }, [
+        cb,
+        h('span', { class: 'harv-super-num' }, 'Super ' + (si + 1)),
+        fillBar,
+        h('span', { class: 'harv-kg' }, kg.toFixed(1) + ' kg'),
+        h('span', { class: 'harv-pct' }, '(' + pct + '%)'),
+        ht.name ? h('span', { class: 'harv-type' }, ht.name) : null
+      ])
+    ]);
+    rows.push(row);
+  }
+
+  var note = hasClearer
+    ? h('div', { class: 'harv-note' }, '✓ You have a clearer board — bees cleared cleanly, no honey loss.')
+    : h('div', { class: 'harv-note warn' }, '⚠ No clearer board — you\'ll brush bees off and lose ~8% of the honey.');
+
+  var body = h('div', { class: 'harv-body' }, [
+    h('div', { class: 'harv-intro' }, 'Select which supers to take off and extract:'),
+    h('div', { class: 'harv-rows' }, rows),
+    note
+  ]);
+
+  function doHarvest() {
+    /* Harvest in reverse-index order so splice doesn't shift indices */
+    var toHarvest = [];
+    for (var i = 0; i < checked.length; i++) { if (checked[i]) toHarvest.push(i); }
+    if (toHarvest.length === 0) { toast('No supers selected.', 'bad'); return; }
+
+    var totalKg = 0;
+    for (var j = toHarvest.length - 1; j >= 0; j--) {
+      var res = harvestSuperAt(colony, toHarvest[j]);
+      if (res.ok) totalKg += res.kg;
+    }
+    closeModal();
+    render();
+    if (colony.alive) openHiveDetail(colony);
+  }
+
+  function backToHive() { closeModal(); if (colony.alive) openHiveDetail(colony); }
+
+  openModal({
+    title: '🍯 Harvest honey — ' + colony.name,
+    body: body,
+    buttons: [
+      { label: '🍯 Harvest selected', cls: 'btn-leaf', act: doHarvest },
+      { label: 'Cancel', act: backToHive }
+    ]
+  });
+}
+
 function _ui_actionDialog(key, colony) {
+  if (key === 'harvest') { _ui_openHarvestDialog(colony); return; }
   var g = (window.ACTION_GUIDE || {})[key];
   if (!g) { var rc = _ui_actionControls(key, colony); if (rc.run) { var rr = rc.run(); if (rr && rr.msg) toast(rr.msg, rr.ok ? 'good' : 'bad'); render(); } return; }
 

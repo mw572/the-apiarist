@@ -487,28 +487,222 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 
 /* ====================================================================
-   HIVE DETAIL
+   HIVE DETAIL — cross-section with real frame content
    ==================================================================== */
 
 .hive-detail { display: flex; gap: 18px; }
-.hive-cross { flex: none; width: 200px; display: flex; flex-direction: column; align-items: center; }
-.hive-cross .cross-stack { display: flex; flex-direction: column; align-items: center; cursor: default; }
-.cross-box {
-  width: 150px; border: 2px solid #8a6a38; background: linear-gradient(180deg,#e7c884,#d4af68);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; color: #6a4a22; position: relative;
+.hive-cross  { flex: none; width: 248px; display: flex; flex-direction: column; }
+.hive-info   { flex: 1; min-width: 0; }
+
+.cross-section-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--honey-dk); margin-bottom: 8px;
 }
-.cross-box.super { height: 34px; }
-.cross-box.brood { height: 58px; }
-.cross-box.excluder { height: 12px; background: repeating-linear-gradient(90deg,#b59a63 0 4px,#d4bf88 4px 8px); }
+.cross-stack { display: flex; flex-direction: column; align-items: center; }
+
+/* Individual boxes (super / brood) */
+.cross-box {
+  width: 210px; border: 2px solid #8a6a38;
+  background: linear-gradient(180deg, #ead592, #d4af68);
+  display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+}
 .cross-box.clickable { cursor: pointer; }
-.cross-box.clickable:hover { filter: brightness(1.07); outline: 2px solid var(--honey-dk); }
-.hive-info { flex: 1; }
+.cross-box.clickable:hover { filter: brightness(1.06); outline: 2px solid var(--honey-dk); outline-offset: -1px; }
+.cross-super { min-height: 62px; }
+.cross-brood { min-height: 84px; }
+.cross-excluder {
+  width: 210px; height: 14px;
+  background: repeating-linear-gradient(90deg, #b59a63 0 4px, #d4bf88 4px 8px);
+  display: flex; align-items: center;
+}
+.cross-excluder-label { font-size: 8px; font-weight: 700; color: #6a4a22; padding: 0 5px; }
+
+.cross-box-label {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .3px; color: #6a4a22;
+  padding: 3px 5px 0; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* 11 frame strips inside each box */
+.cross-frames {
+  display: flex; flex: 1; gap: 1px; padding: 3px 4px 2px; align-items: stretch; min-height: 0;
+}
+.cross-frame {
+  flex: 1; position: relative; border-radius: 1px; overflow: hidden;
+  border: 1px solid rgba(139, 90, 43, 0.25); background: #e9d5a3;
+  min-height: 36px; cursor: pointer;
+}
+.cross-frame:hover { outline: 1.5px solid #7a5a28; z-index: 2; }
+.cross-frame.cf-has-queen { border-color: #b8880a; border-width: 1.5px; }
+.cross-frame.cf-has-qcell { border-color: #c02020; border-width: 1.5px; }
+
+/* Frame band colours — match cell type palette */
+.cf-band.cf-honey    { background: #e8a020; }
+.cf-band.cf-nectar   { background: #f0c33c; }
+.cf-band.cf-pollen   { background: #c87828; }
+.cf-band.cf-capped   { background: #c07a3a; }
+.cf-band.cf-larva    { background: #e8c87a; }
+.cf-band.cf-eggs     { background: #f3e7c2; }
+.cf-band.cf-drone    { background: #a87f44; }
+.cf-band.cf-empty    { background: #ead8a8; }
+
+/* Queen / queen-cell marker dots on frame strip */
+.cf-queen-dot {
+  position: absolute; width: 7px; height: 7px; border-radius: 50%;
+  background: #f5d800; border: 1.5px solid #8a6a00;
+  left: 50%; bottom: 28%; transform: translateX(-50%);
+  z-index: 4; box-shadow: 0 1px 2px rgba(0,0,0,0.45);
+}
+.cf-qcell-dot {
+  position: absolute; width: 6px; height: 6px; border-radius: 50%;
+  background: #c83030; border: 1px solid #6a1010;
+  left: 50%; bottom: 6%; transform: translateX(-50%);
+  z-index: 4;
+}
+
+/* Super fill bar */
+.cross-fill-bar {
+  height: 5px; background: #c8aa60; margin: 1px 4px 3px;
+  border-radius: 2px; overflow: hidden; flex: none;
+}
+.cross-fill-fill { height: 100%; border-radius: 2px; transition: width .4s ease; }
+
+/* Hive floor under brood boxes */
+.cross-floor {
+  width: 210px; height: 11px;
+  background: #7a5a28; border-radius: 0 0 3px 3px;
+  border: 2px solid #5a3c18; border-top: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.cross-entrance-tab {
+  width: 28px; height: 7px; background: #3a2a12; border-radius: 1px;
+}
+
+/* Swarm pressure bar */
+.cross-swarm-bar { width: 210px; margin-top: 9px; }
+.csb-header {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 3px;
+}
+.csb-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--ink-soft); }
+.csb-pct   { font-size: 10px; font-weight: 700; }
+.csb-track { height: 6px; background: #ddd0b8; border-radius: 3px; overflow: hidden; }
+.csb-fill  { height: 100%; border-radius: 3px; transition: width .4s ease; }
+
+/* Meta lines below the stack */
+.cross-meta-line  { font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
+.cross-click-hint { font-size: 10px; color: var(--ink-3); margin-top: 5px; font-style: italic; }
+
+/* ====================================================================
+   HIVE CARD — swarm pressure strip
+   ==================================================================== */
+
+.hive-swarm-strip {
+  width: 68px; height: 4px; margin: 0 auto 2px;
+  background: linear-gradient(90deg, var(--spc, #4a9e5c) var(--sp, 20%), #ddd0b8 var(--sp, 20%));
+  border-radius: 2px;
+}
+
+/* ====================================================================
+   FRAME MANAGEMENT MODAL
+   ==================================================================== */
+
+.frame-mgmt-body { display: flex; flex-direction: column; gap: 16px; }
+.fm-section-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--honey-dk); margin-bottom: 7px;
+}
+.fm-thumbs-row { display: flex; gap: 4px; }
+.fm-frame-thumb {
+  width: 28px; height: 90px; border-radius: 2px;
+  border: 2px solid #9a7b44; cursor: pointer;
+  position: relative; overflow: hidden; background: #e9d5a3;
+  flex-shrink: 0;
+}
+.fm-frame-thumb:hover { outline: 2px solid var(--honey-dk); outline-offset: 1px; }
+.fm-frame-thumb.fm-frame-selected { outline: 3px solid var(--honey-dk); outline-offset: 1px; }
+.fm-frame-num {
+  position: absolute; bottom: 2px; left: 0; right: 0;
+  text-align: center; font-size: 8px; font-weight: 700;
+  color: rgba(60, 40, 10, 0.6); z-index: 10; pointer-events: none;
+}
+.fm-frames-section { background: var(--parch-2); border-radius: 8px; padding: 10px 12px; }
+
+.fm-detail-wrap { display: flex; gap: 16px; align-items: flex-start; }
+.fm-detail-right { flex: 1; }
+.fm-frame-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+.fm-frame-state { font-size: 11px; color: var(--ink-soft); margin-top: 8px; }
+
+.fm-super-frame-vis {
+  width: 70px; height: 130px; border: 2px solid #9a7b44; border-radius: 3px;
+  background: #e9d5a3; position: relative; overflow: hidden; flex-shrink: 0;
+}
+.fm-sfv-fill {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(180deg, #f0c33c, #e8a020);
+  transition: height .4s ease;
+}
+.fm-sfv-label {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 11px; font-weight: 700; color: #6a4a22;
+  white-space: nowrap;
+}
+
+.fm-super-info {
+  font-size: 12px; background: var(--parch-2); border-radius: 6px; padding: 9px 12px;
+}
+.fm-si-row   { margin-bottom: 4px; }
+.fm-si-note  { color: var(--ink-soft); }
+.fm-si-advice {
+  margin-top: 7px; font-size: 11px; padding: 5px 8px; border-radius: 4px;
+}
+.fm-si-advice.good { background: var(--ok-bg);   color: var(--ok); }
+.fm-si-advice.warn { background: var(--warn-bg); color: var(--warn); }
+
+/* fm-comb-col: wraps hex comb (brood or super) in detail view */
+.fm-comb-col { flex: none; display: flex; flex-direction: column; align-items: flex-start; }
+.fm-comb-side { flex: 1; min-width: 0; }
+.fm-comb-tip  { font-size: 11px; color: var(--ink-soft); margin-top: 8px; line-height: 1.4; }
+
+/* Super frame comb wrapper */
+.fm-super-comb-wrap { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.fm-sfv-pct {
+  font-size: 11px; font-weight: 700; color: var(--honey-dk);
+}
 
 .colony-known-note {
   font-size: 12px; font-style: italic; color: var(--info);
   background: var(--info-bg); border-radius: 6px; padding: 6px 9px; margin-bottom: 10px;
 }
+
+/* ====================================================================
+   HARVEST DIALOG
+   ==================================================================== */
+
+.harv-body { display: flex; flex-direction: column; gap: 12px; }
+.harv-intro { font-size: 13px; color: var(--ink-soft); }
+.harv-rows { display: flex; flex-direction: column; gap: 8px; }
+.harv-super-row { background: var(--parch-2); border-radius: 6px; padding: 6px 10px; }
+.harv-super-label {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  font-size: 13px;
+}
+.harv-cb { width: 16px; height: 16px; cursor: pointer; accent-color: var(--honey-dk); }
+.harv-super-num { font-weight: 700; min-width: 56px; }
+.harv-fill-bar {
+  flex: 1; height: 8px; background: #ddd0b8; border-radius: 4px; overflow: hidden;
+}
+.harv-fill-fill { height: 100%; border-radius: 4px; transition: width .3s ease; }
+.harv-kg  { font-weight: 700; min-width: 52px; text-align: right; }
+.harv-pct { font-size: 11px; color: var(--ink-soft); min-width: 36px; }
+.harv-type { font-size: 11px; color: var(--honey-dk); font-style: italic; }
+
+.harv-note {
+  font-size: 11px; padding: 7px 10px; border-radius: 5px;
+  background: var(--ok-bg); color: var(--ok);
+}
+.harv-note.warn { background: var(--warn-bg); color: var(--warn); }
 
 /* ====================================================================
    INSPECTION VIEW

@@ -612,6 +612,11 @@ function addSuper(colony) {
   } else {
     msg = `Super added to ${colony.name} (£${COSTS.superAdd.toFixed(2)}).`;
   }
+  /* Keep visual layout in sync immediately (sync also runs weekly) */
+  if (colony.hiveLayout) {
+    if (!colony.hiveLayout.supers) colony.hiveLayout.supers = [];
+    colony.hiveLayout.supers.push(_colony_makeLayoutSuper());
+  }
   logEvent('📦', msg, 'plain');
   render();
   return { ok: true, msg };
@@ -629,6 +634,9 @@ function removeSuper(colony) {
     return { ok: false, msg: 'The super still has honey in it — harvest or clear it first.' };
   }
   colony.supers--;
+  if (colony.hiveLayout && colony.hiveLayout.supers && colony.hiveLayout.supers.length > 0) {
+    colony.hiveLayout.supers.pop();
+  }
   const msg = `Super removed from ${colony.name}.`;
   logEvent('📦', msg, 'plain');
   render();
@@ -646,6 +654,10 @@ function addBroodBox(colony) {
     return { ok: false, msg: `Not enough funds — a brood box costs £${COSTS.broodBoxAdd.toFixed(2)}.` };
   }
   colony.broodBoxes = 2;
+  if (colony.hiveLayout) {
+    if (!colony.hiveLayout.broodBoxes) colony.hiveLayout.broodBoxes = [];
+    colony.hiveLayout.broodBoxes.push(_colony_makeLayoutBox('brood'));
+  }
   const msg = `Second brood box added to ${colony.name} (£${COSTS.broodBoxAdd.toFixed(2)}). The queen now has more room to lay.`;
   logEvent('🪵', msg, 'good');
   render();
