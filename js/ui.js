@@ -2579,26 +2579,7 @@ function _ui_buildActionButtons(colony) {
     ])
   ]);
 
-  /* === Hive assembly === */
-  var _hasNp = colony.stack && colony.stack.some(function(i) { return i.type === 'newspaper'; });
-  var assembly = h('div', { class: 'action-group' }, [
-    h('div', { class: 'action-group-title' }, '🔲 Hive assembly'),
-    h('div', { class: 'btn-row' }, [
-      abtn('Fit queen excluder', '', 'fitQueenExcluder',
-        dead || !!colony.queenExcluder,
-        dead ? 'This colony has died' : 'Queen excluder already fitted'),
-      abtn('Remove queen excluder', '', 'removeQueenExcluder',
-        dead || !colony.queenExcluder,
-        dead ? 'This colony has died' : 'No queen excluder is fitted'),
-      abtn('Place newspaper', '', 'placeNewspaper',
-        dead || (colony.broodBoxes || 1) < 2 || !!_hasNp,
-        dead ? 'This colony has died'
-          : (colony.broodBoxes || 1) < 2 ? 'Need double brood to use newspaper'
-          : 'Newspaper already in place')
-    ])
-  ]);
-
-  return h('div', {}, [primary, mgmt, swarm, queen, assembly]);
+  return h('div', {}, [primary, mgmt, swarm, queen]);
 }
 
 /* ====================================================================
