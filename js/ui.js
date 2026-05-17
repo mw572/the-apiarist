@@ -2655,17 +2655,16 @@ function openInspection(colony) {
     return;
   }
 
-  /* Weather gate — hard block. Show the reason as a modal (not just a toast)
-     so the player reads why and learns the rule. */
-  if (!report.ok && !report.weatherOk) {
+  /* Deep winter = hard block. Bad-but-not-winter weather = soft warning with option to proceed. */
+  if (report.hardBlock) {
     openModal({
-      title: 'Cannot inspect today',
+      title: 'Cannot inspect in deep winter',
       body: h('div', { class: 'modal-body' }, [
         h('div', { class: 'explainer' }, [
-          h('div', { class: 'explainer-art' }, '🌧️'),
+          h('div', { class: 'explainer-art' }, '❄️'),
           h('div', { class: 'explainer-body' }, [
-            h('p', { text: report.blockReason || 'Conditions are not suitable for an inspection right now.' }),
-            h('p', { html: '<b>When to inspect:</b> choose a calm, dry day when the temperature is above 12°C and foragers are flying. Spring and summer mornings are ideal. Avoid rain, strong wind, and cold snaps.' })
+            h('p', { text: report.blockReason }),
+            h('p', { html: '<b>What to do instead:</b> heft the hive from behind — if it feels light, slide a block of fondant under the crown board. No need to open it until March.' })
           ])
         ])
       ]),
@@ -2674,6 +2673,37 @@ function openInspection(colony) {
     return;
   }
 
+  /* Suboptimal weather: warn but allow the player to proceed.
+     In a week-based game the player picks the best day of the week.
+     Blocking entirely for rain/cool weather would lock them out for weeks. */
+  if (report.weatherWarning) {
+    openModal({
+      title: 'Conditions are not ideal',
+      body: h('div', { class: 'modal-body' }, [
+        h('div', { class: 'explainer' }, [
+          h('div', { class: 'explainer-art' }, '🌧️'),
+          h('div', { class: 'explainer-body' }, [
+            h('p', { text: report.blockReason }),
+            h('p', { html: '<b>When to inspect:</b> choose a calm, dry day above 12°C when foragers are flying. Inspecting in poor conditions makes disease signs and queen cells harder to spot, and the bees more defensive.' })
+          ])
+        ])
+      ]),
+      buttons: [
+        { label: 'OK — I\'ll wait', cls: 'btn-secondary', act: closeModal },
+        { label: 'Inspect anyway', cls: 'btn-primary', act: function() {
+          closeModal();
+          _openInspectionModal(colony, report);
+        }}
+      ]
+    });
+    return;
+  }
+
+  _openInspectionModal(colony, report);
+}
+
+/* Separated so the "Inspect anyway" button on the weather warning can call it directly. */
+function _openInspectionModal(colony, report) {
   var frames = report.frames || [];
   var selected = 0;
   var seen = {};        // frame index -> true once it has been lifted

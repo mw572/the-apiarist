@@ -60,22 +60,28 @@ function inspectColony(colony) {
   const weatherOk = wx.inspect && !deepWinter;
   report.weatherOk = weatherOk;
 
-  if (!weatherOk) {
-    /* Hard block — do NOT update colony.known or colony.lastInspected.
-       Inspecting in poor conditions risks chilling brood, stressing the
-       colony and giving you a false read. Wait for a calm, dry day above 12°C. */
+  if (deepWinter) {
+    /* Deep winter: HARD block. You genuinely cannot open a winter cluster —
+       bees break cluster, chill, and may not reform. Use heft or hefting test. */
     report.ok = false;
-    if (deepWinter) {
-      report.blockReason = 'Too cold to open the hive safely. The cluster needs to stay sealed in deep winter (December–February). If you are worried about stores, heft the hive instead — no need to open it.';
-    } else if (wx.warmth < 0.25) {
-      /* cold but not deep winter */
-      report.blockReason = 'It is too cold to inspect — the bees need at least 12°C before you open them up. A cold brood nest can set the colony back weeks. Wait for a warmer day.';
-    } else if (wx.hazard === 'storm') {
-      report.blockReason = 'Too windy and stormy to inspect safely. Strong wind makes the bees very defensive and you risk losing frames. Wait for calmer conditions.';
-    } else {
-      report.blockReason = 'The weather is not suitable for an inspection today (' + (wx.label || 'poor conditions') + '). Inspect on a fine or mixed day — rain and cold disturb the colony and make disease signs much harder to read.';
-    }
+    report.hardBlock = true;
+    report.blockReason = 'Too cold to open the hive safely. The cluster needs to stay sealed in deep winter (December–February). If you are worried about stores, heft the hive instead — no need to open it.';
     return report;
+  }
+
+  if (!weatherOk) {
+    /* Suboptimal weather: soft warning only. Inspection proceeds but with penalties:
+       harder to spot queen cells and disease, bees more defensive, -3 XP.
+       In a week-based game the player picks the best day of the week — we should
+       never hard-block for multiple weeks running over poor-but-not-dangerous weather. */
+    report.weatherWarning = true;
+    if (wx.warmth < 0.25) {
+      report.blockReason = 'It is cold today — the bees need at least 12°C before you open them up. A cold brood nest can set the colony back. Wait for a warmer day if you can.';
+    } else if (wx.hazard === 'storm') {
+      report.blockReason = 'It is stormy — strong wind makes the bees very defensive and disease signs are harder to read. Inspect on a calmer day if possible.';
+    } else {
+      report.blockReason = 'The conditions are not ideal today (' + (wx.label || 'cool and grey') + '). Inspecting on a fine, warm day above 12°C gives you a much clearer read. You can proceed, but findings may be less reliable.';
+    }
   }
 
   /* ---- Equipment checks -------------------------------------------- */
@@ -409,7 +415,7 @@ function inspectColony(colony) {
 
   /* ---- XP award ----------------------------------------------------- */
   let xp = 10; // base inspection XP
-  if (!weatherOk) xp -= 2; // penalty for bad-weather inspection
+  if (report.weatherWarning) xp -= 3; // penalty for suboptimal conditions (not hard-blocked)
   if (season === 'spring') xp += 3; // swarm season is a teaching moment
   if (queenFound) xp += 2;
   if (colony.queen && colony.queen.marked && queenFound) xp += 1; // small bonus for finding marked queen
