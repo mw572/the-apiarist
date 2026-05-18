@@ -537,11 +537,20 @@ function _colony_emptySuperAt(colony, idx) {
    Only call this when actually taking the box off — not on harvest. */
 function _colony_removeSuperAt(colony, idx) {
   var removedKg = 0;
+  var removedType = 'summer';
   if (colony.hiveLayout && colony.hiveLayout.supers && colony.hiveLayout.supers[idx]) {
-    removedKg = colony.hiveLayout.supers[idx].honeyKg || 0;
+    removedKg  = colony.hiveLayout.supers[idx].honeyKg  || 0;
+    removedType = colony.hiveLayout.supers[idx].honeyType || 'summer';
     colony.hiveLayout.supers.splice(idx, 1);
   } else if (colony.supers > 0) {
     removedKg = colony.superHoney / Math.max(colony.supers, 1);
+    removedType = colony.superHoneyType || 'summer';
+  }
+  /* Credit residual honey to inventory rather than destroying it */
+  if (removedKg > 0) {
+    _econ_ensureKey(Game.inventory.honey, removedType, 0);
+    Game.inventory.honey[removedType] = _econ_roundPrice(Game.inventory.honey[removedType] + removedKg);
+    logEvent('📦', 'Residual ' + removedKg.toFixed(2) + ' kg of honey from the removed super added to your bulk tank.', 'plain');
   }
   colony.superHoney = Math.max(0, _econ_roundPrice((colony.superHoney || 0) - removedKg));
   colony.supers = Math.max(0, (colony.supers || 1) - 1);

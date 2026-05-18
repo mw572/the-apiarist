@@ -888,8 +888,12 @@ function demareeMethod(colony) {
     return { ok: false, msg: 'The Demaree method is a swarm-season manipulation — do it in late April to July when the colony is at risk of swarming.' };
   }
 
-  /* Queen must be confirmed present: directly spotted, eggs seen (proves laying queen
-     was recently here), or last inspection confirmed queenright status */
+  /* Hard live-state check first — stale known snapshot cannot override actual queenlessness */
+  if (!colony.queen || !colony.queen.present || colony.queen.state === 'absent') {
+    return { ok: false, msg: 'The hive is currently queenless — the Demaree requires a laying queen to be present.' };
+  }
+
+  /* Queen must also be confirmed present via inspection knowledge */
   const _demareeQueenConfirmed = colony.known && (
     colony.known.queenSeen ||
     colony.known.eggsSeen ||
@@ -1884,6 +1888,12 @@ function rearQueens(colony) {
   if (!colony.queen || !colony.queen.present || colony.queen.state !== 'laying') {
     return { ok: false, msg: 'The cell raiser needs a laying queen to provide quality worker bees.' };
   }
+  /* One rearing cycle per 4 weeks — queen cells take 3 weeks in real life */
+  if (colony._rearingQueensWeek && (Game.week - colony._rearingQueensWeek) < 4) {
+    var weeksLeft = 4 - (Game.week - colony._rearingQueensWeek);
+    return { ok: false, msg: 'Queens are still developing — check back in ' + weeksLeft + ' week' + (weeksLeft === 1 ? '' : 's') + '.' };
+  }
+  colony._rearingQueensWeek = Game.week;
 
   /* Over the next few weeks (simplified) the colony raises queens.
      Represent as producing reared queens that get added to the stat counter.

@@ -193,6 +193,8 @@ function _migrateSave(g) {
     if (typeof c.newspaperWeeksInPlace !== 'number') c.newspaperWeeksInPlace = 0;
     if (!Array.isArray(c._stackWarnings))            c._stackWarnings = [];
     if (typeof c._isDemareeStackPattern !== 'boolean') c._isDemareeStackPattern = false;
+    /* Queen rearing cooldown stamp — null means never reared */
+    if (typeof c._rearingQueensWeek !== 'number') c._rearingQueensWeek = 0;
   });
 
   /* Inventory fields added with hive assembly mechanic */
@@ -217,10 +219,28 @@ function _migrateSave(g) {
     if (typeof g.stats[k] !== 'number') g.stats[k] = 0;
   });
 
-  /* Flags — ensure object and seenExplainers sub-object exist */
+  /* Flags — ensure object and required sub-keys exist */
   if (!g.flags || typeof g.flags !== 'object') g.flags = {};
   if (!g.flags.seenExplainers || typeof g.flags.seenExplainers !== 'object') {
     g.flags.seenExplainers = {};
+  }
+  if (!g.flags.salesChannels || typeof g.flags.salesChannels !== 'object') {
+    g.flags.salesChannels = { gate: true };
+  }
+  if (typeof g.flags.lastWinterYear !== 'number') g.flags.lastWinterYear = 0;
+
+  /* Reputation — clamp to valid range; injected saves cannot have rep > 100 or < 0 */
+  if (typeof g.reputation !== 'number' || isNaN(g.reputation)) g.reputation = 0;
+  g.reputation = Math.max(0, Math.min(100, g.reputation));
+
+  /* Game.week — must be a finite positive number or the simulation maths produce NaN everywhere */
+  if (typeof g.week !== 'number' || !isFinite(g.week) || g.week < 1) g.week = SIM.startWeek || 14;
+
+  /* Apiaries — ensure each has an id; missing id crashes render */
+  if (Array.isArray(g.apiaries)) {
+    g.apiaries.forEach(function(a, i) {
+      if (!a.id) a.id = i + 1;
+    });
   }
 }
 

@@ -1428,7 +1428,7 @@ function colonyWeeklyUpdate(colony, ctx){
   // After one week (age 1) cells are capped — swarm IMMINENT warning.
   // After a second week capped (age 2) the prime swarm issues.
   // Player has one full inspection window between capped and swarm firing.
-  if (colony.queenCells.type === 'swarm'){
+  if (colony.queenCells.type === 'swarm' && (colony.queenCells.count || 0) > 0){
     colony.queenCells.age++;
     colony.queenCells.state = colony.queenCells.age >= 1 ? 'capped' : 'larvae';
 

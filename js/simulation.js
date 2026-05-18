@@ -394,8 +394,8 @@ function runWeek() {
     /* ---- Bait hive swarm catch ------------------------------------ */
     // Swarm season weeks 15-32; requires bait hives in inventory.
     if (Game.inventory.baitHives > 0 && wkInYear >= 15 && wkInYear <= 32) {
-      // Base catch chance per bait hive per week: ~4 %
-      var catchChance = 0.04 * Game.inventory.baitHives;
+      // Base catch chance per bait hive per week: ~4 % — hard cap at 75% to prevent certainty
+      var catchChance = Math.min(0.75, 0.04 * Game.inventory.baitHives);
       // Higher chance if there are colonies swarming nearby
       if (Math.random() < catchChance) {
         // Find an apiary with space (or use the first one)
