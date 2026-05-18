@@ -473,11 +473,22 @@ function render() {
   else if (view === 'map')      stage.appendChild(_ui_buildMapView());
   else if (view === 'market')   stage.appendChild(_ui_buildMarketView());
   else if (view === 'handbook') stage.appendChild(_ui_buildHandbookView());
-  else if (view === 'finances') stage.appendChild(_ui_buildFinancesView());
-  else if (view === 'journal')  stage.appendChild(_ui_buildJournalView());
+  else if (view === 'records')  stage.appendChild(_ui_buildRecordsView());
+  /* legacy view names — keep working if loaded from old save */
+  else if (view === 'finances') stage.appendChild(_ui_buildRecordsView('finances'));
+  else if (view === 'journal')  stage.appendChild(_ui_buildRecordsView('journal'));
 
   app.appendChild(stage);
   app.appendChild(_ui_buildStatusbar());
+
+  /* Floating advance-week button — mobile only, shown via CSS */
+  var hasUrgent = (Game.advisor || []).some(function(a) { return a.tone === 'bad' || a.tone === 'warn'; });
+  var fab = h('button', {
+    class: 'advance-fab' + (hasUrgent ? '' : ' pulse'),
+    title: 'Advance one week',
+    onclick: function() { if (typeof advanceWeek === 'function') advanceWeek(); }
+  }, '▶︎');
+  app.appendChild(fab);
 }
 
 /* ====================================================================
@@ -574,8 +585,7 @@ function _ui_buildNavbar() {
     { key: 'map',      label: 'Map',      ico: '🗺️' },
     { key: 'market',   label: 'Market',   ico: '🛒' },
     { key: 'handbook', label: 'Handbook', ico: '📗' },
-    { key: 'finances', label: 'Finances', ico: '💰' },
-    { key: 'journal',  label: 'Journal',  ico: '📜' }
+    { key: 'records',  label: 'Records',  ico: '📋' }
   ];
 
   var btns = navItems.map(function(item) {
@@ -1164,6 +1174,7 @@ function _ui_buildHiveCard(colony) {
   else dotCls = known.status || 'unknown';
 
   var statusLine;
+  var plaqueAgeStr = null;
   if (!colony.alive) statusLine = colony.deadReason ? ('Lost — ' + colony.deadReason) : 'Colony lost';
   else if (!known) statusLine = 'Not yet inspected';
   else if (known.heftOnly) statusLine = 'Not yet inspected';
@@ -1171,10 +1182,9 @@ function _ui_buildHiveCard(colony) {
     statusLine = (known.populationBand
       ? known.populationBand.charAt(0).toUpperCase() + known.populationBand.slice(1)
       : (known.note || 'Inspected'));
-    // append inspection age
     if (colony.lastInspected > 0) {
       var _ageW = ((typeof Game !== 'undefined' && Game) ? Game.week : 1) - colony.lastInspected;
-      if (_ageW > 0) statusLine += ' · ' + _ageW + 'w';
+      if (_ageW > 0) plaqueAgeStr = _ageW + 'w ago';
     }
   }
 
@@ -1182,11 +1192,9 @@ function _ui_buildHiveCard(colony) {
   var badgeGlyph = '';
   var badgeCls = '';
   if (colony.alive) {
-    /* Single priority chain — first match wins */
-    if (known && known.queenCells && known.queenCells !== 'none') {
-      /* P1a: fog-of-war: player saw queen cells last inspection */
-      showBadge = true; badgeGlyph = '⚠️'; badgeCls = 'badge-warn';
-    } else if (known && known.disease) {
+    /* Single priority chain — first match wins.
+       Queen cells are shown via the roof crown, not the badge, so P1a removed. */
+    if (known && known.disease) {
       /* P1b: disease observed */
       showBadge = true; badgeGlyph = '🔴'; badgeCls = 'badge-bad';
     } else if (colony.queenCells && colony.queenCells.type === 'swarm' && colony.queenCells.state === 'capped') {
@@ -1322,7 +1330,8 @@ function _ui_buildHiveCard(colony) {
     h('div', { class: 'hive-stand' }),
     h('div', { class: 'hive-plaque' }, [
       h('div', { class: 'nm', text: colony.name }),
-      h('div', { class: 'st', text: statusLine })
+      h('div', { class: 'st', text: statusLine }),
+      plaqueAgeStr ? h('div', { class: 'st-age', text: plaqueAgeStr }) : null
     ])
   ]);
 }
@@ -1710,6 +1719,7 @@ function _ui_marketSellTab() {
       h('div', { class: 'meta' }, [
         h('b', { text: ht.name }),
         h('p', { text: count + ' jar' + (count !== 1 ? 's' : '') + ' — ' + fmtMoney(price) + ' each via ' + ch.name }),
+        batch < count ? h('p', { class: 'honey-note', text: '⚑ Channel capacity: ' + batch + ' jars this sale (' + (count - batch) + ' remaining)' }) : null,
         vis.note ? h('p', { class: 'honey-note', text: '⚠ ' + vis.note }) : null
       ]),
       h('div', { class: 'shop-action' }, h('button', {
@@ -1719,7 +1729,7 @@ function _ui_marketSellTab() {
           toast(r.msg, r.ok ? 'good' : 'bad');
           if (r.ok) render();
         }
-      }, 'Sell ' + batch))
+      }, [ 'Sell ' + batch, h('span', { class: 'shop-price' }, fmtMoney(price * batch)) ]))
     ]));
   });
   if (!jarRows.length) {
@@ -1964,18 +1974,67 @@ function _ui_buildGlossaryPane(gloss) {
 }
 
 /* ====================================================================
-   FINANCES VIEW
+   RECORDS VIEW — combines Journal + Finances with internal tabs
    ==================================================================== */
 
-function _ui_buildFinancesView() {
+function _ui_buildRecordsView(startTab) {
+  var activeTab = startTab || (Game.ui && Game.ui.recordsTab) || 'journal';
+
+  function setTab(t) {
+    if (!Game.ui) Game.ui = {};
+    Game.ui.recordsTab = t;
+    render();
+  }
+
+  var tabBar = h('div', { class: 'records-tabs' }, [
+    h('button', { class: 'records-tab' + (activeTab === 'journal'  ? ' active' : ''),
+      onclick: function() { setTab('journal'); } }, '📜 Journal'),
+    h('button', { class: 'records-tab' + (activeTab === 'finances' ? ' active' : ''),
+      onclick: function() { setTab('finances'); } }, '💰 Finances')
+  ]);
+
+  var content = activeTab === 'finances'
+    ? _ui_buildFinancesContent()
+    : _ui_buildJournalContent();
+
+  return h('div', { class: 'panel-view narrow' }, [tabBar, content]);
+}
+
+function _ui_buildJournalContent() {
+  var log = (Game.log || []).slice();
+  var entries = log.map(function(entry) {
+    return h('div', { class: 'log-entry ' + (entry.tone || 'plain') }, [
+      h('span', { class: 'when', text: (typeof dateLabel === 'function') ? dateLabel(entry.week) : ('Wk ' + entry.week) }),
+      h('span', { class: 'ico' }, entry.icon || ''),
+      h('span', { class: 'txt', text: entry.text || '' })
+    ]);
+  });
+  if (!entries.length) {
+    entries = [h('div', { class: 'empty-state' }, [
+      h('div', { class: 'big' }, '📜'),
+      h('p', { text: 'Your journal is empty. Events and notes will appear here as you play.' })
+    ])];
+  }
+  return h('div', { class: 'card' }, entries);
+}
+
+function _ui_buildFinancesContent() {
   var ledger = (Game.ledger || []).slice().reverse();
   var stats = Game.stats || {};
+
+  /* Income vs spend summary */
+  var income = 0, spend = 0;
+  (Game.ledger || []).forEach(function(e) {
+    var yr = (typeof gameYear === 'function') ? gameYear() : 1;
+    var entryYr = Math.ceil(e.week / 52);
+    if (entryYr === yr) { if (e.amount > 0) income += e.amount; else spend += e.amount; }
+  });
 
   var ledgerRows = ledger.map(function(entry) {
     var isPos = entry.amount > 0;
     return h('tr', {}, [
       h('td', { text: (typeof dateLabel === 'function') ? dateLabel(entry.week) : ('Wk ' + entry.week) }),
-      h('td', { text: entry.desc || '' }),
+      h('td', { class: 'desc-cell', text: entry.desc || '' }),
       h('td', { class: 'amt ' + (isPos ? 'pos' : 'neg'), text: fmtMoney(entry.amount) })
     ]);
   });
@@ -1996,30 +2055,27 @@ function _ui_buildFinancesView() {
     ]);
   });
 
-  return h('div', { class: 'panel-view narrow' }, [
-    h('div', { class: 'page-title' }, ['💰 Finances']),
-    h('div', { class: 'page-sub' }, 'A full record of money in and out.'),
-    h('div', { class: 'card', style: { marginBottom: '16px' } }, [
-      h('div', { class: 'card-title' }, 'Current balance'),
-      h('div', { style: { fontSize: '32px', fontFamily: 'var(--serif)', color: 'var(--honey-dk)', fontWeight: '700' },
-                  text: fmtMoney(Game.cash) })
+  return h('div', {}, [
+    h('div', { class: 'card', style: { marginBottom: '12px' } }, [
+      h('div', { class: 'card-title' }, 'This year'),
+      h('div', { style: { display:'flex', gap:'16px', flexWrap:'wrap' } }, [
+        h('div', {}, [ h('div', { style:{ fontSize:'22px', fontFamily:'var(--serif)', color:'var(--ok)', fontWeight:'700' } }, fmtMoney(income)), h('small', { style:{color:'var(--ink-soft)'} }, 'Income') ]),
+        h('div', {}, [ h('div', { style:{ fontSize:'22px', fontFamily:'var(--serif)', color:'var(--bad)', fontWeight:'700' } }, fmtMoney(spend)),  h('small', { style:{color:'var(--ink-soft)'} }, 'Spend') ]),
+        h('div', {}, [ h('div', { style:{ fontSize:'22px', fontFamily:'var(--serif)', color:'var(--honey-dk)', fontWeight:'700' } }, fmtMoney(Game.cash)), h('small', { style:{color:'var(--ink-soft)'} }, 'Cash') ])
+      ])
     ]),
-    h('div', { class: 'card', style: { marginBottom: '16px' } }, [
+    h('div', { class: 'card', style: { marginBottom: '12px' } }, [
       h('div', { class: 'card-title' }, 'Statistics'),
       h('div', { class: 'stat-tiles' }, statTiles)
     ]),
     h('div', { class: 'card' }, [
       h('div', { class: 'card-title' }, 'Ledger'),
-      h('table', { class: 'ledger-table' }, [
-        h('thead', {}, [
-          h('tr', {}, [
-            h('th', { text: 'Date' }),
-            h('th', { text: 'Description' }),
-            h('th', { text: 'Amount' })
+      h('div', { class: 'ledger-wrap' }, [
+        h('table', { class: 'ledger-table' }, [
+          h('thead', {}, [h('tr', {}, [h('th', {text:'Date'}), h('th', {text:'Description'}), h('th', {text:'Amount'})])]),
+          h('tbody', {}, ledgerRows.length ? ledgerRows : [
+            h('tr', {}, [h('td', { colspan:'3', text:'No transactions yet.', style:{color:'var(--ink-faint)',fontStyle:'italic'} })])
           ])
-        ]),
-        h('tbody', {}, ledgerRows.length ? ledgerRows : [
-          h('tr', {}, [h('td', { colspan: '3', text: 'No transactions yet.', style: { color: 'var(--ink-faint)', fontStyle: 'italic' } })])
         ])
       ])
     ])
@@ -2027,32 +2083,19 @@ function _ui_buildFinancesView() {
 }
 
 /* ====================================================================
+   FINANCES VIEW — kept for legacy compatibility
+   ==================================================================== */
+
+function _ui_buildFinancesView() {
+  return _ui_buildRecordsView('finances');
+}
+
+/* ====================================================================
    JOURNAL VIEW
    ==================================================================== */
 
 function _ui_buildJournalView() {
-  var log = (Game.log || []).slice();
-  // newest first
-  var entries = log.map(function(entry) {
-    return h('div', { class: 'log-entry ' + (entry.tone || 'plain') }, [
-      h('span', { class: 'when', text: (typeof dateLabel === 'function') ? dateLabel(entry.week) : ('Wk ' + entry.week) }),
-      h('span', { class: 'ico' }, entry.icon || ''),
-      h('span', { class: 'txt', text: entry.text || '' })
-    ]);
-  });
-
-  if (entries.length === 0) {
-    entries = [h('div', { class: 'empty-state' }, [
-      h('div', { class: 'big' }, '📜'),
-      h('p', { text: 'Your journal is empty. Events and notes will appear here as you play.' })
-    ])];
-  }
-
-  return h('div', { class: 'panel-view narrow' }, [
-    h('div', { class: 'page-title' }, ['📜 Journal']),
-    h('div', { class: 'page-sub' }, 'A record of everything that has happened at your apiary.'),
-    h('div', { class: 'card' }, entries)
-  ]);
+  return _ui_buildRecordsView('journal');
 }
 
 /* ====================================================================
@@ -2070,8 +2113,8 @@ function openHiveDetail(colony, _startTab) {
     weeksAgo = Game.week - known.week;
   }
 
-  /* Default tab: actions if never inspected, inspection otherwise */
-  var activeTab = _startTab || (known && !known.heftOnly ? 'inspection' : 'actions');
+  /* Default to actions — players open hive detail to do things, not re-read history */
+  var activeTab = _startTab || 'actions';
 
   /* ── Left column: cross-section + hive assembly ── */
   var crossSection;
@@ -3871,11 +3914,16 @@ function _openInspectionModal(colony, report) {
     title: 'Inspecting ' + colony.name,
     body: modalBody,
     xwide: true,
-    buttons: [{ label: 'Done', cls: 'btn-primary', act: function() {
-      /* Award inspection XP only when player finishes the modal */
-      if (report && report.xp) addXp(report.xp);
-      closeModal(); render();
-    } }]
+    buttons: [
+      { label: 'Back to hive →', cls: '', act: function() {
+        if (report && report.xp) addXp(report.xp);
+        closeModal(); render(); openHiveDetail(colony, 'actions');
+      }},
+      { label: 'Done', cls: 'btn-primary', act: function() {
+        if (report && report.xp) addXp(report.xp);
+        closeModal(); render();
+      }}
+    ]
   });
 }
 

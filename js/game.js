@@ -280,6 +280,12 @@ function advanceWeek(){
   _checkWinterSurvival();
   saveGame();
   render();
+  /* Brief amber flash so the player feels time moving */
+  var _stg = document.querySelector('.stage');
+  if (_stg) {
+    _stg.classList.add('week-flash');
+    setTimeout(function() { _stg.classList.remove('week-flash'); }, 450);
+  }
   _present(presentables);
 }
 
