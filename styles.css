@@ -378,12 +378,11 @@ button { font-family: var(--sans); cursor: pointer; }
   font-family: var(--serif); font-size: 13px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .6px; color: var(--honey-dk);
   padding: 9px 14px 4px; flex: none;
+  display: flex; align-items: center; justify-content: space-between;
 }
 .side-body { padding: 4px 14px 12px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 
-.time-controls { padding: 12px 14px; background: var(--parch-2); border-bottom: 1px solid var(--line-dk); }
-.time-controls .btn { width: 100%; justify-content: center; margin-bottom: 6px; }
-.time-controls .btn:last-child { margin-bottom: 0; }
+/* time-controls — see action list section below */
 
 /* mentor — an on-screen teaching companion with a speech bubble */
 .mentor { display: flex; gap: 10px; align-items: flex-start; margin: 12px 14px; }
@@ -1651,3 +1650,131 @@ button { font-family: var(--sans); cursor: pointer; }
 .inspect-rec .rec-text { flex: 1; }
 .inspect-rec button { flex: none; }
 .inspect-summary li.sum-urgent { color: var(--bad); font-weight: 700; }
+
+/* ====================================================================
+   GUIDED ACTION LIST (sidebar)
+   ==================================================================== */
+
+.action-count {
+  font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
+  background: var(--bad-bg); color: var(--bad);
+}
+.action-count.tone-warn { background: var(--warn-bg); color: var(--warn); }
+.action-count.tone-ok   { background: var(--ok-bg); color: var(--ok); }
+.action-count.tone-info { background: var(--info-bg); color: var(--info); }
+
+.action-item {
+  padding: 9px 10px; border-radius: 8px; margin-bottom: 7px;
+  border-left: 3px solid transparent;
+}
+.action-item.tone-bad  { background: var(--bad-bg);  border-left-color: var(--bad); }
+.action-item.tone-warn { background: var(--warn-bg); border-left-color: var(--warn); }
+.action-item.tone-ok   { background: var(--ok-bg);   border-left-color: var(--ok); }
+.action-item.tone-info { background: var(--info-bg); border-left-color: var(--info); }
+
+.action-urgency {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+.action-urgency.tone-bad  { color: var(--bad); }
+.action-urgency.tone-warn { color: var(--warn); }
+.action-urgency.tone-ok   { color: var(--ok); }
+.action-urgency.tone-info { color: var(--info); }
+.action-urgency .ico { font-size: 13px; }
+.urgency-label { }
+
+.action-text { font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+.action-open-btn {
+  margin-top: 7px; font-size: 11.5px; padding: 3px 9px;
+  background: rgba(255,255,255,0.7); border: 1px solid var(--line-dk);
+}
+.action-open-btn:hover { background: var(--honey); color: #fff; border-color: var(--honey-deep); }
+
+.action-list { display: flex; flex-direction: column; }
+.advisor-empty { font-size: 13px; color: var(--ink-faint); font-style: italic; padding: 6px 2px; }
+
+/* Time controls moved to bottom */
+.time-controls {
+  padding: 12px 14px; background: var(--parch-2);
+  border-top: 1px solid var(--line-dk);
+  flex: none;
+}
+.time-controls .btn { width: 100%; justify-content: center; margin-bottom: 6px; }
+.time-controls .btn:last-child { margin-bottom: 0; }
+
+/* ====================================================================
+   HONEY COLOR SWATCHES (sell tab)
+   ==================================================================== */
+
+.honey-swatch {
+  width: 42px; height: 42px; border-radius: 6px; flex: none;
+  border: 2px solid rgba(0,0,0,0.12); box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);
+}
+.honey-note {
+  font-size: 11.5px; color: var(--warn); font-style: italic; margin-top: 2px;
+}
+
+/* ====================================================================
+   TERRITORY MAP VIEW
+   ==================================================================== */
+
+.map-season-strip {
+  display: flex; align-items: center; gap: 8px; font-size: 14px;
+  padding: 10px 16px; border-radius: 8px; margin-bottom: 18px;
+  background: var(--parch-2); border: 1px solid var(--line);
+}
+.map-season-strip.spring { background: #e8f4e0; border-color: #a8cc88; }
+.map-season-strip.summer { background: #fffae0; border-color: #d4c060; }
+.map-season-strip.autumn { background: #f8ece0; border-color: #c8a060; }
+.map-season-strip.winter { background: #e8eef4; border-color: #a8b8cc; }
+
+.map-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.map-territory {
+  background: var(--paper); border: 1px solid var(--line-dk);
+  border-radius: 12px; overflow: hidden; box-shadow: var(--shadow);
+  border-top: 4px solid var(--territory-color, var(--leaf));
+  transition: box-shadow 0.15s;
+}
+.map-territory:hover { box-shadow: var(--shadow-lg); }
+.map-territory-active { border-width: 1px; border-top-width: 4px; }
+
+.map-territory-header {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px 8px; border-bottom: 1px solid var(--line);
+}
+.map-site-ico { font-size: 28px; flex: none; }
+.map-site-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.map-site-info b { font-size: 14px; font-family: var(--serif); }
+.map-site-honey { font-size: 12px; color: var(--ink-soft); }
+.map-active-badge {
+  flex: none; font-size: 11px; font-weight: 700; padding: 3px 9px;
+  background: var(--territory-color, var(--leaf)); color: var(--territory-text, #fff);
+  border-radius: 12px; white-space: nowrap;
+}
+
+.map-forage-strip {
+  font-size: 12px; color: var(--ink-soft); font-style: italic;
+  padding: 6px 14px; background: var(--parch-2); border-bottom: 1px solid var(--line);
+}
+
+.map-apiaries-list { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.map-apiary-line {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  padding: 7px 10px; background: var(--parch-2); border-radius: 7px;
+}
+.map-ap-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--territory-color, var(--ok));
+}
+.map-ap-cols { flex: 1; color: var(--ink-soft); font-size: 12px; }
+.map-apiary-line b { flex: none; font-size: 13px; }
+
+.map-empty-site {
+  padding: 14px; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; font-size: 13px; color: var(--ink-faint); font-style: italic;
+}

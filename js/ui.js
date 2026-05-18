@@ -470,6 +470,7 @@ function render() {
   var view = (Game.ui && Game.ui.view) || 'apiary';
 
   if (view === 'apiary')    stage.appendChild(_ui_buildApiaryView());
+  else if (view === 'map')      stage.appendChild(_ui_buildMapView());
   else if (view === 'market')   stage.appendChild(_ui_buildMarketView());
   else if (view === 'handbook') stage.appendChild(_ui_buildHandbookView());
   else if (view === 'finances') stage.appendChild(_ui_buildFinancesView());
@@ -570,6 +571,7 @@ function _ui_buildNavbar() {
 
   var navItems = [
     { key: 'apiary',   label: 'Apiary',   ico: '🏡', pip: badCount > 0 ? badCount : 0 },
+    { key: 'map',      label: 'Map',      ico: '🗺️' },
     { key: 'market',   label: 'Market',   ico: '🛒' },
     { key: 'handbook', label: 'Handbook', ico: '📗' },
     { key: 'finances', label: 'Finances', ico: '💰' },
@@ -608,10 +610,29 @@ function _ui_buildNavbar() {
    Cached per apiary + season so it does not flicker between weeks.
    ==================================================================== */
 var _ui_sceneCache = {};
-function _ui_apiaryScene(season, apiaryId) {
-  var cacheKey = (apiaryId || 0) + '|' + season;
-  if (_ui_sceneCache[cacheKey]) return _ui_sceneCache[cacheKey];
 
+function _ui_cloud(x, y, s) {
+  return '<g fill="#fcfcf7" opacity="0.93">' +
+    '<ellipse cx="' + x + '" cy="' + y + '" rx="' + (48*s) + '" ry="' + (26*s) + '"/>' +
+    '<ellipse cx="' + (x-36*s) + '" cy="' + (y+9*s) + '" rx="' + (32*s) + '" ry="' + (20*s) + '"/>' +
+    '<ellipse cx="' + (x+38*s) + '" cy="' + (y+7*s) + '" rx="' + (34*s) + '" ry="' + (21*s) + '"/></g>';
+}
+
+function _ui_apiaryScene(season, siteType, apiaryId) {
+  var cacheKey = (apiaryId || 0) + '|' + season + '|' + (siteType || 'rural');
+  if (_ui_sceneCache[cacheKey]) return _ui_sceneCache[cacheKey];
+  var result;
+  if (siteType === 'farmland')      result = _ui_sceneFarmland(season);
+  else if (siteType === 'moorland') result = _ui_sceneMoorland(season);
+  else if (siteType === 'orchard')  result = _ui_sceneOrchard(season);
+  else if (siteType === 'urban')    result = _ui_sceneUrban(season);
+  else                              result = _ui_sceneRural(season);
+  _ui_sceneCache[cacheKey] = result;
+  return result;
+}
+
+/* ---- Rural (mixed woodland — the classic scene) ---- */
+function _ui_sceneRural(season) {
   var P = {
     spring: { sky1:'#a9cae0', sky2:'#dde7d6', hF:'#a6c389', hM:'#8bb062', hN:'#7ba353',
       g1:'#9cc066', g2:'#86ad55', can:'#6f9a42', can2:'#83ab53', trunk:'#7c5a34',
@@ -630,65 +651,311 @@ function _ui_apiaryScene(season, apiaryId) {
   var W = 1200, H = 620, hz = 205, bare = (season === 'winter');
 
   function tree(x, by, s) {
-    var tw = 15 * s, th = 74 * s, o = '';
-    o += '<rect x="' + (x - tw / 2).toFixed(1) + '" y="' + (by - th).toFixed(1) +
-      '" width="' + tw.toFixed(1) + '" height="' + th.toFixed(1) + '" rx="' + (4 * s).toFixed(1) +
-      '" fill="' + c.trunk + '"/>';
+    var tw = 15*s, th = 74*s, o = '';
+    o += '<rect x="' + (x-tw/2).toFixed(1) + '" y="' + (by-th).toFixed(1) +
+      '" width="' + tw.toFixed(1) + '" height="' + th.toFixed(1) + '" rx="' + (4*s).toFixed(1) + '" fill="' + c.trunk + '"/>';
     if (bare) {
-      o += '<g stroke="' + c.trunk + '" stroke-width="' + (4.5 * s).toFixed(1) +
-        '" stroke-linecap="round" fill="none">';
-      o += '<path d="M' + x + ' ' + (by - th + 20 * s).toFixed(0) + ' q ' + (-20 * s).toFixed(0) +
-        ' ' + (-16 * s).toFixed(0) + ' ' + (-32 * s).toFixed(0) + ' ' + (-44 * s).toFixed(0) + '"/>';
-      o += '<path d="M' + x + ' ' + (by - th + 10 * s).toFixed(0) + ' q ' + (20 * s).toFixed(0) +
-        ' ' + (-18 * s).toFixed(0) + ' ' + (30 * s).toFixed(0) + ' ' + (-46 * s).toFixed(0) + '"/></g>';
+      o += '<g stroke="' + c.trunk + '" stroke-width="' + (4.5*s).toFixed(1) + '" stroke-linecap="round" fill="none">';
+      o += '<path d="M' + x + ' ' + (by-th+20*s).toFixed(0) + ' q ' + (-20*s).toFixed(0) + ' ' + (-16*s).toFixed(0) + ' ' + (-32*s).toFixed(0) + ' ' + (-44*s).toFixed(0) + '"/>';
+      o += '<path d="M' + x + ' ' + (by-th+10*s).toFixed(0) + ' q ' + (20*s).toFixed(0) + ' ' + (-18*s).toFixed(0) + ' ' + (30*s).toFixed(0) + ' ' + (-46*s).toFixed(0) + '"/></g>';
     } else {
-      var fy = by - th - 2 * s;
-      o += '<circle cx="' + x + '" cy="' + fy.toFixed(1) + '" r="' + (48 * s).toFixed(1) + '" fill="' + c.can + '"/>';
-      o += '<circle cx="' + (x - 32 * s).toFixed(1) + '" cy="' + (fy + 18 * s).toFixed(1) + '" r="' + (36 * s).toFixed(1) + '" fill="' + c.can2 + '"/>';
-      o += '<circle cx="' + (x + 34 * s).toFixed(1) + '" cy="' + (fy + 14 * s).toFixed(1) + '" r="' + (38 * s).toFixed(1) + '" fill="' + c.can2 + '"/>';
-      o += '<circle cx="' + (x + 6 * s).toFixed(1) + '" cy="' + (fy - 24 * s).toFixed(1) + '" r="' + (31 * s).toFixed(1) + '" fill="' + c.can + '"/>';
+      var fy = by-th-2*s;
+      o += '<circle cx="' + x + '" cy="' + fy.toFixed(1) + '" r="' + (48*s).toFixed(1) + '" fill="' + c.can + '"/>';
+      o += '<circle cx="' + (x-32*s).toFixed(1) + '" cy="' + (fy+18*s).toFixed(1) + '" r="' + (36*s).toFixed(1) + '" fill="' + c.can2 + '"/>';
+      o += '<circle cx="' + (x+34*s).toFixed(1) + '" cy="' + (fy+14*s).toFixed(1) + '" r="' + (38*s).toFixed(1) + '" fill="' + c.can2 + '"/>';
+      o += '<circle cx="' + (x+6*s).toFixed(1) + '" cy="' + (fy-24*s).toFixed(1) + '" r="' + (31*s).toFixed(1) + '" fill="' + c.can + '"/>';
       if (c.bloom) {
         for (var bl = 0; bl < 9; bl++) {
-          var a = Math.random() * 6.28, r = (18 + Math.random() * 36) * s;
-          o += '<circle cx="' + (x + Math.cos(a) * r).toFixed(1) + '" cy="' + (fy + Math.sin(a) * r).toFixed(1) +
-            '" r="' + (3.5 * s).toFixed(1) + '" fill="#fbe1ea"/>';
+          var a = bl * 0.698, r = (18 + (bl % 3) * 12) * s;
+          o += '<circle cx="' + (x+Math.cos(a)*r).toFixed(1) + '" cy="' + (fy+Math.sin(a)*r).toFixed(1) + '" r="' + (3.5*s).toFixed(1) + '" fill="#fbe1ea"/>';
         }
       }
     }
     return o;
   }
-  function cloud(x, y, s) {
-    return '<g fill="#fcfcf7" opacity="0.95">' +
-      '<ellipse cx="' + x + '" cy="' + y + '" rx="' + (48 * s) + '" ry="' + (26 * s) + '"/>' +
-      '<ellipse cx="' + (x - 36 * s) + '" cy="' + (y + 9 * s) + '" rx="' + (32 * s) + '" ry="' + (20 * s) + '"/>' +
-      '<ellipse cx="' + (x + 38 * s) + '" cy="' + (y + 7 * s) + '" rx="' + (34 * s) + '" ry="' + (21 * s) + '"/></g>';
-  }
 
   var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">';
-  s += '<defs><linearGradient id="agSky" x1="0" y1="0" x2="0" y2="1">' +
-    '<stop offset="0" stop-color="' + c.sky1 + '"/><stop offset="1" stop-color="' + c.sky2 + '"/></linearGradient>' +
-    '<linearGradient id="agGrass" x1="0" y1="0" x2="0" y2="1">' +
-    '<stop offset="0" stop-color="' + c.g1 + '"/><stop offset="1" stop-color="' + c.g2 + '"/></linearGradient></defs>';
+  s += '<defs><linearGradient id="agSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c.sky1 + '"/><stop offset="1" stop-color="' + c.sky2 + '"/></linearGradient>' +
+    '<linearGradient id="agGrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c.g1 + '"/><stop offset="1" stop-color="' + c.g2 + '"/></linearGradient></defs>';
   s += '<rect width="' + W + '" height="' + H + '" fill="url(#agSky)"/>';
-  s += '<circle cx="985" cy="92" r="86" fill="' + c.sun + '" opacity="0.45"/>';
-  s += '<circle cx="985" cy="92" r="48" fill="' + c.sun + '"/>';
-  s += cloud(250, 96, 1.0) + cloud(610, 62, 0.78) + cloud(1070, 150, 0.66);
-  s += '<path d="M0 ' + (hz - 30) + ' Q 300 ' + (hz - 95) + ' 620 ' + (hz - 44) + ' T 1200 ' + (hz - 58) + ' V ' + H + ' H 0 Z" fill="' + c.hF + '"/>';
-  s += '<path d="M0 ' + (hz + 18) + ' Q 360 ' + (hz - 44) + ' 760 ' + (hz + 22) + ' T 1200 ' + (hz - 2) + ' V ' + H + ' H 0 Z" fill="' + c.hM + '"/>';
-  for (var t = 0; t < 11; t++) s += tree(56 + t * 112, hz + 30, 0.32);
-  s += '<path d="M0 ' + (hz + 96) + ' Q 440 ' + (hz + 54) + ' 880 ' + (hz + 96) + ' T 1200 ' + (hz + 80) + ' V ' + H + ' H 0 Z" fill="' + c.hN + '"/>';
-  s += '<path d="M0 ' + (hz + 150) + ' Q 520 ' + (hz + 126) + ' 1200 ' + (hz + 156) + ' V ' + H + ' H 0 Z" fill="url(#agGrass)"/>';
-  s += tree(116, hz + 200, 1.05) + tree(1108, hz + 220, 1.2) + tree(978, hz + 165, 0.72);
+  s += '<circle cx="985" cy="92" r="86" fill="' + c.sun + '" opacity="0.45"/><circle cx="985" cy="92" r="48" fill="' + c.sun + '"/>';
+  s += _ui_cloud(250, 96, 1.0) + _ui_cloud(610, 62, 0.78) + _ui_cloud(1070, 150, 0.66);
+  s += '<path d="M0 ' + (hz-30) + ' Q 300 ' + (hz-95) + ' 620 ' + (hz-44) + ' T 1200 ' + (hz-58) + ' V ' + H + ' H 0 Z" fill="' + c.hF + '"/>';
+  s += '<path d="M0 ' + (hz+18) + ' Q 360 ' + (hz-44) + ' 760 ' + (hz+22) + ' T 1200 ' + (hz-2) + ' V ' + H + ' H 0 Z" fill="' + c.hM + '"/>';
+  for (var t = 0; t < 11; t++) s += tree(56+t*112, hz+30, 0.32);
+  s += '<path d="M0 ' + (hz+96) + ' Q 440 ' + (hz+54) + ' 880 ' + (hz+96) + ' T 1200 ' + (hz+80) + ' V ' + H + ' H 0 Z" fill="' + c.hN + '"/>';
+  s += '<path d="M0 ' + (hz+150) + ' Q 520 ' + (hz+126) + ' 1200 ' + (hz+156) + ' V ' + H + ' H 0 Z" fill="url(#agGrass)"/>';
+  s += tree(116, hz+200, 1.05) + tree(1108, hz+220, 1.2) + tree(978, hz+165, 0.72);
   if (c.flowers.length) {
     for (var f = 0; f < 54; f++) {
-      var fx = (Math.random() * W).toFixed(0);
-      var fy2 = (hz + 168 + Math.random() * (H - hz - 184)).toFixed(0);
-      var col = c.flowers[Math.floor(Math.random() * c.flowers.length)];
-      s += '<circle cx="' + fx + '" cy="' + fy2 + '" r="' + (1.6 + Math.random() * 2.3).toFixed(1) + '" fill="' + col + '" opacity="0.9"/>';
+      var fx = ((f * 227) % W).toFixed(0);
+      var fy2 = (hz + 168 + ((f * 73) % (H - hz - 184))).toFixed(0);
+      var col = c.flowers[f % c.flowers.length];
+      s += '<circle cx="' + fx + '" cy="' + fy2 + '" r="' + (1.6 + (f%3)*0.8).toFixed(1) + '" fill="' + col + '" opacity="0.9"/>';
     }
   }
   s += '</svg>';
-  _ui_sceneCache[cacheKey] = s;
+  return s;
+}
+
+/* ---- Farmland (flat arable fields, hedgerows, OSR / wheat) ---- */
+function _ui_sceneFarmland(season) {
+  var W = 1200, H = 620, hz = 270;
+  var sky1 = season === 'winter' ? '#b8ccd8' : season === 'autumn' ? '#c0beb0' : '#a4c8e0';
+  var sky2 = season === 'winter' ? '#dce4dc' : season === 'autumn' ? '#dcd4b0' : '#cce4c4';
+  var sunC = season === 'winter' ? '#eaeae0' : '#fde8b0';
+  var fieldTop = season === 'spring' ? '#f0cc08' : season === 'summer' ? '#b8aa3c' : season === 'autumn' ? '#b08838' : '#7a5830';
+  var fieldBot = season === 'spring' ? '#d8b008' : season === 'summer' ? '#9e9228' : season === 'autumn' ? '#906830' : '#5a3e20';
+  var hedgeC = season === 'winter' ? '#3a4830' : '#3c6820';
+  var hedgeC2 = season === 'winter' ? '#2e3824' : '#2e5018';
+  var grassC = season === 'winter' ? '#8a9878' : season === 'autumn' ? '#9a9448' : '#6a9438';
+
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">';
+  s += '<defs><linearGradient id="agSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + sky1 + '"/><stop offset="1" stop-color="' + sky2 + '"/></linearGradient>' +
+    '<linearGradient id="agField" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + fieldTop + '"/><stop offset="1" stop-color="' + fieldBot + '"/></linearGradient></defs>';
+  s += '<rect width="' + W + '" height="' + H + '" fill="url(#agSky)"/>';
+  s += '<circle cx="940" cy="88" r="80" fill="' + sunC + '" opacity="0.38"/><circle cx="940" cy="88" r="44" fill="' + sunC + '"/>';
+  s += _ui_cloud(280, 108, 1.0) + _ui_cloud(720, 72, 0.8) + _ui_cloud(1060, 140, 0.65);
+  /* Far field */
+  s += '<rect x="0" y="' + (hz-10) + '" width="' + W + '" height="' + (H-hz+10) + '" fill="url(#agField)"/>';
+  /* Distant hedge band */
+  s += '<path d="M0 ' + hz + ' Q200 ' + (hz-8) + ' 400 ' + (hz+4) + ' Q700 ' + (hz-6) + ' 1000 ' + (hz+4) + ' Q1100 ' + (hz-2) + ' 1200 ' + hz + ' V' + (hz+22) + ' H0 Z" fill="' + hedgeC + '"/>';
+  /* Mid field — slightly lighter band */
+  var mhz = hz + 130;
+  s += '<path d="M0 ' + mhz + ' Q300 ' + (mhz-10) + ' 600 ' + (mhz+6) + ' Q900 ' + (mhz-4) + ' 1200 ' + mhz + ' V' + (mhz+28) + ' H0 Z" fill="' + hedgeC2 + '"/>';
+  /* Tillage lines on far field */
+  if (season !== 'summer') {
+    for (var tl = 0; tl < 16; tl++) {
+      s += '<line x1="' + (30+tl*74) + '" y1="' + hz + '" x2="' + (30+tl*74) + '" y2="' + (hz+125) + '" stroke="rgba(0,0,0,0.06)" stroke-width="2"/>';
+    }
+  }
+  /* Lone hedge trees */
+  var htC = season === 'winter' ? '#4a3828' : '#3a6018';
+  var htC2 = '#2e4e10';
+  function hedgeTree(x, by, sc) {
+    var o = '<rect x="' + (x-5*sc).toFixed(0) + '" y="' + (by-52*sc).toFixed(0) + '" width="' + (10*sc).toFixed(0) + '" height="' + (52*sc).toFixed(0) + '" fill="#5a4230"/>';
+    if (season === 'winter') {
+      o += '<line x1="' + x + '" y1="' + (by-52*sc).toFixed(0) + '" x2="' + (x-26*sc).toFixed(0) + '" y2="' + (by-86*sc).toFixed(0) + '" stroke="#4a3828" stroke-width="' + (3.5*sc).toFixed(0) + '"/>';
+      o += '<line x1="' + x + '" y1="' + (by-44*sc).toFixed(0) + '" x2="' + (x+22*sc).toFixed(0) + '" y2="' + (by-80*sc).toFixed(0) + '" stroke="#4a3828" stroke-width="' + (3*sc).toFixed(0) + '"/>';
+    } else {
+      o += '<circle cx="' + x + '" cy="' + (by-68*sc).toFixed(0) + '" r="' + (30*sc).toFixed(0) + '" fill="' + htC + '"/>';
+      o += '<circle cx="' + (x-18*sc).toFixed(0) + '" cy="' + (by-56*sc).toFixed(0) + '" r="' + (22*sc).toFixed(0) + '" fill="' + htC2 + '"/>';
+    }
+    return o;
+  }
+  s += hedgeTree(175, hz+4, 1.0) + hedgeTree(820, hz+2, 0.88);
+  /* Foreground grass strip */
+  s += '<path d="M0 ' + (hz+220) + ' Q480 ' + (hz+200) + ' 1200 ' + (hz+228) + ' V' + H + ' H0 Z" fill="' + grassC + '"/>';
+  /* Fence posts */
+  for (var fp = 0; fp < 9; fp++) {
+    var fpx = 18 + fp * 148;
+    s += '<rect x="' + (fpx-2) + '" y="' + (hz+188) + '" width="5" height="46" rx="1" fill="#9a7840"/>';
+    s += '<rect x="' + (fpx-3) + '" y="' + (hz+192) + '" width="7" height="6" rx="1" fill="#b89050"/>';
+  }
+  s += '<line x1="18" y1="' + (hz+200) + '" x2="' + (18+8*148) + '" y2="' + (hz+200) + '" stroke="#9a7840" stroke-width="1.5" opacity="0.65"/>';
+  s += '<line x1="18" y1="' + (hz+218) + '" x2="' + (18+8*148) + '" y2="' + (hz+218) + '" stroke="#9a7840" stroke-width="1.5" opacity="0.65"/>';
+  /* OSR label shimmer — yellow field in spring only */
+  if (season === 'spring') {
+    s += '<rect x="0" y="' + (hz-10) + '" width="' + W + '" height="' + (hz+132-(hz-10)) + '" fill="rgba(255,220,0,0.08)"/>';
+  }
+  s += '</svg>';
+  return s;
+}
+
+/* ---- Moorland (open moor, heather, no tall trees) ---- */
+function _ui_sceneMoorland(season) {
+  var W = 1200, H = 620, hz = 220;
+  var sky1 = season === 'winter' ? '#a8b8c8' : season === 'spring' ? '#9eb8d0' : season === 'summer' ? '#8ab0cc' : '#aab0b8';
+  var sky2 = season === 'winter' ? '#c8ccc8' : season === 'spring' ? '#bcccc0' : season === 'summer' ? '#b8ccc4' : '#c0b8a8';
+  var sunC = season === 'winter' ? '#dce0dc' : '#f8e0a0';
+  var h1C = season === 'summer' ? '#7a3070' : season === 'spring' ? '#9a6080' : season === 'autumn' ? '#c07030' : '#7a6050';
+  var h2C = season === 'summer' ? '#5a2050' : season === 'spring' ? '#7a4060' : season === 'autumn' ? '#a05828' : '#6a5040';
+  var h3C = season === 'summer' ? '#903888' : season === 'spring' ? '#6a4868' : season === 'autumn' ? '#b86828' : '#5a4838';
+  var grassC = season === 'summer' ? '#5a6830' : season === 'spring' ? '#6a7838' : season === 'autumn' ? '#8a7838' : '#4a5028';
+
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">';
+  s += '<defs><linearGradient id="agSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + sky1 + '"/><stop offset="1" stop-color="' + sky2 + '"/></linearGradient></defs>';
+  s += '<rect width="' + W + '" height="' + H + '" fill="url(#agSky)"/>';
+  /* Softer sun — moorland is often overcast */
+  s += '<circle cx="920" cy="100" r="64" fill="' + sunC + '" opacity="0.3"/><circle cx="920" cy="100" r="36" fill="' + sunC + '" opacity="0.6"/>';
+  /* Thinner clouds, more scattered */
+  s += _ui_cloud(180, 88, 0.85) + _ui_cloud(560, 58, 0.7) + _ui_cloud(940, 120, 0.9) + _ui_cloud(1100, 76, 0.55);
+  /* Far ridge — distant moorland silhouette */
+  s += '<path d="M0 ' + (hz-60) + ' Q200 ' + (hz-110) + ' 450 ' + (hz-80) + ' Q650 ' + (hz-60) + ' 800 ' + (hz-90) + ' Q1000 ' + (hz-120) + ' 1200 ' + (hz-70) + ' V' + H + ' H0 Z" fill="' + h1C + '" opacity="0.55"/>';
+  /* Mid moor */
+  s += '<path d="M0 ' + (hz-10) + ' Q280 ' + (hz-55) + ' 560 ' + (hz-20) + ' Q840 ' + (hz-35) + ' 1200 ' + (hz-5) + ' V' + H + ' H0 Z" fill="' + h2C + '"/>';
+  /* Near moor ground */
+  s += '<path d="M0 ' + (hz+80) + ' Q360 ' + (hz+50) + ' 720 ' + (hz+85) + ' Q1000 ' + (hz+60) + ' 1200 ' + (hz+75) + ' V' + H + ' H0 Z" fill="' + h3C + '"/>';
+  /* Heather bushes — low rounded mounds */
+  function heatherBush(x, y, w, ht) {
+    var bc = season === 'summer' ? '#8a2888' : season === 'spring' ? '#8a5870' : season === 'autumn' ? '#c07028' : '#6a5048';
+    var bc2 = season === 'summer' ? '#6a1868' : season === 'autumn' ? '#a05020' : '#503840';
+    var o = '<ellipse cx="' + x + '" cy="' + y + '" rx="' + w + '" ry="' + ht + '" fill="' + bc + '"/>';
+    o += '<ellipse cx="' + (x-w*0.4).toFixed(0) + '" cy="' + (y+ht*0.3).toFixed(0) + '" rx="' + (w*0.55).toFixed(0) + '" ry="' + (ht*0.7).toFixed(0) + '" fill="' + bc2 + '"/>';
+    return o;
+  }
+  var bushData = [[90,hz+148,52,18],[240,hz+132,38,14],[420,hz+158,62,20],[580,hz+140,44,16],
+                  [750,hz+150,56,19],[900,hz+135,40,15],[1050,hz+155,58,20],[1150,hz+144,34,13]];
+  for (var bi = 0; bi < bushData.length; bi++) {
+    s += heatherBush(bushData[bi][0], bushData[bi][1], bushData[bi][2], bushData[bi][3]);
+  }
+  /* Dry stone wall */
+  s += '<rect x="0" y="' + (hz+190) + '" width="' + W + '" height="14" rx="3" fill="#9a9080" opacity="0.7"/>';
+  s += '<rect x="0" y="' + (hz+193) + '" width="' + W + '" height="8" rx="2" fill="#b4a898" opacity="0.5"/>';
+  /* Stone detail */
+  for (var st = 0; st < 18; st++) {
+    s += '<rect x="' + (10+st*68) + '" y="' + (hz+191) + '" width="58" height="12" rx="2" fill="rgba(0,0,0,0.06)"/>';
+  }
+  /* Foreground grass/heather */
+  s += '<path d="M0 ' + (hz+210) + ' Q400 ' + (hz+194) + ' 1200 ' + (hz+214) + ' V' + H + ' H0 Z" fill="' + grassC + '"/>';
+  s += '</svg>';
+  return s;
+}
+
+/* ---- Orchard (rows of apple/cherry trees, blossom in spring) ---- */
+function _ui_sceneOrchard(season) {
+  var W = 1200, H = 620, hz = 215;
+  var sky1 = season === 'winter' ? '#c0cad2' : season === 'autumn' ? '#b8c0b0' : '#a8c8e0';
+  var sky2 = season === 'winter' ? '#dce0d8' : season === 'autumn' ? '#d8cca8' : '#cce4c8';
+  var sunC = season === 'winter' ? '#e8e8e0' : '#fce8b0';
+  var g1 = season === 'winter' ? '#a8b4a0' : season === 'autumn' ? '#9a9e58' : '#88b050';
+  var g2 = season === 'winter' ? '#8a9888' : season === 'autumn' ? '#808840' : '#70a038';
+
+  function orchTree(x, by, sc) {
+    var tC = '#6a4828';
+    var o = '<rect x="' + (x-5*sc).toFixed(0) + '" y="' + (by-58*sc).toFixed(0) + '" width="' + (10*sc).toFixed(0) + '" height="' + (58*sc).toFixed(0) + '" fill="' + tC + '"/>';
+    if (season === 'winter') {
+      o += '<line x1="' + x + '" y1="' + (by-58*sc).toFixed(0) + '" x2="' + (x-30*sc).toFixed(0) + '" y2="' + (by-94*sc).toFixed(0) + '" stroke="' + tC + '" stroke-width="' + (4*sc).toFixed(0) + '"/>';
+      o += '<line x1="' + x + '" y1="' + (by-50*sc).toFixed(0) + '" x2="' + (x+28*sc).toFixed(0) + '" y2="' + (by-90*sc).toFixed(0) + '" stroke="' + tC + '" stroke-width="' + (3.5*sc).toFixed(0) + '"/>';
+      o += '<line x1="' + x + '" y1="' + (by-38*sc).toFixed(0) + '" x2="' + (x-16*sc).toFixed(0) + '" y2="' + (by-64*sc).toFixed(0) + '" stroke="' + tC + '" stroke-width="' + (2.5*sc).toFixed(0) + '"/>';
+    } else {
+      var canC = season === 'spring' ? '#e8d8e8' : season === 'summer' ? '#4a8a38' : '#7a9a2c';
+      var canC2 = season === 'spring' ? '#f0c8d8' : season === 'summer' ? '#3a7828' : '#688220';
+      var cy = by-82*sc;
+      o += '<ellipse cx="' + x + '" cy="' + cy.toFixed(0) + '" rx="' + (40*sc).toFixed(0) + '" ry="' + (34*sc).toFixed(0) + '" fill="' + canC + '"/>';
+      o += '<ellipse cx="' + (x-22*sc).toFixed(0) + '" cy="' + (cy+12*sc).toFixed(0) + '" rx="' + (30*sc).toFixed(0) + '" ry="' + (26*sc).toFixed(0) + '" fill="' + canC2 + '"/>';
+      o += '<ellipse cx="' + (x+24*sc).toFixed(0) + '" cy="' + (cy+10*sc).toFixed(0) + '" rx="' + (32*sc).toFixed(0) + '" ry="' + (28*sc).toFixed(0) + '" fill="' + canC + '"/>';
+      if (season === 'spring') {
+        for (var b = 0; b < 14; b++) {
+          var ba = b * 0.449;
+          var br = (14 + (b%3)*9)*sc;
+          o += '<circle cx="' + (x+Math.cos(ba)*br).toFixed(0) + '" cy="' + (cy+Math.sin(ba)*br*0.85).toFixed(0) + '" r="' + (3.5*sc).toFixed(0) + '" fill="#f8c8d8"/>';
+        }
+      } else if (season === 'autumn') {
+        for (var fr = 0; fr < 8; fr++) {
+          var fa = fr * 0.785;
+          var frr = (10+(fr%3)*7)*sc;
+          o += '<circle cx="' + (x+Math.cos(fa)*frr).toFixed(0) + '" cy="' + (cy+Math.sin(fa)*frr*0.85+6*sc).toFixed(0) + '" r="' + (4.5*sc).toFixed(0) + '" fill="#cc3818"/>';
+        }
+      }
+    }
+    return o;
+  }
+
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">';
+  s += '<defs><linearGradient id="agSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + sky1 + '"/><stop offset="1" stop-color="' + sky2 + '"/></linearGradient>' +
+    '<linearGradient id="agGrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + g1 + '"/><stop offset="1" stop-color="' + g2 + '"/></linearGradient></defs>';
+  s += '<rect width="' + W + '" height="' + H + '" fill="url(#agSky)"/>';
+  s += '<circle cx="950" cy="90" r="78" fill="' + sunC + '" opacity="0.42"/><circle cx="950" cy="90" r="44" fill="' + sunC + '"/>';
+  s += _ui_cloud(220, 92, 0.95) + _ui_cloud(640, 66, 0.78) + _ui_cloud(1020, 140, 0.7);
+  /* Rolling meadow ground */
+  s += '<path d="M0 ' + (hz+20) + ' Q360 ' + (hz-20) + ' 760 ' + (hz+24) + ' T 1200 ' + (hz+10) + ' V' + H + ' H0 Z" fill="' + g1 + '"/>';
+  s += '<path d="M0 ' + (hz+150) + ' Q500 ' + (hz+130) + ' 1200 ' + (hz+160) + ' V' + H + ' H0 Z" fill="url(#agGrass)"/>';
+  /* Far row of orchard trees */
+  for (var ot = 0; ot < 7; ot++) s += orchTree(100 + ot * 170, hz + 60, 0.42);
+  /* Near row */
+  for (var ot2 = 0; ot2 < 5; ot2++) s += orchTree(100 + ot2 * 240, hz + 200, 0.88);
+  /* Grass path between rows */
+  s += '<rect x="0" y="' + (hz+62) + '" width="' + W + '" height="' + (hz+140-hz-62) + '" fill="rgba(120,160,60,0.18)"/>';
+  /* Blossom petals on ground in spring */
+  if (season === 'spring') {
+    for (var p = 0; p < 30; p++) {
+      s += '<circle cx="' + ((p*157+60)%W) + '" cy="' + (hz+155+((p*83)%60)) + '" r="2" fill="#f8d0e0" opacity="0.8"/>';
+    }
+  }
+  s += '</svg>';
+  return s;
+}
+
+/* ---- Urban (rooftops, chimneys, garden wall) ---- */
+function _ui_sceneUrban(season) {
+  var W = 1200, H = 620;
+  var sky1 = season === 'winter' ? '#a0aab8' : season === 'autumn' ? '#b8b0a0' : '#88b0cc';
+  var sky2 = season === 'winter' ? '#c8ccc8' : season === 'autumn' ? '#ccc0a0' : '#b8d0c0';
+  var sunC = '#f8e0a0';
+  var brickA = '#b87858', brickB = '#9a6048', brickC = '#c08868';
+  var roofA = '#5a5050', roofB = '#786860', roofC = '#484040';
+  var chimneyC = '#4a4040';
+  var wallC = '#b89868', mortarC = '#c8b088';
+  var gardenC = season === 'winter' ? '#6a7a5a' : season === 'autumn' ? '#788448' : '#5a8838';
+
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">';
+  s += '<defs><linearGradient id="agSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + sky1 + '"/><stop offset="1" stop-color="' + sky2 + '"/></linearGradient></defs>';
+  s += '<rect width="' + W + '" height="' + H + '" fill="url(#agSky)"/>';
+  s += '<circle cx="900" cy="80" r="72" fill="' + sunC + '" opacity="0.36"/><circle cx="900" cy="80" r="40" fill="' + sunC + '"/>';
+  s += _ui_cloud(300, 102, 0.9) + _ui_cloud(720, 70, 0.72) + _ui_cloud(1080, 130, 0.6);
+
+  /* Building silhouettes — varied heights, terrace style */
+  var buildings = [
+    { x:0, w:180, h:290, bk:brickA },
+    { x:175, w:220, h:240, bk:brickB },
+    { x:390, w:160, h:310, bk:brickC },
+    { x:545, w:200, h:260, bk:brickA },
+    { x:740, w:140, h:330, bk:brickB },
+    { x:875, w:190, h:270, bk:brickC },
+    { x:1058, w:145, h:250, bk:brickA }
+  ];
+  /* Draw building walls */
+  for (var bi = 0; bi < buildings.length; bi++) {
+    var b = buildings[bi];
+    var by = H - b.h;
+    s += '<rect x="' + b.x + '" y="' + by + '" width="' + b.w + '" height="' + b.h + '" fill="' + b.bk + '"/>';
+    /* Roof */
+    s += '<rect x="' + b.x + '" y="' + (by-16) + '" width="' + b.w + '" height="18" fill="' + roofA + '"/>';
+    /* Windows */
+    var rows = Math.floor((b.h - 40) / 60);
+    var cols = Math.floor(b.w / 60);
+    for (var wr = 0; wr < rows; wr++) {
+      for (var wc = 0; wc < cols; wc++) {
+        var wx = b.x + 20 + wc*52, wy = by + 28 + wr*58;
+        s += '<rect x="' + wx + '" y="' + wy + '" width="26" height="34" rx="2" fill="rgba(200,220,240,0.5)"/>';
+        s += '<line x1="' + (wx+13) + '" y1="' + wy + '" x2="' + (wx+13) + '" y2="' + (wy+34) + '" stroke="rgba(100,120,140,0.4)" stroke-width="1"/>';
+      }
+    }
+  }
+  /* Rooftop silhouette overlap */
+  for (var ri = 0; ri < buildings.length; ri++) {
+    var rb = buildings[ri];
+    s += '<rect x="' + rb.x + '" y="' + (H-rb.h-18) + '" width="' + rb.w + '" height="6" rx="1" fill="' + roofB + '"/>';
+  }
+  /* Chimneys */
+  var chimneyData = [[80,H-292],[310,H-244],[470,H-314],[640,H-264],[800,H-334],[990,H-274]];
+  for (var ci = 0; ci < chimneyData.length; ci++) {
+    var cx = chimneyData[ci][0], cby = chimneyData[ci][1];
+    s += '<rect x="' + (cx-8) + '" y="' + (cby-48) + '" width="16" height="52" fill="' + chimneyC + '"/>';
+    s += '<rect x="' + (cx-11) + '" y="' + (cby-52) + '" width="22" height="8" rx="2" fill="' + roofC + '"/>';
+    /* Smoke in winter */
+    if (season === 'winter') {
+      s += '<path d="M' + cx + ' ' + (cby-52) + ' Q' + (cx-10) + ' ' + (cby-72) + ' ' + cx + ' ' + (cby-90) + ' Q' + (cx+12) + ' ' + (cby-108) + ' ' + cx + ' ' + (cby-124) + '" fill="none" stroke="rgba(200,200,200,0.5)" stroke-width="6"/>';
+    }
+  }
+  /* Garden wall */
+  s += '<rect x="0" y="' + (H-160) + '" width="' + W + '" height="30" fill="' + wallC + '"/>';
+  /* Mortar lines */
+  for (var ml = 0; ml < 16; ml++) {
+    s += '<rect x="' + (ml*78) + '" y="' + (H-161) + '" width="70" height="32" rx="1" fill="' + mortarC + '" opacity="0.3"/>';
+    s += '<line x1="' + (ml*78) + '" y1="' + (H-146) + '" x2="' + (ml*78+70) + '" y2="' + (H-146) + '" stroke="rgba(180,160,120,0.4)" stroke-width="1"/>';
+  }
+  /* Garden soil / plants below wall */
+  s += '<rect x="0" y="' + (H-130) + '" width="' + W + '" height="130" fill="' + gardenC + '"/>';
+  /* Garden plants */
+  var plantC = season === 'winter' ? '#4a5840' : season === 'autumn' ? '#6a7830' : '#4a8028';
+  for (var gp = 0; gp < 10; gp++) {
+    var gpx = 50 + gp * 118;
+    s += '<ellipse cx="' + gpx + '" cy="' + (H-90) + '" rx="28" ry="22" fill="' + plantC + '"/>';
+    s += '<ellipse cx="' + (gpx+20) + '" cy="' + (H-96) + '" rx="20" ry="16" fill="' + gardenC + '"/>';
+  }
+  s += '</svg>';
   return s;
 }
 
@@ -784,7 +1051,7 @@ function _ui_buildApiaryView() {
   hiveNodes.push(addSlot);
 
   var yardRow = h('div', { class: 'yard-row' }, hiveNodes);
-  var scene = h('div', { class: 'yard-scene', html: _ui_apiaryScene(season, apiary ? apiary.id : 0) });
+  var scene = h('div', { class: 'yard-scene', html: _ui_apiaryScene(season, siteType, apiary ? apiary.id : 0) });
   var yard = h('div', { class: 'yard ' + (season || 'spring') }, [scene, yardRow]);
 
   var main = h('div', { class: 'apiary-main' }, [
@@ -797,6 +1064,96 @@ function _ui_buildApiaryView() {
 
   return h('div', { class: 'apiary-view' }, [main, sidebar]);
 }
+
+/* ====================================================================
+   TERRITORY MAP VIEW — overview of all sites, forage, honey types
+   ==================================================================== */
+function _ui_buildMapView() {
+  var season = (typeof seasonOfWeek === 'function') ? seasonOfWeek(Game.week) : 'spring';
+  var wkInYear = ((Game.week - 1) % 52) + 1;
+  var apiaries = Game.apiaries || [];
+
+  /* All possible site types with their characteristics */
+  var SITE_META = {
+    rural:    { label: 'Rural Woodland', ico: '🌳', honey: 'Mixed summer blossom', color: '#6f8f44', textCol: '#fff', forage: 'Good all season' },
+    farmland: { label: 'Arable Farmland', ico: '🌾', honey: 'Oilseed rape (spring)', color: '#d4a020', textCol: '#2a1a00', forage: 'Strong spring, variable summer' },
+    urban:    { label: 'Urban Garden', ico: '🏘️', honey: 'Summer garden blend', color: '#7a8a9a', textCol: '#fff', forage: 'Diverse, long season' },
+    orchard:  { label: 'Orchard', ico: '🍎', honey: 'Spring blossom', color: '#8a4a20', textCol: '#fff', forage: 'Rich spring, quieter summer' },
+    moorland: { label: 'Moorland', ico: '🌿', honey: 'Heather (late summer)', color: '#6a3068', textCol: '#fff', forage: 'Sparse, heather peak Jul-Sep' }
+  };
+
+  /* Map territory cards */
+  var territoryCards = Object.keys(SITE_META).map(function(siteKey) {
+    var meta = SITE_META[siteKey];
+    var siteApiaries = apiaries.filter(function(ap) { return ap.siteType === siteKey; });
+    var totalCols = siteApiaries.reduce(function(sum, ap) {
+      return sum + ((typeof coloniesIn === 'function') ? coloniesIn(ap.id).filter(function(c) { return c.alive; }).length : 0);
+    }, 0);
+    var isActive = siteApiaries.length > 0;
+
+    var apList = siteApiaries.map(function(ap) {
+      var count = (typeof coloniesIn === 'function') ? coloniesIn(ap.id).filter(function(c) { return c.alive; }).length : 0;
+      return h('div', { class: 'map-apiary-line' }, [
+        h('span', { class: 'map-ap-dot' }),
+        h('b', { text: ap.name }),
+        h('span', { class: 'map-ap-cols', text: count + ' colon' + (count === 1 ? 'y' : 'ies') }),
+        h('button', { class: 'btn btn-xs', onclick: function() {
+          Game.ui.selectedApiary = ap.id;
+          Game.ui.view = 'apiary';
+          render();
+        } }, 'View →')
+      ]);
+    });
+
+    return h('div', {
+      class: 'map-territory' + (isActive ? ' map-territory-active' : ''),
+      style: { '--territory-color': meta.color, '--territory-text': meta.textCol }
+    }, [
+      h('div', { class: 'map-territory-header' }, [
+        h('span', { class: 'map-site-ico' }, meta.ico),
+        h('div', { class: 'map-site-info' }, [
+          h('b', { text: meta.label }),
+          h('span', { class: 'map-site-honey', text: '🍯 ' + meta.honey })
+        ]),
+        isActive ? h('span', { class: 'map-active-badge' }, totalCols + ' col' + (totalCols === 1 ? 'ony' : 'onies')) : null
+      ]),
+      h('div', { class: 'map-forage-strip', text: meta.forage }),
+      isActive ? h('div', { class: 'map-apiaries-list' }, apList) : h('div', { class: 'map-empty-site' }, [
+        h('span', { text: 'No apiary here yet.' }),
+        h('button', { class: 'btn btn-sm btn-leaf', onclick: function() {
+          Game.ui.view = 'market';
+          _ui_marketTab = 'apiaries';
+          render();
+        } }, 'Establish →')
+      ])
+    ]);
+  });
+
+  /* Season strip — what's flowering now */
+  var mo = (typeof monthOfWeek === 'function') ? monthOfWeek(wkInYear) : 0;
+  var forageNote = (FORAGE && FORAGE.sources) ? FORAGE.sources[mo] : '';
+  var seasonStrip = h('div', { class: 'map-season-strip ' + season }, [
+    h('span', { class: 'map-season-ico' }, season === 'spring' ? '🌸' : season === 'summer' ? '☀️' : season === 'autumn' ? '🍂' : '❄️'),
+    h('b', { text: season.charAt(0).toUpperCase() + season.slice(1) }),
+    forageNote ? h('span', { text: ' — ' + forageNote }) : null
+  ]);
+
+  return h('div', { class: 'panel-view narrow' }, [
+    h('div', { class: 'page-title' }, '🗺️ Territory Map'),
+    h('div', { class: 'page-sub' }, 'Your apiaries across the landscape. Each site has its own forage, honey character, and seasonal rhythm.'),
+    seasonStrip,
+    h('div', { class: 'map-grid' }, territoryCards)
+  ]);
+}
+
+/* Honey type color lookup by site (for map view) */
+var HONEY_VISUAL_MAP = {
+  rural:    { color: '#e8a820' },
+  farmland: { color: '#f2ce08' },
+  urban:    { color: '#e0b830' },
+  orchard:  { color: '#f5e96a' },
+  moorland: { color: '#8b3a1a' }
+};
 
 /* Single hive card in the yard */
 function _ui_buildHiveCard(colony) {
@@ -954,8 +1311,7 @@ function _ui_buildHiveCard(colony) {
 function _ui_buildSidebar() {
   var advisor = Game.advisor || [];
 
-  /* The mentor speaks the single most pressing thing — drawn from the same
-     advisor list, so the mentor and the notes below can never contradict. */
+  /* Mentor speaks the single most pressing thing */
   var top = null;
   for (var i = 0; i < advisor.length; i++) { if (advisor[i].tone === 'bad') { top = advisor[i]; break; } }
   if (!top) { for (var j = 0; j < advisor.length; j++) { if (advisor[j].tone === 'warn') { top = advisor[j]; break; } } }
@@ -966,7 +1322,7 @@ function _ui_buildSidebar() {
     mentorTone = top.tone;
   } else {
     var ml = (typeof mentorLine === 'function') ? mentorLine() : null;
-    mentorText = ml || 'All looks well at the apiary. Enjoy a calm week — and keep half an eye on the season ahead.';
+    mentorText = ml || 'All looks well at the apiary. Enjoy a calm week — keep half an eye on the season ahead.';
     mentorTone = 'ok';
   }
 
@@ -978,16 +1334,38 @@ function _ui_buildSidebar() {
     ])
   ]);
 
-  /* The notes list shows everything else the advisor flagged */
+  /* Guided action items — urgency-ranked, click-to-open-colony where possible */
   var notes = advisor.filter(function(a) { return a !== top; });
-  var advisorItems;
+  var actionItems;
   if (!notes.length) {
-    advisorItems = [h('div', { class: 'advisor-empty' }, 'Nothing else to flag right now.')];
+    actionItems = [h('div', { class: 'advisor-empty' }, 'No further flags — you\'re on top of things.')];
   } else {
-    advisorItems = notes.map(function(item) {
-      return h('div', { class: 'advisor-item ' + (item.tone || 'info') }, [
+    actionItems = notes.map(function(item) {
+      /* Try to match a colony by name appearing at the start of the text */
+      var matchCol = null;
+      var colonies = Game.colonies || [];
+      for (var ci = 0; ci < colonies.length; ci++) {
+        if (colonies[ci].alive && item.text && item.text.indexOf(colonies[ci].name) === 0) {
+          matchCol = colonies[ci];
+          break;
+        }
+      }
+
+      var urgencyLabel = { bad: 'Urgent', warn: 'Soon', info: 'Note', ok: 'Good' }[item.tone] || 'Note';
+      var urgencyRow = h('div', { class: 'action-urgency ' + (item.tone || 'info') }, [
         h('span', { class: 'ico' }, item.icon || ''),
-        h('span', { text: item.text })
+        h('span', { class: 'urgency-label' }, urgencyLabel)
+      ]);
+
+      var openBtn = matchCol ? h('button', {
+        class: 'btn btn-xs action-open-btn',
+        onclick: function() { openHiveDetail(matchCol, 'actions'); }
+      }, 'Open →') : null;
+
+      return h('div', { class: 'action-item tone-' + (item.tone || 'info') }, [
+        urgencyRow,
+        h('div', { class: 'action-text', text: item.text }),
+        openBtn
       ]);
     });
   }
@@ -1000,15 +1378,18 @@ function _ui_buildSidebar() {
   var skipBtn = h('button', {
     class: 'btn',
     onclick: function() { _ui_advanceToEvent(); }
-  }, 'Advance to next event');
+  }, 'Skip to next event');
 
   return h('div', { class: 'apiary-side' }, [
-    h('div', { class: 'time-controls' }, [advanceBtn, skipBtn]),
     mentorBlock,
     h('div', { class: 'side-section' }, [
-      h('div', { class: 'side-head', text: 'Adviser notes' }),
-      h('div', { class: 'side-body' }, advisorItems)
-    ])
+      h('div', { class: 'side-head' }, [
+        h('span', { text: 'Action list' }),
+        notes.length > 0 ? h('span', { class: 'action-count tone-' + (top ? top.tone : 'ok') }, String(notes.length)) : null
+      ]),
+      h('div', { class: 'side-body action-list' }, actionItems)
+    ]),
+    h('div', { class: 'time-controls' }, [advanceBtn, skipBtn])
   ]);
 }
 
@@ -1281,20 +1662,32 @@ function _ui_marketSellTab() {
     return SALES[b].priceMul > SALES[a].priceMul ? b : a;
   }, unlocked[0]);
 
+  /* Honey type visual characteristics — color swatch + special handling notes */
+  var HONEY_VISUAL = {
+    spring:   { color: '#f5e96a', note: null },
+    oilseed:  { color: '#f2ce08', note: 'Sets fast — bottle within 5-6 weeks of extraction' },
+    summer:   { color: '#e8a820', note: null },
+    lime:     { color: '#d8de50', note: null },
+    borage:   { color: '#f0d060', note: null },
+    heather:  { color: '#8b3a1a', note: 'Thixotropic — must be pressed, not spun' },
+    ivy:      { color: '#2a2010', note: 'Dark and bitter. Niche market — price accordingly' }
+  };
+
   var jarRows = [];
   Object.keys(HONEY_TYPES).forEach(function(htId) {
     var count = jars[htId] || 0;
     if (count <= 0) return;
     var ht = HONEY_TYPES[htId];
+    var vis = HONEY_VISUAL[htId] || { color: '#e8a820', note: null };
     var ch = SALES[best];
     var price = (typeof marketPrice === 'function') ? marketPrice(htId, best) : ht.value;
     var batch = Math.min(count, ch.capacity);
     jarRows.push(h('div', { class: 'shop-item' }, [
-      h('div', { class: 'ico' }, '🍯'),
+      h('div', { class: 'honey-swatch', style: { background: vis.color } }),
       h('div', { class: 'meta' }, [
         h('b', { text: ht.name }),
-        h('p', { text: count + ' jar' + (count !== 1 ? 's' : '') + ' in stock — ' +
-          fmtMoney(price) + ' each via ' + ch.name })
+        h('p', { text: count + ' jar' + (count !== 1 ? 's' : '') + ' — ' + fmtMoney(price) + ' each via ' + ch.name }),
+        vis.note ? h('p', { class: 'honey-note', text: '⚠ ' + vis.note }) : null
       ]),
       h('div', { class: 'shop-action' }, h('button', {
         class: 'btn btn-leaf shop-buy',
