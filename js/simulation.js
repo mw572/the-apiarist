@@ -458,7 +458,33 @@ function runWeek() {
   /* 7. Advisor -------------------------------------------------------- */
   buildAdvisor();
 
-  /* 8. Return presentables ------------------------------------------ */
+  /* 8. Week honey summary — brief toast when there is a meaningful flow */
+  (function() {
+    var totalSuper = 0;
+    var aliveCount = 0;
+    var cols = Game.colonies || [];
+    for (var ci = 0; ci < cols.length; ci++) {
+      if (cols[ci].alive) {
+        totalSuper += cols[ci].superHoney || 0;
+        aliveCount++;
+      }
+    }
+    var weekHoneyGained = totalSuper - (Game._lastWeekSuperHoney || 0);
+    Game._lastWeekSuperHoney = totalSuper;
+    // Only notify during active flow periods (spring through autumn)
+    var wkInYear = ((week - 1) % 52) + 1;
+    var inFlow = wkInYear >= 14 && wkInYear <= 38;
+    if (inFlow && weekHoneyGained >= 0.5 && aliveCount > 0) {
+      var kgStr = weekHoneyGained.toFixed(1);
+      presentables.unshift({
+        kind: 'toast',
+        text: '🍯 ' + kgStr + ' kg gained this week (' + totalSuper.toFixed(1) + ' kg total in supers)',
+        tone: 'good',
+      });
+    }
+  })();
+
+  /* 9. Return presentables ------------------------------------------ */
   return presentables;
 }
 
@@ -497,9 +523,12 @@ function _sim_resolveEvent(ev, week) {
         });
       } else {
         out.push({
-          kind: 'toast',
-          text: colony.name + ' has died. Reason: ' + reason + '.',
-          tone: 'bad',
+          kind : 'modal',
+          title: colony.name + ' has died',
+          body : '<p><strong>' + colony.name + '</strong> has been lost.</p>' +
+                 '<p><strong>Cause:</strong> ' + reason + '.</p>' +
+                 '<p>Inspect the hive in the next week or two before clearing it out — ' +
+                 'understanding the cause helps you prevent it next time.</p>',
         });
       }
       break;

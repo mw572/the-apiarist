@@ -1296,6 +1296,12 @@ function _ui_buildHiveCard(colony) {
     }
   }
 
+  /* Queen cell crown: shown when cells were observed last inspection */
+  var qcellCrown = null;
+  if (colony.alive && known && known.queenCells && known.queenCells !== 'none') {
+    qcellCrown = h('div', { class: 'hive-qcell-crown', title: 'Queen cells seen — check swarm control' }, '👑');
+  }
+
   var hiveCls = 'hive';
   if (!colony.alive) hiveCls += ' is-dead';
   if (known && known.disease) hiveCls += ' has-disease';
@@ -1307,6 +1313,7 @@ function _ui_buildHiveCard(colony) {
     h('div', { class: 'hive-dot ' + dotCls }),
     showBadge ? h('div', { class: 'hive-badge ' + badgeCls }, badgeGlyph) : null,
     inspectUrgency,
+    qcellCrown,
     h('div', { class: 'hive-bees' }, beeNodes),
     h('div', { class: 'hive-roof' }),
     h('div', { class: 'hive-stack' }, boxes),
@@ -2962,6 +2969,37 @@ function _ui_buildActionButtons(colony) {
     return btn;
   }
 
+  /* === Queen state summary === */
+  var queenSummary = (function() {
+    if (dead) {
+      return h('div', { class: 'queen-summary qs-dead' }, [
+        h('span', { class: 'qs-ico' }, '💀'),
+        h('span', { class: 'qs-text' }, 'Colony lost — ' + (colony.deadReason || 'unknown cause'))
+      ]);
+    }
+    var q = colony.queen;
+    var icon, text, cls;
+    if (!q || !q.present) {
+      if (colony.queenCells) {
+        icon = '🥚'; text = 'Queenless — queen cells present'; cls = 'qs-warn';
+      } else {
+        icon = '⚠️'; text = 'Queenless — no queen found'; cls = 'qs-bad';
+      }
+    } else {
+      var qParts = [];
+      if (q.age) qParts.push('year ' + q.age);
+      if (q.marked) qParts.push('marked');
+      if (q.clipped) qParts.push('clipped');
+      icon = '👑';
+      text = 'Queen present' + (qParts.length ? ' — ' + qParts.join(', ') : '');
+      cls = 'qs-ok';
+    }
+    return h('div', { class: 'queen-summary ' + cls }, [
+      h('span', { class: 'qs-ico' }, icon),
+      h('span', { class: 'qs-text' }, text)
+    ]);
+  })();
+
   var inspectBtn = h('button', {
     class: 'btn btn-sm btn-primary',
     text: '🔍 Inspect the hive',
@@ -2992,7 +3030,7 @@ function _ui_buildActionButtons(colony) {
 
   /* === Management actions === */
   var mgmt = h('div', { class: 'action-group' }, [
-    h('div', { class: 'action-group-title' }, 'Hive management'),
+    h('div', { class: 'action-group-title' }, '🔧 Hive management'),
     h('div', { class: 'btn-row' }, [
       abtn('Clearer board', '', 'fitClearerBoard',
         dead || (colony.supers || 0) === 0 || !!colony.clearerFitted,
@@ -3038,7 +3076,7 @@ function _ui_buildActionButtons(colony) {
   ]);
 
   /* === Queen & colony === */
-  var queen = h('div', { class: 'action-group' }, [
+  var queenGroup = h('div', { class: 'action-group' }, [
     h('div', { class: 'action-group-title' }, '👑 Queen and colony'),
     h('div', { class: 'btn-row' }, [
       abtn('Requeen', '', 'requeen', dead, 'This colony has died'),
@@ -3048,12 +3086,19 @@ function _ui_buildActionButtons(colony) {
       abtn('Rear queens', '', 'rearQueens', dead, 'This colony has died'),
       abtn('Unite colonies', '', 'unite',
         dead || (typeof aliveColonies === 'function' && aliveColonies().length < 2),
-        'No other colony to unite with'),
+        'No other colony to unite with')
+    ])
+  ]);
+
+  /* === Danger zone — destructive, irreversible === */
+  var dangerZone = h('div', { class: 'action-danger-zone' }, [
+    h('div', { class: 'action-group-title' }, '⚠️ Danger zone'),
+    h('div', { class: 'btn-row' }, [
       abtn('Sell colony', 'btn-danger', 'sellColony', dead, 'This colony has died')
     ])
   ]);
 
-  return h('div', {}, [primary, mgmt, swarm, queen]);
+  return h('div', {}, [queenSummary, primary, mgmt, swarm, queenGroup, dangerZone]);
 }
 
 /* ====================================================================

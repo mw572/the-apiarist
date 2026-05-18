@@ -285,6 +285,18 @@ button { font-family: var(--sans); cursor: pointer; }
   position: absolute; top: -8px; left: -6px; font-size: 18px; z-index: 6;
   filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
 }
+/* queen-cell crown: pulsing indicator on hive roof when cells observed */
+.hive-qcell-crown {
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  font-size: 14px; z-index: 7; line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.45));
+  animation: qcell-pulse 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes qcell-pulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50%       { transform: translateX(-50%) scale(1.2); }
+}
 .hive.is-dead { opacity: .55; filter: grayscale(.7); }
 .hive.is-dead .hive-box {
   background: repeating-linear-gradient(
@@ -1832,4 +1844,41 @@ button { font-family: var(--sans); cursor: pointer; }
 .map-empty-site {
   padding: 14px; display: flex; align-items: center; justify-content: space-between;
   gap: 10px; font-size: 13px; color: var(--ink-faint); font-style: italic;
+}
+
+/* ====================================================================
+   QUEEN STATE SUMMARY (action tab header)
+   ==================================================================== */
+.queen-summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 11px; border-radius: 8px; margin-bottom: 12px;
+  font-size: 13px; font-weight: 600; border: 1px solid transparent;
+}
+.queen-summary .qs-ico { font-size: 16px; flex: none; }
+.queen-summary .qs-text { flex: 1; }
+.queen-summary.qs-ok   { background: var(--ok-bg);   color: var(--ok);   border-color: rgba(74,158,92,0.25); }
+.queen-summary.qs-warn { background: var(--warn-bg); color: var(--warn); border-color: rgba(212,130,10,0.25); }
+.queen-summary.qs-bad  { background: var(--bad-bg);  color: var(--bad);  border-color: rgba(192,48,48,0.25); }
+.queen-summary.qs-dead { background: var(--parch-2); color: var(--ink-soft); border-color: var(--line-dk); }
+
+/* ====================================================================
+   DANGER ZONE (destructive colony actions)
+   ==================================================================== */
+.action-danger-zone {
+  border: 1px solid var(--bad); border-radius: 9px;
+  background: var(--bad-bg); padding: 9px 11px; margin-top: 14px;
+}
+.action-danger-zone .action-group-title { color: var(--bad); }
+.action-danger-zone .btn-row { gap: 6px; }
+
+/* ====================================================================
+   MOBILE ACTION BUTTONS — stack vertically for easier tapping
+   ==================================================================== */
+@media (max-width: 640px) {
+  .action-primary-row { display: flex; flex-direction: column; gap: 8px; }
+  .action-primary-row .btn { width: 100%; justify-content: center; }
+  .action-group .btn-row { flex-direction: column; gap: 6px; }
+  .action-group .btn-row .btn { width: 100%; justify-content: center; }
+  .action-danger-zone .btn-row { flex-direction: column; gap: 6px; }
+  .action-danger-zone .btn-row .btn { width: 100%; justify-content: center; }
 }
