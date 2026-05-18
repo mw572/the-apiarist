@@ -235,7 +235,13 @@ button { font-family: var(--sans); cursor: pointer; }
   background: linear-gradient(180deg, #eccf8c, #d3ac63);
   position: relative; box-shadow: inset 0 -3px 4px rgba(90,60,25,0.16);
 }
-.hive-box.super { height: 24px; background: linear-gradient(180deg, #efd9a0, #ddc07c); }
+.hive-box.super { height: 24px; background: linear-gradient(180deg, #efd9a0, #ddc07c); overflow: hidden; }
+.hive-box.super::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+  height: var(--honey-fill, 0%);
+  background: rgba(195, 135, 20, 0.45);
+  pointer-events: none;
+}
 .hive-box.brood { height: 42px; }
 .hive-box::before {
   content: ''; position: absolute; left: 50%; transform: translateX(-50%);
@@ -280,6 +286,18 @@ button { font-family: var(--sans); cursor: pointer; }
   filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
 }
 .hive.is-dead { opacity: .55; filter: grayscale(.7); }
+.hive.is-dead .hive-box {
+  background: repeating-linear-gradient(
+    -45deg, rgba(100,80,50,0.22) 0, rgba(100,80,50,0.22) 3px,
+    transparent 3px, transparent 10px
+  ), linear-gradient(180deg, #c8b898, #b09878) !important;
+}
+/* 3px red left stripe when disease observed */
+.hive.has-disease .hive-stack { position: relative; }
+.hive.has-disease .hive-stack::before {
+  content: ''; position: absolute; left: -5px; top: 0; bottom: 0; width: 3px;
+  background: var(--bad); border-radius: 2px; z-index: 4;
+}
 .hive-bees { position: absolute; left: 0; right: 0; top: -24px; bottom: 28px; pointer-events: none; z-index: 6; overflow: visible; }
 .bee {
   position: absolute; font-size: 14px; opacity: 0;
@@ -1370,7 +1388,7 @@ button { font-family: var(--sans); cursor: pointer; }
 .toast {
   background: var(--ink); color: var(--wax); padding: 9px 18px; border-radius: 20px;
   font-size: 13px; font-weight: 600; box-shadow: var(--shadow-lg);
-  animation: toastIn .2s, toastOut .3s 2.7s forwards;
+  animation: toastIn .2s, toastOut .3s 4.1s forwards;
 }
 .toast.good { background: var(--leaf-dk); }
 .toast.bad { background: var(--bad); }
@@ -1408,7 +1426,7 @@ button { font-family: var(--sans); cursor: pointer; }
   /* keep form fields at 16px+ so iOS Safari does not zoom in on focus */
   input, select, textarea { font-size: 16px; }
 
-  /* --- top bar: compact, stays one row --- */
+  /* --- top bar: compact — show only cash + weather + brand --- */
   .topbar { height: 52px; gap: 8px; padding: 0 10px; }
   .topbar .brand { font-size: 15px; }
   .topbar-clock { gap: 6px; min-width: 0; }
@@ -1418,17 +1436,36 @@ button { font-family: var(--sans); cursor: pointer; }
   .topbar-clock .when small { font-size: 8px; letter-spacing: .3px; }
   .topbar-stat b { font-size: 13px; }
   .topbar-stat small { font-size: 8px; letter-spacing: .3px; }
+  .topbar-stat.ev { display: none; }   /* hide business value on mobile */
+  .topbar-stat.skill { display: none; } /* hide skill level on mobile */
   .topbar-btn { width: 30px; height: 30px; font-size: 14px; }
 
-  /* --- nav: icon above a small label, five tabs share the width --- */
-  .navbar { gap: 2px; padding: 4px 4px 0; }
+  /* --- nav: iOS-style bottom bar --- */
+  .navbar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    gap: 0; padding: 4px 0 env(safe-area-inset-bottom, 4px);
+    border-top: 1px solid var(--line-dk); border-bottom: none;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.10);
+    background: var(--parch-2);
+  }
   .nav-btn {
-    position: relative; flex: 1 1 0; min-width: 0;
+    position: relative; flex: 1 1 0; min-width: 0; min-height: 52px;
     flex-direction: column; gap: 2px;
-    padding: 6px 1px; font-size: 9.5px; letter-spacing: 0; text-align: center;
+    padding: 6px 2px; font-size: 9.5px; letter-spacing: 0; text-align: center;
+    border-radius: 0; border: none;
+  }
+  .nav-btn.active {
+    background: var(--warn-bg); color: var(--honey-dk);
+    border: none; border-bottom: none; margin-bottom: 0;
   }
   .nav-btn .ico { font-size: 18px; }
   .nav-btn .pip { position: absolute; top: 3px; right: 8px; }
+
+  /* push content above the fixed bottom navbar */
+  .stage { padding-bottom: 60px; }
+
+  /* toast floats above the bottom navbar */
+  .toast-stack { bottom: 72px; }
 
   /* --- apiary: stack the scene above the adviser panel --- */
   .apiary-view { flex-direction: column; }
@@ -1463,9 +1500,11 @@ button { font-family: var(--sans); cursor: pointer; }
   .panel-view { padding: 14px 13px; }
   .panel-view.narrow { max-width: 100%; }
 
-  /* --- market --- */
-  .market-tab { padding: 8px 12px; font-size: 12px; }
-  .kit-item { min-width: 0; flex: 1 1 30%; }
+  /* --- market: tabs scroll horizontally, no wrap --- */
+  .market-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+                 padding-bottom: 4px; gap: 4px; }
+  .market-tab { flex: none; padding: 8px 12px; font-size: 12px; }
+  .kit-item { min-width: 0; flex: 1 1 45%; }
   .shop-item .ico { font-size: 22px; width: 28px; }
 
   /* --- handbook: the contents list stacks above the article --- */
@@ -1484,12 +1523,22 @@ button { font-family: var(--sans); cursor: pointer; }
   .title-card .bee-crest { font-size: 40px; }
   .diff-picks { flex-direction: column; }
 
-  /* --- modals: use nearly the full width --- */
-  .modal, .modal.wide, .modal.xwide { width: 94vw; }
-  .modal-body { padding: 14px; }
-  .modal-head { padding: 11px 14px; }
+  /* --- modals: near full-screen, body scrolls independently --- */
+  .modal, .modal.wide, .modal.xwide {
+    width: 96vw; max-height: 88dvh;
+    display: flex; flex-direction: column;
+  }
+  .modal-body {
+    padding: 14px; overflow-y: auto; flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+  .modal-head { padding: 11px 14px; flex: none; }
   .modal-head h3 { font-size: 16px; }
-  .modal-foot { padding: 10px 14px; }
+  .modal-foot { padding: 10px 14px; flex: none; }
+
+  /* --- save/load action buttons: stack vertically on mobile --- */
+  .sl-actions { flex-direction: column; }
+  .sl-actions .btn { min-width: 0; width: 100%; justify-content: center; }
 
   /* --- hive detail: stack on mobile --- */
   .hive-detail { flex-direction: column; height: auto; }
@@ -1499,6 +1548,8 @@ button { font-family: var(--sans); cursor: pointer; }
   /* --- inspection: frames scroll sideways, detail stacks --- */
   .inspect-box-inner { justify-content: flex-start; overflow-x: auto; padding-bottom: 4px; }
   .inspect-detail { flex-direction: column; }
+  /* bigger frame touch targets */
+  .box-frame { width: 44px; height: 120px; }
 
   /* --- statusbar: compact on mobile --- */
   .statusbar { height: 36px; padding: 0 8px; gap: 0; }
@@ -1513,10 +1564,14 @@ button { font-family: var(--sans); cursor: pointer; }
   .spare-hive-label { font-size: 11px; }
   .spare-hive-sub { font-size: 9px; }
 
-  /* --- roomier tap targets --- */
-  .btn { padding: 10px 15px; }
-  .btn-sm { padding: 7px 11px; }
-  .book-link { padding: 8px 10px; }
+  /* --- minimum 44px touch targets everywhere --- */
+  .btn { padding: 10px 15px; min-height: 44px; }
+  .btn-sm { padding: 7px 11px; min-height: 40px; }
+  .book-link { padding: 10px; min-height: 44px; display: flex; align-items: center; }
+  .ag-option { padding: 12px 14px; }
+
+  /* map grid: single column on mobile */
+  .map-grid { grid-template-columns: 1fr; }
 }
 
 /* action education dialog — every action explained as you take it */

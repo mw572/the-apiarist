@@ -250,7 +250,7 @@ function toast(text, tone) {
   while (stack.children.length > 4) stack.removeChild(stack.firstChild);
   setTimeout(function() {
     if (el.parentNode) el.parentNode.removeChild(el);
-  }, 3100);
+  }, 4500);
 }
 
 /* ====================================================================
@@ -550,7 +550,7 @@ function _ui_buildTopbar() {
       h('b', { text: fmtMoney(typeof enterpriseValue === 'function' ? enterpriseValue() : 0) }),
       h('small', { text: 'Business value' })
     ]),
-    h('div', { class: 'topbar-stat' }, [
+    h('div', { class: 'topbar-stat skill' }, [
       h('b', { text: titleName }),
       h('small', { text: 'Skill level ' + sl })
     ]),
@@ -1167,9 +1167,16 @@ function _ui_buildHiveCard(colony) {
   if (!colony.alive) statusLine = colony.deadReason ? ('Lost — ' + colony.deadReason) : 'Colony lost';
   else if (!known) statusLine = 'Not yet inspected';
   else if (known.heftOnly) statusLine = 'Not yet inspected';
-  else statusLine = (known.populationBand
-    ? known.populationBand.charAt(0).toUpperCase() + known.populationBand.slice(1)
-    : (known.note || 'Inspected'));
+  else {
+    statusLine = (known.populationBand
+      ? known.populationBand.charAt(0).toUpperCase() + known.populationBand.slice(1)
+      : (known.note || 'Inspected'));
+    // append inspection age
+    if (colony.lastInspected > 0) {
+      var _ageW = ((typeof Game !== 'undefined' && Game) ? Game.week : 1) - colony.lastInspected;
+      if (_ageW > 0) statusLine += ' · ' + _ageW + 'w';
+    }
+  }
 
   var showBadge = false;
   var badgeGlyph = '';
@@ -1228,7 +1235,12 @@ function _ui_buildHiveCard(colony) {
   // Box stack: supers on top, brood boxes below
   var boxes = [];
   var superCount = colony.supers || 0;
-  for (var s = 0; s < superCount; s++) boxes.push(h('div', { class: 'hive-box super' }));
+  // honey fill per super: full super ≈ 12 kg
+  var honeyPerSuper = superCount > 0 ? (colony.superHoney || 0) / superCount : 0;
+  var fillFrac = Math.min(1, honeyPerSuper / 12);
+  for (var s = 0; s < superCount; s++) {
+    boxes.push(h('div', { class: 'hive-box super', style: { '--honey-fill': Math.round(fillFrac * 100) + '%' } }));
+  }
   var broodCount = colony.broodBoxes || 1;
   for (var b = 0; b < broodCount; b++) boxes.push(h('div', { class: 'hive-box brood' }));
 
@@ -1284,8 +1296,12 @@ function _ui_buildHiveCard(colony) {
     }
   }
 
+  var hiveCls = 'hive';
+  if (!colony.alive) hiveCls += ' is-dead';
+  if (known && known.disease) hiveCls += ' has-disease';
+
   return h('div', {
-    class: 'hive' + (colony.alive ? '' : ' is-dead'),
+    class: hiveCls,
     onclick: function() { openHiveDetail(colony); }
   }, [
     h('div', { class: 'hive-dot ' + dotCls }),
