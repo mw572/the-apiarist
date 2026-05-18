@@ -484,7 +484,7 @@ function render() {
   /* Floating advance-week button — mobile only, shown via CSS */
   var hasUrgent = (Game.advisor || []).some(function(a) { return a.tone === 'bad' || a.tone === 'warn'; });
   var fab = h('button', {
-    class: 'advance-fab' + (hasUrgent ? '' : ' pulse'),
+    class: 'advance-fab' + (hasUrgent ? ' urgent' : ' pulse'),
     title: 'Advance one week',
     onclick: function() { if (typeof advanceWeek === 'function') advanceWeek(); }
   }, '▶︎');
@@ -1185,7 +1185,7 @@ function _ui_buildHiveCard(colony) {
       : (known.note || 'Inspected'));
     if (colony.lastInspected > 0) {
       var _ageW = ((typeof Game !== 'undefined' && Game) ? Game.week : 1) - colony.lastInspected;
-      if (_ageW > 0) plaqueAgeStr = _ageW + 'w ago';
+      if (_ageW > 0) plaqueAgeStr = _ageW === 1 ? '1 week ago' : _ageW + ' weeks ago';
     }
   }
 
@@ -1406,7 +1406,7 @@ function _ui_buildSidebar() {
   var advanceBtn = h('button', {
     class: 'btn btn-primary',
     onclick: function() { if (typeof advanceWeek === 'function') advanceWeek(); }
-  }, '+ Advance one week');
+  }, '+ Advance one week (7 days)');
 
   var skipBtn = h('button', {
     class: 'btn',
@@ -1529,7 +1529,12 @@ function _ui_shopRow(item, category) {
       onclick: function() {
         var r = buyFromCatalog(category, item.id, 1);
         toast(r.msg, r.ok ? 'good' : 'bad');
-        if (r.ok) render();
+        if (r.ok) {
+          if (category === 'bees' && typeof Game !== 'undefined' && Game.ui) {
+            Game.ui.view = 'apiary';
+          }
+          render();
+        }
       }
     }, [ 'Buy', h('span', { class: 'shop-price' }, fmtMoney(item.price)) ]);
   }
@@ -1610,6 +1615,78 @@ function _ui_marketSuppliesTab() {
       (function(tid) { return function() { return buySupply(tid, 1); }; })(id));
   });
 
+  /* === Extract & Bottle section === */
+  var honeyInv = inv.honey || {};
+  var honeyTypes = Object.keys(honeyInv).filter(function(t) { return (honeyInv[t] || 0) >= 0.01; });
+  var KG_PER_JAR = 0.34;
+  var emptyJars = inv.emptyJars || 0;
+
+  var bottleSection;
+  if (honeyTypes.length === 0) {
+    bottleSection = h('div', { class: 'card' }, [
+      h('div', { class: 'card-title' }, '🫙 Extract & Bottle'),
+      h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', margin: 0 } },
+        'No bulk honey yet. Inspect a hive when the supers are heavy, then use the Harvest action to bring the honey in.')
+    ]);
+  } else {
+    var bottleRows = honeyTypes.map(function(ht) {
+      var kgAvail = honeyInv[ht] || 0;
+      var maxJars = (ht === 'heather')
+        ? Math.floor(kgAvail * 0.70 / KG_PER_JAR)
+        : Math.floor(kgAvail / KG_PER_JAR);
+      var htInfo = (typeof HONEY_TYPES !== 'undefined' && HONEY_TYPES[ht]) || {};
+      var htName = htInfo.name || ht;
+
+      var input = h('input', {
+        type: 'number',
+        class: 'bottle-input',
+        value: String(Math.min(maxJars, emptyJars)),
+        min: '1',
+        max: String(Math.min(maxJars, emptyJars))
+      });
+
+      var btn = h('button', {
+        class: 'btn btn-sm btn-primary',
+        text: 'Bottle',
+        onclick: function() {
+          var n = parseInt(input.value, 10) || 0;
+          if (n < 1) { toast('Enter at least 1 jar.', 'bad'); return; }
+          var r = (typeof extractAndBottle === 'function')
+            ? extractAndBottle(ht, n)
+            : { ok: false, msg: 'extractAndBottle not loaded.' };
+          toast(r.msg, r.ok ? 'good' : 'bad');
+          if (r.ok) render();
+        }
+      });
+      if (maxJars < 1 || emptyJars < 1) btn.disabled = true;
+
+      var jarNote = emptyJars < 1
+        ? 'No empty jars — buy a jar pack below.'
+        : maxJars < 1
+          ? 'Not enough honey for even one jar.'
+          : 'Up to ' + Math.min(maxJars, emptyJars) + ' jar' + (Math.min(maxJars, emptyJars) === 1 ? '' : 's') + ' (you have ' + emptyJars + ' empty jar' + (emptyJars === 1 ? '' : 's') + ')';
+
+      return h('div', { class: 'bottle-row' }, [
+        h('div', { class: 'bottle-meta' }, [
+          h('b', { text: htName }),
+          h('span', { class: 'bottle-kg', text: kgAvail.toFixed(2) + ' kg bulk' }),
+          h('span', { class: 'bottle-note', text: jarNote })
+        ]),
+        h('div', { class: 'bottle-controls' }, [input, btn])
+      ]);
+    });
+
+    bottleSection = h('div', { class: 'card' }, [
+      h('div', { class: 'card-title' }, '🫙 Extract & Bottle'),
+      h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', margin: '0 0 10px' } },
+        'Turn bulk honey into jars ready to sell. Each 227g jar takes ' + KG_PER_JAR + ' kg of honey. ' +
+        (typeof Game !== 'undefined' && !(Game.inventory.tools && Game.inventory.tools.extractor)
+          ? 'You\'ll hire the association extractor (' + fmtMoney(typeof COSTS !== 'undefined' ? COSTS.extractorHire : 15) + ' per session).'
+          : 'Your extractor is ready.')),
+      h('div', { class: 'bottle-list' }, bottleRows)
+    ]);
+  }
+
   return h('div', {}, [
     h('div', { class: 'card' }, [
       h('div', { class: 'card-title' }, '🛍️ Feeding and bottling'),
@@ -1617,6 +1694,7 @@ function _ui_marketSuppliesTab() {
         text: 'Buy sugar for syrup and jars for your honey. Feeding and bottling draw on this stock.' }),
       h('div', { class: 'shop-list' }, feedRows)
     ]),
+    bottleSection,
     h('div', { class: 'card' }, [
       h('div', { class: 'card-title' }, '💊 Varroa treatments'),
       h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', margin: '0 0 8px' },
@@ -2164,7 +2242,7 @@ function openHiveDetail(colony, _startTab) {
       panelInspection.classList.remove('hive-tab-hidden');
       panelActions.classList.add('hive-tab-hidden');
     }
-  }, '🔍 Last inspection' + (known && !known.heftOnly && weeksAgo > 0 ? ' (' + weeksAgo + 'w ago)' : ''));
+  }, '🔍 Last inspection' + (known && !known.heftOnly && weeksAgo > 0 ? ' (' + (weeksAgo === 1 ? '1 week ago' : weeksAgo + ' weeks ago') + ')' : ''));
 
   var tabAct = h('button', {
     class: 'hive-tab' + (activeTab === 'actions' ? ' active' : ''),
@@ -2996,8 +3074,61 @@ function _ui_topSuperHoney(colony) {
   return (colony.superHoney || 0) / Math.max(colony.supers, 1);
 }
 
+function _ui_buildDeadPanel(colony) {
+  var cause = colony.deadReason || 'Unknown cause';
+  var weekDied = colony.deadWeek || null;
+  var weeksAgo = weekDied ? Math.max(0, Game.week - weekDied) : null;
+
+  var clearBtn = h('button', {
+    class: 'btn btn-sm btn-primary',
+    text: '📦 Clear the site',
+    onclick: function() {
+      var supers = colony.supers || 0;
+      var boxes  = colony.broodBoxes || 1;
+      Game.inventory.spareHives = (Game.inventory.spareHives || 0) + 1;
+      if (supers > 0) Game.inventory.supers = (Game.inventory.supers || 0) + supers;
+      colony.cleared = true;
+      logEvent('📦', 'Cleared ' + colony.name + '. Equipment returned to stock.', 'plain');
+      toast('Equipment back in stock — hive and supers recovered.', 'good');
+      render();
+    }
+  });
+  if (colony.cleared) clearBtn.disabled = true;
+
+  var tips = {
+    'starvation':    'Feed colonies in autumn — 2 kg sugar syrup per week until stores feel heavy when you heft the hive.',
+    'varroa':        'Treat in late summer once the main crop is off. Aim for a mite count below 1 per 100 bees before winter.',
+    'queenlessness': 'Check for eggs every two weeks during spring and summer. Act quickly — a queenless colony only has weeks.',
+    'chilling':      'In spring, size the colony to its bee numbers — a small cluster cannot cover a large brood nest.',
+    'unknown':       'Keep a hive diary so you can spot what changed in the weeks before a loss.'
+  };
+  var tipKey = Object.keys(tips).find(function(k) { return cause.toLowerCase().indexOf(k) !== -1; }) || 'unknown';
+
+  return h('div', { class: 'dead-colony-panel' }, [
+    h('div', { class: 'dead-col-header' }, [
+      h('span', { class: 'dead-col-icon' }, '🪦'),
+      h('div', {}, [
+        h('div', { class: 'dead-col-title' }, colony.name + ' — colony lost'),
+        h('div', { class: 'dead-col-cause' }, 'Cause: ' + cause +
+          (weeksAgo !== null ? ' · ' + weeksAgo + ' week' + (weeksAgo === 1 ? '' : 's') + ' ago' : ''))
+      ])
+    ]),
+    h('p', { class: 'dead-col-tip' }, '💡 ' + tips[tipKey]),
+    h('div', { class: 'dead-col-actions' }, [
+      colony.cleared
+        ? h('p', { class: 'muted', style: { fontSize: '13px' } }, 'Equipment already recovered.')
+        : [
+            h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '8px' } },
+              'Recover the hive and any supers, then buy a new nucleus when you\'re ready.'),
+            clearBtn
+          ]
+    ])
+  ]);
+}
+
 function _ui_buildActionButtons(colony) {
   var dead = !colony.alive;
+  if (dead) return _ui_buildDeadPanel(colony);
 
   function abtn(label, cls, key, disabled, reason) {
     var btn = h('button', {

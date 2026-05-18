@@ -375,7 +375,7 @@ function _checkWinterSurvival(){
   var wk = ((Game.week - 1) % 52) + 1;
   if (wk >= 18 && wk <= 20 && Game.flags.lastWinterYear !== gameYear()){
     Game.flags.lastWinterYear = gameYear();
-    if (gameYear() > 1 && aliveColonies().length > 0){
+    if (aliveColonies().length > 0){
       Game.stats.wintersSurvived += 1;
       /* XP: surviving winter is the single hardest milestone in beekeeping —
          15 XP per colony alive at mid-spring (weeks 18-20). Getting all your
