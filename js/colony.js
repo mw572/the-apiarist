@@ -1263,6 +1263,16 @@ function colonyWeeklyUpdate(colony, ctx){
     }
   }
 
+  // --- 11a2. Clearer board expiry — warn after 2 weeks in place -------
+  if (colony.clearerFitted) {
+    colony.clearerFittedWeeks = (colony.clearerFittedWeeks || 0) + 1;
+    if (colony.clearerFittedWeeks === 2) {
+      events.push({ type: 'clearerOverdue', colony: colony });
+    }
+  } else {
+    colony.clearerFittedWeeks = 0;
+  }
+
   // --- 11b. Newspaper uniting — bees chew through after ~1 week ------
   if (colony.stack && colony.stack.some(function(i) { return i.type === 'newspaper'; })) {
     colony.newspaperWeeksInPlace = (colony.newspaperWeeksInPlace || 0) + 1;

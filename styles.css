@@ -1454,6 +1454,7 @@ button { font-family: var(--sans); cursor: pointer; }
   .topbar-stat b { font-size: 13px; }
   .topbar-stat small { font-size: 9px; letter-spacing: .3px; }
   .topbar-stat.ev { display: none; }
+  .topbar-stat.skill { display: none; }
   .topbar-btn { min-width: 44px; min-height: 44px; font-size: 18px; border-radius: 10px; }
 
   /* --- nav: iOS-style bottom bar --- */

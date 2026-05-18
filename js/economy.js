@@ -305,7 +305,7 @@ function harvestColony(colony) {
     colony.superHoney = 0;
     colony.supers = 0;
     colony.queenExcluder = false;
-    colony.clearerFitted = false;
+    colony.clearerFitted = false; colony.clearerFittedWeeks = 0;
     if (colony.hiveLayout) colony.hiveLayout.supers = [];
     if (colony.stack) {
       colony.stack = colony.stack.filter(function(i) {
@@ -327,9 +327,16 @@ function harvestColony(colony) {
 
   // Moisture note for context — not a hard block.
   var season = seasonOfWeek(Game.week);
+  var _hvstWkInYr = ((Game.week - 1) % 52) + 1;
   var isHeightOfFlow = (season === 'summer' && forageNectar(Game.week) > 0.7);
   if (isHeightOfFlow) {
     msgs.push('Some frames may have unripe honey at the height of the flow — check moisture before bottling.');
+  }
+
+  // Winter harvest warning — removing ivy or stored honey in deep winter
+  // takes away the colony's emergency reserves.
+  if ((_hvstWkInYr >= 44 || _hvstWkInYr <= 8) && (type === 'ivy' || type === 'summer')) {
+    msgs.push('Harvesting in deep winter removes stores the colony may need to survive until spring. Only take honey if you are confident the colony has at least 15 kg left in the brood box, and feed fondant immediately after.');
   }
 
   // OSR crystallisation: FIX (Issue C) — harvestColony had no crystallisation
@@ -377,7 +384,7 @@ function harvestColony(colony) {
   // QX serves no purpose with no supers — clear it.
   colony.queenExcluder = false;
   // Clearer board is consumed by the harvest — reset for the next cycle.
-  colony.clearerFitted = false;
+  colony.clearerFitted = false; colony.clearerFittedWeeks = 0;
   // Sync stack — remove all supers, QX, and clearer board
   if (colony.stack) {
     colony.stack = colony.stack.filter(function(i) {
@@ -477,7 +484,7 @@ function harvestSuperAt(colony, superIdx) {
     kg = _econ_roundPrice(kg - loss);
     msgs.push('Without a clearer board you had to brush bees off, losing ' + loss.toFixed(2) + ' kg.');
   }
-  colony.clearerFitted = false;
+  colony.clearerFitted = false; colony.clearerFittedWeeks = 0;
 
   /* Cappings wax */
   Game.inventory.wax = _econ_roundPrice((Game.inventory.wax || 0) + _econ_roundPrice(kg * 0.013));
@@ -578,7 +585,7 @@ function _colony_removeSuperAt(colony, idx) {
       }
     }
     if (colony.clearerFitted) {
-      colony.clearerFitted = false;
+      colony.clearerFitted = false; colony.clearerFittedWeeks = 0;
       if (colony.stack) colony.stack = colony.stack.filter(function(i) { return i.type !== 'clearerBoard'; });
     }
   }

@@ -320,6 +320,14 @@ function inspectColony(colony) {
     knownDisease = 'chalkbrood';
   }
 
+  /* DWV — tracked separately from colony.diseases, surface at 0.3+ threshold */
+  if ((colony.dwv || 0) > 0.3 && skill >= 2) {
+    report.findings.push({ icon: '🦠', text: 'Bees emerging with deformed or crumpled wings — a sign of Deformed Wing Virus spread by varroa. This colony needs urgent treatment to reduce the mite load before winter bees are damaged.' });
+    if (!report.lesson) {
+      report.lesson = 'Deformed Wing Virus (DWV) is transmitted by varroa mites feeding on developing pupae. Infected winter bees have shortened abdomens and reduced fat reserves, meaning they die before spring. Treating varroa promptly is the only effective control.';
+    }
+  }
+
   /* Pests */
   const knownPests = [];
   if (colony.waspPressure > 0.4) {
@@ -657,6 +665,21 @@ function addSuper(colony) {
     return { ok: false, msg: 'Five supers is the practical maximum on one hive — the stack would be too tall to work safely.' };
   }
 
+  /* Block if a non-harvest-safe varroa treatment is active — honey would be contaminated */
+  if (colony.treatment) {
+    const _t = TREATMENTS[colony.treatment.id];
+    if (_t && !_t.harvestSafe) {
+      return { ok: false, msg: 'A varroa treatment is active on ' + colony.name + ' (' + _t.name + '). Adding supers now would contaminate the honey. Wait for the treatment to finish (' + colony.treatment.weeksLeft + ' week' + (colony.treatment.weeksLeft !== 1 ? 's' : '') + ' remaining).' };
+    }
+  }
+
+  /* Warn (not block) if adding supers outside the active season */
+  const _superWkInYr = wkInYear(Game.week);
+  let _superSeasonWarn = '';
+  if (_superWkInYr >= 43 || _superWkInYr <= 8) {
+    _superSeasonWarn = ' Note: it is late in the year and there is no nectar flow — supers are not needed in winter and will prevent varroa treatment. Remove them when you are ready to treat.';
+  }
+
   /* Check inventory first; if none in stock, block and direct to Market */
   if ((Game.inventory.supers || 0) < 1) {
     return { ok: false, msg: 'No supers in stock — buy one from the Market (Supplies tab) first. They cost £' + COSTS.superAdd + ' each.' };
@@ -676,13 +699,14 @@ function addSuper(colony) {
   }
 
   let msg = `Super added to ${colony.name} from stock (${Game.inventory.supers} remaining).`;
+  if (_superSeasonWarn) msg += _superSeasonWarn;
 
   /* Warn if no queen excluder is fitted — queen can move up into the honey */
   if (!colony.queenExcluder) {
     msg += ' No queen excluder is fitted — the queen can access the supers and lay in the honey frames. Fit one from the Hive Assembly panel.';
     logEvent('📦', msg, 'bad');
   } else {
-    logEvent('📦', msg, 'plain');
+    logEvent('📦', msg, _superSeasonWarn ? 'warn' : 'plain');
   }
 
   render();
@@ -1119,10 +1143,17 @@ function feedColony(colony, kg, kind) {
     warning = ' Warning: feeding syrup with honey supers on risks contaminating the crop — remove the supers first.';
   }
 
-  /* Syrup is ineffective in deep winter: bees too cold to take it down and evaporate water.
-     Fondant is the correct deep-winter emergency feed — placed directly on the top bars. */
+  /* Block syrup in deep winter: bees clustered below 10°C cannot take down liquid feed.
+     Syrup applied in this window still increments colony.feeding artificially (wrong), so
+     we reject it rather than warn. Fondant placed on the top bars is the correct fix. */
   if ((kind === 'syrup1' || kind === 'syrup2') && deepWinter) {
-    warning += ' Syrup is not suitable in deep winter — bees cannot process it when clustered. Use fondant placed directly on the frames instead.';
+    /* Undo the feeding credit we already applied above */
+    colony.feeding -= kg * feedConversion;
+    Game.inventory.sugar = (Game.inventory.sugar || 0) + sugarNeeded;
+    const deepWinterMsg = `Bees cannot process liquid syrup in deep winter — they are clustered and too cold to take it down and evaporate the water. Put fondant directly on the top bars instead. Sugar returned to stock.`;
+    logEvent('🍯', colony.name + ': ' + deepWinterMsg, 'warn');
+    render();
+    return { ok: false, msg: deepWinterMsg };
   }
 
   /* Fondant outside winter — it works but is less efficient than syrup for store building */
@@ -1656,7 +1687,7 @@ function requeen(colony, source) {
        colony.layingWorkers ? ' Laying workers make it very difficult to introduce any queen.' :
        ' Give them a few days to calm down before trying again.');
     logEvent('👑', msg, 'bad');
-    toast('Queen rejected.', 'bad');
+    toast(colony.name + ': the colony killed the new queen. This sometimes happens if she was introduced too quickly or the colony sensed a mismatch. Check for laying workers before trying again.', 'bad');
     render();
     return { ok: false, msg };
   }

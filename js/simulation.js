@@ -525,6 +525,7 @@ function _sim_resolveEvent(ev, week) {
         out.push({
           kind : 'modal',
           title: colony.name + ' has died',
+          text : colony.name + ' has died — ' + reason + '.',
           body : '<p><strong>' + colony.name + '</strong> has been lost.</p>' +
                  '<p><strong>Cause:</strong> ' + reason + '.</p>' +
                  '<p>Inspect the hive in the next week or two before clearing it out — ' +
@@ -567,7 +568,7 @@ function _sim_resolveEvent(ev, week) {
       } else {
         out.push({
           kind: 'toast',
-          text: colony.name + ' has swarmed.' + (_noBaitHive ? ' No bait hive — swarm is lost.' : ''),
+          text: colony.name + ' has swarmed.' + (_noBaitHive ? ' No bait hive set — swarm is gone. Set one out before swarm season to give yourself a chance of catching one.' : ' Check your bait hive.'),
           tone: 'bad',
         });
       }
@@ -587,7 +588,7 @@ function _sim_resolveEvent(ev, week) {
       logEvent('🐝', colony.name + ': a cast swarm has left — a virgin queen led a secondary swarm from the cells. The colony is now significantly weaker.', 'bad');
       out.push({
         kind: 'toast',
-        text: colony.name + ': cast swarm issued. Colony has lost further bees.',
+        text: colony.name + ': a secondary swarm has left, led by a virgin queen. Colony is now significantly weaker — inspect soon.',
         tone: 'bad',
       });
       break;
@@ -596,9 +597,14 @@ function _sim_resolveEvent(ev, week) {
       logEvent('⚠️', colony.name + ': you missed the Demaree 7-day check. The top box has raised emergency queen cells — deal with these now or the colony may cast.', 'warn');
       out.push({
         kind: 'toast',
-        text: colony.name + ': Demaree check overdue — emergency cells in top box.',
+        text: colony.name + ': Demaree check overdue — open the top brood box and cut out all queen cells. If a virgin emerges before you act, she can cast a secondary swarm.',
         tone: 'warn',
       });
+      break;
+
+    case 'clearerOverdue':
+      logEvent('📦', colony.name + ': clearer board has been in place for 2 weeks — harvest the super or remove the board. Bees above the clearer cannot access stores below.', 'warn');
+      out.push({ kind: 'toast', text: colony.name + ': clearer board still fitted after 2 weeks. Harvest or remove it — bees above cannot reach their food.', tone: 'warn' });
       break;
 
     case 'demareeComplete':
@@ -785,8 +791,8 @@ function _sim_resolveEvent(ev, week) {
           kind  : 'explainer',
           id    : 'winter_survived_first',
           title : 'Through the Winter',
-          body  : '<p>Your colony has come through winter -- well done. A cluster of bees keeps the centre of the hive at around 35 degrees Celsius regardless of the temperature outside, slowly working their way through their winter stores. ' +
-                  'Give them a first inspection on the next calm, mild day (14 degrees or above) to check the queen is present and there are still enough stores to see them through to the spring flow.</p>',
+          body  : '<p>A colony through the winter is the real first achievement in beekeeping. Most winter losses come from starvation or varroa-damaged bees — both avoidable with autumn feeding and timely mite treatment. Your colony has passed that test.</p>' +
+                  '<p>Give them a first inspection on the next calm, mild day (14 degrees Celsius or above): check the queen is laying and there are still stores to last until the first proper flow in April. The colony will build fast from here — swarm season follows within weeks.</p>',
         });
       } else {
         logEvent('🌷', colony.name + ' has survived the winter.', 'good');
@@ -1014,7 +1020,7 @@ function buildAdvisor() {
       items.push({
         tone: 'bad',
         icon: '🍯',
-        text: col.name + ': the OSR honey in your supers has crystallised in the comb. It cannot be extracted by centrifuge. Harvest immediately — you will lose most of this crop but the frames must be cleared before they are permanently ruined.',
+        text: col.name + ': OSR honey has set solid in the supers. Use the Harvest action to salvage what you can by pressing — expect to recover roughly half the normal yield. Act soon: set honey in the brood box blocks cells the queen needs for laying.',
       });
       badCount++;
     } else if ((col.osrRisk || 0) >= 1 && col.superHoney > 0 && !col.osrCrystallised) {

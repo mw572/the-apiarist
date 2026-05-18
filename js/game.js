@@ -319,6 +319,23 @@ function loadSaveObject(obj){
 /* --- the weekly controller ------------------------------------------ */
 
 var _advancingWeek = false;
+function _checkGameOver(presentables){
+  if (gameYear() <= 1) return;
+  if (aliveColonies().length > 0) return;
+  if ((Game.inventory.spareHives || 0) > 0) return;
+  if (Game.cash >= 100) return;
+  /* Softlock: no bees, no hives, not enough money to buy a nuc (~£180 min) */
+  if (Game.flags && Game.flags.gameOverShown) return;
+  if (Game.flags) Game.flags.gameOverShown = true;
+  presentables.push({
+    kind : 'modal',
+    title: 'Your apiary has failed',
+    body : '<p>You have no colonies, no spare hives, and not enough money to start again. This run is over.</p>' +
+           '<p>That is not unusual — most beekeepers lose everything at least once. What matters is what you take from it. When you are ready, start a new game and put those lessons to work.</p>' +
+           '<p><button onclick="if(confirm(\'Start a new game? Your current game will be lost.\')){ localStorage.removeItem(\'theApiaristSave\'); location.reload(); }" style="margin-top:12px;padding:8px 16px;border-radius:8px;background:var(--honey);border:none;cursor:pointer;font-weight:700;">Start a new game</button></p>',
+  });
+}
+
 function advanceWeek(){
   if (!Game || _advancingWeek) return;
   _advancingWeek = true;
@@ -331,6 +348,7 @@ function advanceWeek(){
 
   _yearMaintenance();
   _checkWinterSurvival();
+  _checkGameOver(presentables);
   saveGame();
   render();
   _advancingWeek = false;

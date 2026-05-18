@@ -128,13 +128,13 @@ const SITE_TYPES = {
   rural:    { label:'Mixed countryside', icon:'🌳', nectar:0.97, pollen:1.05,
               spray:0.03, shelter:1.05, blurb:'Hedgerows, woodland and meadow. Steady and reliable all season.' },
   farmland: { label:'Arable farmland', icon:'🌾', nectar:1.0, pollen:1.0, springCrop:'oilseed',
-              spray:0.13, shelter:0.85, blurb:'A huge oilseed rape flow in spring, then a sharp June gap. Spray risk.' },
+              spray:0.13, shelter:0.85, blurb:'A huge nectar flow from oilseed rape in spring, then a sharp forage gap in June when the spring crop ends and summer flowers have not opened yet. Spray risk from nearby fields.' },
   urban:    { label:'Town gardens', icon:'🏘️', nectar:0.83, pollen:1.12, warmth:1.0,
               spray:0.01, shelter:1.15, blurb:'Gardens give a long, varied, gentle season and milder weather.' },
   orchard:  { label:'Orchard', icon:'🍎', nectar:0.92, pollen:1.22, springCrop:'spring', pollination:true,
               spray:0.05, shelter:1.0, blurb:'Glorious spring blossom and pollination demand; quieter later on.' },
   moorland: { label:'Moor edge', icon:'⛰️', nectar:0.72, pollen:0.72, heather:true,
-              spray:0.0, shelter:0.7, blurb:'Sparse most of the year, but the August heather flow is something special.' },
+              spray:0.0, shelter:0.7, blurb:'Sparse forage for most of the year, so colonies may need feeding through spring and early summer. The August heather flow is exceptional but brief — you earn it.' },
 };
 
 /* --- Forage calendar (52 weeks, index 0 = week 1) -------------------- */
