@@ -119,6 +119,12 @@ function startNewGame(name, difficulty){
 
   logEvent('🌼', 'You set up as a beekeeper. ' + APIARY_NAMES[0] + ' is ready for its first colony.', 'good');
 
+  /* Reset module-level simulation state so it doesn't carry over from a previous game */
+  if (typeof _sim_hornetApiaries !== 'undefined') { _sim_hornetApiaries = {}; }
+  if (typeof _sim_yearsPlayed    !== 'undefined') { _sim_yearsPlayed    = 0;  }
+  if (typeof _sim_wetStreak      !== 'undefined') { _sim_wetStreak      = 0;  }
+  if (typeof _ui_sceneCache      !== 'undefined') { _ui_sceneCache      = {}; }
+
   if (typeof generateWeather === 'function') generateWeather();
   if (typeof buildAdvisor === 'function') buildAdvisor();
 
@@ -195,6 +201,26 @@ function _migrateSave(g) {
     if (typeof g.inventory.supers !== 'number')        g.inventory.supers = 0;
     if (typeof g.inventory.queenExcluders !== 'number') g.inventory.queenExcluders = 0;
     if (typeof g.inventory.newspaper !== 'number')      g.inventory.newspaper = 0;
+    if (!g.inventory.honey || typeof g.inventory.honey !== 'object') g.inventory.honey = {};
+    if (!g.inventory.jars  || typeof g.inventory.jars  !== 'object') g.inventory.jars  = {};
+    if (typeof g.inventory.emptyJars !== 'number') g.inventory.emptyJars = 0;
+    if (typeof g.inventory.wax !== 'number') g.inventory.wax = 0;
+  }
+
+  /* Stats — ensure all counters exist */
+  if (!g.stats || typeof g.stats !== 'object') {
+    g.stats = {};
+  }
+  var _statDefaults = ['honeyHarvested','jarsSold','swarmsLost','queensReared',
+    'coloniesLost','wintersSurvived','colonyDeaths','inspections'];
+  _statDefaults.forEach(function(k) {
+    if (typeof g.stats[k] !== 'number') g.stats[k] = 0;
+  });
+
+  /* Flags — ensure object and seenExplainers sub-object exist */
+  if (!g.flags || typeof g.flags !== 'object') g.flags = {};
+  if (!g.flags.seenExplainers || typeof g.flags.seenExplainers !== 'object') {
+    g.flags.seenExplainers = {};
   }
 }
 
@@ -219,6 +245,11 @@ function loadGame(){
     _migrateSave(g);
     Game = g;
     if (!Game.ui) Game.ui = { view:'apiary', selectedApiary: Game.apiaries[0].id, selectedColony:null };
+    /* Reset simulation caches so stale state doesn't persist across loads */
+    if (typeof _sim_hornetApiaries !== 'undefined') { _sim_hornetApiaries = {}; }
+    if (typeof _sim_yearsPlayed    !== 'undefined') { _sim_yearsPlayed    = 0;  }
+    if (typeof _sim_wetStreak      !== 'undefined') { _sim_wetStreak      = 0;  }
+    if (typeof _ui_sceneCache      !== 'undefined') { _ui_sceneCache      = {}; }
     if (typeof buildAdvisor === 'function') buildAdvisor();
     render();
     return true;
@@ -267,8 +298,10 @@ function loadSaveObject(obj){
 
 /* --- the weekly controller ------------------------------------------ */
 
+var _advancingWeek = false;
 function advanceWeek(){
-  if (!Game) return;
+  if (!Game || _advancingWeek) return;
+  _advancingWeek = true;
   _presentQueue = [];
 
   var presentables = [];
@@ -280,6 +313,7 @@ function advanceWeek(){
   _checkWinterSurvival();
   saveGame();
   render();
+  _advancingWeek = false;
   /* Brief amber flash so the player feels time moving */
   var _stg = document.querySelector('.stage');
   if (_stg) {

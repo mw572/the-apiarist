@@ -474,9 +474,9 @@ function render() {
   else if (view === 'market')   stage.appendChild(_ui_buildMarketView());
   else if (view === 'handbook') stage.appendChild(_ui_buildHandbookView());
   else if (view === 'records')  stage.appendChild(_ui_buildRecordsView());
-  /* legacy view names — keep working if loaded from old save */
-  else if (view === 'finances') stage.appendChild(_ui_buildRecordsView('finances'));
-  else if (view === 'journal')  stage.appendChild(_ui_buildRecordsView('journal'));
+  /* legacy view names — normalise to 'records' so tab state persists */
+  else if (view === 'finances') { Game.ui.recordsTab = 'finances'; Game.ui.view = 'records'; stage.appendChild(_ui_buildRecordsView('finances')); }
+  else if (view === 'journal')  { Game.ui.recordsTab = 'journal';  Game.ui.view = 'records'; stage.appendChild(_ui_buildRecordsView('journal')); }
 
   app.appendChild(stage);
   app.appendChild(_ui_buildStatusbar());
@@ -498,8 +498,8 @@ function render() {
 function _ui_buildStatusbar() {
   var inv = (Game && Game.inventory) || {};
   var cash      = (Game && Game.cash != null) ? Game.cash : 0;
-  var honeyKg   = inv.honeyKg   || 0;
-  var sugarKg   = inv.sugarKg   || 0;
+  var honeyKg   = inv.honey ? Object.values(inv.honey).reduce(function(s,v){ return s+(v||0); }, 0) : 0;
+  var sugarKg   = inv.sugar     || 0;
   var jars      = inv.jars ? Object.values(inv.jars).reduce(function(s,v){ return s+(v||0); }, 0) : 0;
   var spare     = inv.spareHives || 0;
   var bait      = inv.baitHives  || 0;
@@ -1000,6 +1000,7 @@ function _ui_buildApiaryView() {
         class: 'btn btn-sm' + (ap.id === selId ? ' btn-primary' : ''),
         onclick: function() {
           Game.ui.selectedApiary = ap.id;
+          Game.ui.selectedColony = null;
           render();
         },
         text: ap.name
@@ -2019,7 +2020,7 @@ function _ui_buildJournalContent() {
 }
 
 function _ui_buildFinancesContent() {
-  var ledger = (Game.ledger || []).slice().reverse();
+  var ledger = (Game.ledger || []).slice();
   var stats = Game.stats || {};
 
   /* Income vs spend summary */

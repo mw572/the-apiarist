@@ -527,7 +527,7 @@ button { font-family: var(--sans); cursor: pointer; }
    MODALS
    ==================================================================== */
 
-#modal-root { position: fixed; inset: 0; pointer-events: none; z-index: 100; }
+#modal-root { position: fixed; inset: 0; pointer-events: none; z-index: 150; }
 .modal-overlay {
   position: absolute; inset: 0; background: rgba(40,28,12,0.55);
   display: flex; align-items: center; justify-content: center;
@@ -1321,6 +1321,7 @@ button { font-family: var(--sans); cursor: pointer; }
 .ledger-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .ledger-table .amt.pos { color: var(--ok); font-weight: 700; }
 .ledger-table .amt.neg { color: var(--bad); font-weight: 700; }
+.ledger-table .desc-cell { color: var(--ink); max-width: 260px; word-break: break-word; }
 
 /* ====================================================================
    TITLE / NEW GAME SCREEN
@@ -1477,11 +1478,11 @@ button { font-family: var(--sans); cursor: pointer; }
   .nav-btn .ico { font-size: 18px; }
   .nav-btn .pip { position: absolute; top: 3px; right: 8px; }
 
-  /* push content above the fixed bottom navbar */
-  .stage { padding-bottom: 60px; }
+  /* push content above the fixed bottom navbar + iOS home bar */
+  .stage { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 
-  /* toast floats above the bottom navbar */
-  .toast-stack { bottom: 72px; }
+  /* toast floats above the FAB (56px) which sits 68px above navbar */
+  .toast-stack { bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
 
   /* --- apiary: stack the scene above the adviser panel --- */
   .apiary-view { flex-direction: column; }

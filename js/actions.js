@@ -653,6 +653,10 @@ function _act_knownNote(colony, queenFound, storesBand, disease, qcellsVisible) 
 function addSuper(colony) {
   if (!colony.alive) return { ok: false, msg: 'This colony is no longer alive.' };
 
+  if ((colony.supers || 0) >= 5) {
+    return { ok: false, msg: 'Five supers is the practical maximum on one hive — the stack would be too tall to work safely.' };
+  }
+
   /* Check inventory first; if none in stock, block and direct to Market */
   if ((Game.inventory.supers || 0) < 1) {
     return { ok: false, msg: 'No supers in stock — buy one from the Market (Supplies tab) first. They cost £' + COSTS.superAdd + ' each.' };
@@ -925,7 +929,7 @@ function demareeMethod(colony) {
      fully intact while relieving congestion takes real understanding. */
   addXp(15);
 
-  const msg = `Demaree carried out on ${colony.name} (£${boxCost}). This is a single-hive technique — no new colony is created. Your hive now has two brood boxes: the queen is sealed in the lower box with one frame of open brood; all other brood sits in the top box above the supers, separated by two queen excluders. Come back NEXT WEEK and open the top box to destroy any emergency cells — if you miss this, the top box will raise a virgin and a cast swarm will issue.`;
+  const msg = `Demaree carried out on ${colony.name} (£${COSTS.broodBoxAdd}). This is a single-hive technique — no new colony is created. Your hive now has two brood boxes: the queen is sealed in the lower box with one frame of open brood; all other brood sits in the top box above the supers, separated by two queen excluders. Come back NEXT WEEK and open the top box to destroy any emergency cells — if you miss this, the top box will raise a virgin and a cast swarm will issue.`;
   logEvent('🔄', msg, 'good');
   render();
   return { ok: true, msg };
