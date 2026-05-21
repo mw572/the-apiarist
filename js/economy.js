@@ -394,7 +394,24 @@ function harvestColony(colony) {
 
   // Stats.
   Game.stats.honeyHarvested = _econ_roundPrice((Game.stats.honeyHarvested || 0) + kg);
+  if (Game.yearStats) Game.yearStats.honeyKg = _econ_roundPrice((Game.yearStats.honeyKg || 0) + kg);
   colony.productionThisYear = _econ_roundPrice((colony.productionThisYear || 0) + kg);
+
+  /* First-harvest celebration (engagement update) */
+  if (Game.flags && Game.flags.seenExplainers && !Game.flags.seenExplainers.firstHarvest) {
+    Game.flags.seenExplainers.firstHarvest = true;
+    var _hName = (HONEY_TYPES[type] && HONEY_TYPES[type].name) ? HONEY_TYPES[type].name : type;
+    if (typeof openModal === 'function') {
+      setTimeout(function() {
+        openModal({
+          title: 'First harvest',
+          body: '<p>Those first jars feel different from the bulk crop. ' + _hName + ' from your own bees.</p>' +
+                '<p>The colour, the smell — this is what the year\'s work was for. Well done.</p>' +
+                '<p>Tip: label your jars with the honey type and harvest date. Customers and show judges both care.</p>'
+        });
+      }, 400);
+    }
+  }
 
   var honeyName = (HONEY_TYPES[type] && HONEY_TYPES[type].name) ? HONEY_TYPES[type].name : type;
   var baseMsg = 'Harvested ' + kg.toFixed(1) + ' kg of ' + honeyName + ' from ' + colony.name + '.';
@@ -495,6 +512,7 @@ function harvestSuperAt(colony, superIdx) {
 
   /* Stats */
   Game.stats.honeyHarvested = _econ_roundPrice((Game.stats.honeyHarvested || 0) + kg);
+  if (Game.yearStats) Game.yearStats.honeyKg = _econ_roundPrice((Game.yearStats.honeyKg || 0) + kg);
   colony.productionThisYear = _econ_roundPrice((colony.productionThisYear || 0) + kg);
 
   /* Empty the super frames but KEEP the box on the hive */
@@ -708,6 +726,13 @@ function extractAndBottle(honeyType, jarCount) {
  * and sales channel, adjusted for current reputation.
  * Returns a number (£).
  */
+function _econ_seasonalPriceMult(week) {
+  var wkInYr = ((week - 1) % 52) + 1;
+  if (wkInYr >= 44 || wkInYr <= 4) return 1.25;   // Nov-Jan: Christmas premium
+  if (wkInYr >= 5 && wkInYr <= 8)  return 1.15;   // Feb: Valentine's / early year
+  return 1.0;
+}
+
 function marketPrice(honeyType, channelId) {
   var honeyData   = HONEY_TYPES[honeyType];
   var channelData = SALES[channelId];
@@ -717,7 +742,9 @@ function marketPrice(honeyType, channelId) {
   // yearQuality (0.5-0.75) shifts price ±15%: good years = slightly lower prices (bumper crop)
   var _yq = (typeof Game !== 'undefined' && Game.yearQuality != null) ? Game.yearQuality : 0.65;
   var _yearMul = 0.925 + _yq * 0.15; // 0.925..1.04 → bad year premium, good year slight discount
-  var price = honeyData.value * channelData.priceMul * (1 + Game.reputation / 200) * _yearMul;
+  var _wk = (typeof Game !== 'undefined' && Game) ? Game.week : 14;
+  var _seasonMul = _econ_seasonalPriceMult(_wk);
+  var price = honeyData.value * channelData.priceMul * (1 + Game.reputation / 200) * _yearMul * _seasonMul;
   return _econ_roundPrice(price);
 }
 
@@ -940,4 +967,135 @@ function pollinationContract(apiaryId) {
   logEvent('🍎', msg, 'good');
   toast(fmtMoney(income) + ' pollination fee collected.', 'good');
   return { ok: true, msg: msg };
+}
+
+/* ====================================================================
+   CANDLES — winter workshop product
+   ==================================================================== */
+
+function makeCandles(batches) {
+  batches = Math.max(1, Math.floor(batches || 1));
+  var waxNeeded = batches * CANDLE_WAX_PER_BATCH;
+  if ((Game.inventory.wax || 0) < waxNeeded) {
+    return { ok: false, msg: 'You only have ' + (Game.inventory.wax || 0).toFixed(2) + ' kg of wax. Each batch of ' + CANDLES_PER_BATCH + ' candles needs ' + CANDLE_WAX_PER_BATCH + ' kg.' };
+  }
+  var wkInYr = ((Game.week - 1) % 52) + 1;
+  if (wkInYr > 8 && wkInYr < 42) {
+    return { ok: false, msg: 'Candle-making is a winter workshop activity — come back in October when the season winds down.' };
+  }
+  Game.inventory.wax = Math.round((Game.inventory.wax - waxNeeded) * 100) / 100;
+  var made = batches * CANDLES_PER_BATCH;
+  Game.inventory.candles = (Game.inventory.candles || 0) + made;
+  if (typeof addXp === 'function') addXp(2 * batches);
+  logEvent('🕯️', 'Made ' + made + ' beeswax candles from ' + waxNeeded.toFixed(2) + ' kg of cappings wax. Worth ' + fmtMoney(made * CANDLE_PRICE) + ' to sell.', 'good');
+
+  /* First-time explainer */
+  if (Game.flags && Game.flags.seenExplainers && !Game.flags.seenExplainers.firstCandles) {
+    Game.flags.seenExplainers.firstCandles = true;
+  }
+  return { ok: true, msg: made + ' candles made.' };
+}
+
+function sellCandles(count) {
+  count = Math.min(count, Game.inventory.candles || 0);
+  if (count < 1) return { ok: false, msg: 'No candles in stock.' };
+  var income = Math.round(count * CANDLE_PRICE * 100) / 100;
+  earn(income, 'Candle sales — ' + count + ' beeswax candle' + (count === 1 ? '' : 's'));
+  Game.inventory.candles -= count;
+  Game.reputation = Math.min(100, (Game.reputation || 0) + Math.max(0.3, 1 - (Game.reputation || 0) / 120));
+  logEvent('🕯️', 'Sold ' + count + ' candle' + (count === 1 ? '' : 's') + ' for ' + fmtMoney(income) + '.', 'good');
+  return { ok: true, income: income };
+}
+
+/* ====================================================================
+   HONEY SHOW — county competition
+   ==================================================================== */
+
+function enterHoneyShow(types) {
+  types = (types || []).slice(0, 3);
+  if (!types.length) { if (typeof closeModal === 'function') closeModal(); return; }
+
+  function _randInt(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+
+  var judgeComments = {
+    high: [
+      'Exceptional clarity — the judge held it to the light for a long time.',
+      'A beautifully presented entry. The colour is spot-on for the variety.',
+      'Excellent moisture content, confirmed with the refractometer.'
+    ],
+    mid: [
+      'A solid entry, let down slightly by minor granulation on the shoulder.',
+      'Good flavour but the presentation jar had a small air bubble.',
+      'Competent work. The colour ran a touch dark for the class.'
+    ],
+    low: [
+      'The moisture level was concerning — at risk of fermentation.',
+      'Granulation had progressed too far before extraction.',
+      'Presentation jar was underfilled — judges notice that.'
+    ]
+  };
+
+  var results = types.map(function(type) {
+    var score = 45;
+    if (Game.inventory.tools && Game.inventory.tools.settlingTank) score += _randInt(8, 20);
+    if (Game.inventory.tools && Game.inventory.tools.refractometer) score += _randInt(5, 15);
+    score += Math.floor((Game.reputation || 0) / 12);
+    score += _randInt(-12, 18);
+    if (type === 'heather' || type === 'lime') score += 8;
+    score = Math.min(100, Math.max(10, score));
+
+    var award = score >= 80 ? 'First' : score >= 65 ? 'Second' : score >= 50 ? 'Third' : score >= 38 ? 'Commended' : null;
+    var tier  = score >= 65 ? 'high' : score >= 45 ? 'mid' : 'low';
+    var comment = judgeComments[tier][_randInt(0, judgeComments[tier].length - 1)];
+
+    if (award === 'First') {
+      Game.reputation = Math.min(100, (Game.reputation || 0) + 8);
+      if (typeof addXp === 'function') addXp(12);
+    } else if (award === 'Second') {
+      Game.reputation = Math.min(100, (Game.reputation || 0) + 4);
+      if (typeof addXp === 'function') addXp(6);
+    } else if (award) {
+      if (typeof addXp === 'function') addXp(3);
+    }
+
+    /* Deduct 1 jar for entry */
+    if (Game.inventory.jars[type] > 0) Game.inventory.jars[type]--;
+
+    return { type: type, score: score, award: award, comment: comment };
+  });
+
+  /* Store ribbons */
+  if (!Game.flags.honeyShowRibbons) Game.flags.honeyShowRibbons = [];
+  var yr = (typeof gameYear === 'function') ? gameYear() : 1;
+  results.forEach(function(r) {
+    if (r.award) Game.flags.honeyShowRibbons.push({ year: yr, type: r.type, award: r.award });
+  });
+  if (!Game.stats) Game.stats = {};
+  Game.stats.showWins = (Game.stats.showWins || 0) + results.filter(function(r) { return r.award === 'First'; }).length;
+  Game.flags['showEntered_yr' + yr] = true;
+
+  var honeyNames = { spring: 'Spring Blossom', summer: 'Summer Honey', heather: 'Heather', lime: 'Lime', oilseed: 'OSR', ivy: 'Ivy' };
+  var bodyHtml = results.map(function(r) {
+    var name = honeyNames[r.type] || r.type;
+    var awardHtml = r.award ? '<strong>' + r.award + ' Prize</strong>' : 'No award';
+    return '<p><em>' + name + '</em> — ' + awardHtml + '. ' + r.comment + '</p>';
+  }).join('');
+
+  if (!results.some(function(r) { return r.award; })) {
+    bodyHtml += '<p>A hard day — but you know what to work on before next year.</p>';
+  }
+
+  logEvent('🏆', 'Honey show results in — ' + results.filter(function(r) { return r.award; }).length + ' award(s) from ' + types.length + ' entr' + (types.length === 1 ? 'y' : 'ies') + '.',
+    results.some(function(r){ return r.award; }) ? 'good' : 'plain');
+
+  if (typeof openModal === 'function') openModal({ title: 'Honey Show Results', body: bodyHtml });
+  if (typeof saveGame === 'function') saveGame();
+  if (typeof render === 'function') render();
+}
+
+/* Expose to window so UI callbacks can invoke from inline HTML */
+if (typeof window !== 'undefined') {
+  window.enterHoneyShow = enterHoneyShow;
+  window.makeCandles    = makeCandles;
+  window.sellCandles    = sellCandles;
 }

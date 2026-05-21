@@ -1065,8 +1065,25 @@ function _ui_buildApiaryView() {
   var scene = h('div', { class: 'yard-scene', html: _ui_apiaryScene(season, siteType, apiary ? apiary.id : 0) });
   var yard = h('div', { class: 'yard ' + (season || 'spring') }, [scene, yardRow]);
 
+  /* Engagement update — pending swarm alert for this apiary */
+  var pendingSwarmAlert = null;
+  if (Game.flags && Game.flags.pendingSwarm && apiary && Game.flags.pendingSwarm.apiaryId === apiary.id) {
+    pendingSwarmAlert = h('div', { class: 'swarm-alert-card' }, [
+      h('div', { class: 'sa-icon' }, '🐝'),
+      h('div', { class: 'sa-body' }, [
+        h('div', { class: 'sa-title' }, 'A swarm has moved into your bait hive!'),
+        h('div', { class: 'sa-sub' }, 'They will move on within a week if you do not hive them.')
+      ]),
+      h('button', {
+        class: 'btn btn-primary',
+        onclick: function() { _ui_openSwarmNamingModal(); }
+      }, 'Hive this swarm')
+    ]);
+  }
+
   var main = h('div', { class: 'apiary-main' }, [
     apiaryHead,
+    pendingSwarmAlert,
     yard
   ]);
 
@@ -1330,11 +1347,82 @@ function _ui_buildHiveCard(colony) {
     h('div', { class: 'hive-floor' }),
     h('div', { class: 'hive-stand' }),
     h('div', { class: 'hive-plaque' }, [
-      h('div', { class: 'nm', text: colony.name }),
+      h('div', { class: 'nm' }, [
+        h('span', { text: colony.name }),
+        _ui_buildStatusBadge(colony)
+      ]),
       h('div', { class: 'st', text: statusLine }),
       plaqueAgeStr ? h('div', { class: 'st-age', text: plaqueAgeStr }) : null
-    ])
+    ]),
+    _ui_buildHiveScene(colony, (typeof Game !== 'undefined' && Game) ? Game.week : 1)
   ]);
+}
+
+/* Engagement update — living apiary scene: animated bee dots / winter cluster */
+function _ui_buildHiveScene(colony, week) {
+  var wkInYr = ((week - 1) % 52) + 1;
+  var isWinter = (wkInYr >= 44 || wkInYr <= 8);
+  var forage = (typeof forageNectar === 'function') ? forageNectar(week) : 0.5;
+  var popFraction = Math.min(1, (colony.population || 0) / (SIM.fullColonyPop || 21000));
+  var layers = [];
+
+  if (!isWinter && forage > 0.1 && colony.alive !== false) {
+    var dotCount = Math.round(popFraction * forage * 5);
+    for (var i = 0; i < dotCount; i++) {
+      var delay = (i * 0.8).toFixed(1);
+      var dur = (2.5 + (i % 3) * 0.7).toFixed(1);
+      var dx = (25 + (i * 13) % 40);
+      var dy = -(15 + (i * 7) % 25);
+      if (i % 2 === 0) dx = -dx;
+      layers.push(h('div', {
+        class: 'bee-dot',
+        style: 'animation-delay:' + delay + 's;animation-duration:' + dur + 's;--dx:' + dx + 'px;--dy:' + dy + 'px'
+      }));
+    }
+  }
+
+  if (isWinter && colony.alive !== false) {
+    var sz = Math.max(16, Math.round(popFraction * 38));
+    layers.push(h('div', {
+      class: 'winter-cluster',
+      style: 'width:' + sz + 'px;height:' + sz + 'px'
+    }));
+  }
+
+  return h('div', { class: 'hive-scene' }, layers);
+}
+
+/* Engagement update — status badge: text + colour, accessible */
+function _ui_buildStatusBadge(colony) {
+  if (!colony.alive) return null;
+  var cls = 'ok', glyph = '✓';
+  var advItems = (Game.advisor || []).filter(function(a) {
+    return a.text && a.text.indexOf(colony.name) === 0 && (a.tone === 'bad' || a.tone === 'warn');
+  });
+  var pop = colony.population || 0;
+  var maxPop = SIM.fullColonyPop || 21000;
+  var wkInYr = ((Game.week - 1) % 52) + 1;
+  var isWinter = wkInYr >= 44 || wkInYr <= 8;
+  var diseaseOn = false;
+  if (colony.diseases) {
+    var dk = Object.keys(colony.diseases);
+    for (var i = 0; i < dk.length; i++) {
+      if ((colony.diseases[dk[i]] || 0) > 0.15) { diseaseOn = true; break; }
+    }
+  }
+  var varroaRate = (typeof varroaInfestation === 'function') ? varroaInfestation(colony) : 0;
+  var lowWinterStores = isWinter && (colony.honey || 0) < 8;
+
+  if (diseaseOn || varroaRate > 0.03 || lowWinterStores) {
+    cls = 'bad'; glyph = '!!';
+  } else if (advItems.length > 0) {
+    cls = 'warn'; glyph = '!';
+  } else if (pop > maxPop * 0.3) {
+    cls = 'ok'; glyph = '✓';
+  } else {
+    cls = 'warn'; glyph = '!';
+  }
+  return h('span', { class: 'hive-status-badge ' + cls, title: cls === 'ok' ? 'Healthy' : cls === 'warn' ? 'Needs attention' : 'Urgent' }, glyph);
 }
 
 /* ====================================================================
@@ -1403,8 +1491,27 @@ function _ui_buildSidebar() {
     });
   }
 
+  /* Engagement update — advance button urgency:
+     pulse + amber when 2+ alive colonies have advisor items needing attention */
+  var _urgentCount = 0;
+  if (Array.isArray(Game.advisor)) {
+    var _flagged = {};
+    Game.advisor.forEach(function(a) {
+      if (a.tone === 'bad' || a.tone === 'warn') {
+        var cols = Game.colonies || [];
+        for (var ci = 0; ci < cols.length; ci++) {
+          if (cols[ci].alive && a.text && a.text.indexOf(cols[ci].name) === 0) {
+            _flagged[cols[ci].name] = true;
+            break;
+          }
+        }
+      }
+    });
+    _urgentCount = Object.keys(_flagged).length;
+  }
+  var _advBtnCls = 'btn btn-primary btn-advance' + (_urgentCount >= 2 ? ' urgent' : '');
   var advanceBtn = h('button', {
-    class: 'btn btn-primary',
+    class: _advBtnCls,
     onclick: function() { if (typeof advanceWeek === 'function') advanceWeek(); }
   }, '+ Advance one week (7 days)');
 
@@ -1838,6 +1945,47 @@ function _ui_marketSellTab() {
     ]));
   }
 
+  /* Engagement update — Candles card (always shown if wax or candles present) */
+  var candleCount = inv.candles || 0;
+  if (wax >= CANDLE_WAX_PER_BATCH || candleCount > 0) {
+    var _wkInYr = ((Game.week - 1) % 52) + 1;
+    var _isWinter = (_wkInYr <= 8 || _wkInYr >= 42);
+    var maxBatches = Math.floor(wax / CANDLE_WAX_PER_BATCH);
+    var firstTime = !(Game.flags && Game.flags.seenExplainers && Game.flags.seenExplainers.firstCandles);
+    var blurb = firstTime ? h('div', { class: 'candle-blurb' },
+      'Cappings wax rendered clean and poured into moulds — ' + Math.round(CANDLE_WAX_PER_BATCH * 1000) + 'g of wax becomes ' + CANDLES_PER_BATCH + ' candles worth £' + (CANDLES_PER_BATCH * CANDLE_PRICE).toFixed(2) + ', vs about £' + (CANDLE_WAX_PER_BATCH * 14).toFixed(2) + ' of raw wax.') : null;
+
+    cards.push(h('div', { class: 'card candle-card' }, [
+      h('div', { class: 'card-title' }, '🕯️ Beeswax candles'),
+      blurb,
+      h('div', { class: 'candle-stats' }, [
+        h('span', {}, 'Wax: ' + wax.toFixed(2) + ' kg'),
+        h('span', {}, 'Candles: ' + candleCount)
+      ]),
+      h('div', { class: 'candle-actions' }, [
+        h('button', {
+          class: 'btn btn-leaf',
+          disabled: (!_isWinter || maxBatches < 1) ? 'disabled' : null,
+          onclick: function() {
+            var r = makeCandles(1);
+            toast(r.msg, r.ok ? 'good' : 'bad');
+            if (r.ok) render();
+          }
+        }, _isWinter ? ('Make 1 batch (' + CANDLES_PER_BATCH + ' candles)') : 'Winter only'),
+        h('button', {
+          class: 'btn',
+          disabled: candleCount < 1 ? 'disabled' : null,
+          onclick: function() {
+            var r = sellCandles(candleCount);
+            if (r.ok) toast('Sold ' + candleCount + ' candles.', 'good');
+            else toast(r.msg, 'bad');
+            if (r.ok) render();
+          }
+        }, candleCount > 0 ? ('Sell all (' + fmtMoney(candleCount * CANDLE_PRICE) + ')') : 'No candles')
+      ])
+    ]));
+  }
+
   var alive = (typeof aliveColonies === 'function') ? aliveColonies() : [];
   if (alive.length) {
     var colRows = alive.map(function(col) {
@@ -2076,7 +2224,8 @@ function _ui_buildRecordsView(startTab) {
     ? _ui_buildFinancesContent()
     : _ui_buildJournalContent();
 
-  return h('div', { class: 'panel-view narrow' }, [tabBar, content]);
+  var goalsWidget = _ui_buildGoalsWidget();
+  return h('div', { class: 'panel-view narrow' }, [tabBar, content, goalsWidget]);
 }
 
 function _ui_buildJournalContent() {
@@ -2232,32 +2381,38 @@ function openHiveDetail(colony, _startTab) {
   /* ── Tab panels ── */
   var panelInspection = h('div', { class: 'hive-tab-panel' + (activeTab === 'inspection' ? '' : ' hive-tab-hidden') }, [inspectionContent]);
   var panelActions    = h('div', { class: 'hive-tab-panel' + (activeTab === 'actions'    ? '' : ' hive-tab-hidden') }, [_ui_buildActionButtons(colony)]);
+  var panelDiary      = h('div', { class: 'hive-tab-panel' + (activeTab === 'diary'      ? '' : ' hive-tab-hidden') }, [_ui_buildDiaryPanel(colony)]);
+
+  function _tabSwitch(activeKey) {
+    tabInspect.className = 'hive-tab' + (activeKey === 'inspection' ? ' active' : '');
+    tabAct.className     = 'hive-tab' + (activeKey === 'actions'    ? ' active' : '');
+    tabDiary.className   = 'hive-tab' + (activeKey === 'diary'      ? ' active' : '');
+    panelInspection.classList.toggle('hive-tab-hidden', activeKey !== 'inspection');
+    panelActions.classList.toggle('hive-tab-hidden', activeKey !== 'actions');
+    panelDiary.classList.toggle('hive-tab-hidden', activeKey !== 'diary');
+  }
 
   /* ── Tab bar ── */
   var tabInspect = h('button', {
     class: 'hive-tab' + (activeTab === 'inspection' ? ' active' : ''),
-    onclick: function() {
-      tabInspect.className = 'hive-tab active';
-      tabAct.className = 'hive-tab';
-      panelInspection.classList.remove('hive-tab-hidden');
-      panelActions.classList.add('hive-tab-hidden');
-    }
+    onclick: function() { _tabSwitch('inspection'); }
   }, '🔍 Last inspection' + (known && !known.heftOnly && weeksAgo > 0 ? ' (' + (weeksAgo === 1 ? '1 week ago' : weeksAgo + ' weeks ago') + ')' : ''));
 
   var tabAct = h('button', {
     class: 'hive-tab' + (activeTab === 'actions' ? ' active' : ''),
-    onclick: function() {
-      tabAct.className = 'hive-tab active';
-      tabInspect.className = 'hive-tab';
-      panelActions.classList.remove('hive-tab-hidden');
-      panelInspection.classList.add('hive-tab-hidden');
-    }
+    onclick: function() { _tabSwitch('actions'); }
   }, '⚙ Actions');
 
+  var tabDiary = h('button', {
+    class: 'hive-tab' + (activeTab === 'diary' ? ' active' : ''),
+    onclick: function() { _tabSwitch('diary'); }
+  }, '📔 Diary');
+
   var rightCol = h('div', { class: 'hive-right-col' }, [
-    h('div', { class: 'hive-tab-bar' }, [tabInspect, tabAct]),
+    h('div', { class: 'hive-tab-bar' }, [tabInspect, tabAct, tabDiary]),
     panelInspection,
-    panelActions
+    panelActions,
+    panelDiary
   ]);
 
   var bodyNode = h('div', { class: 'hive-detail' }, [leftCol, rightCol]);
@@ -2585,6 +2740,17 @@ function _ui_buildHiveCross(colony) {
     queenParts.push('No queen');
   }
 
+  /* Engagement update — queen genetics surfacing (when inspected & queen present) */
+  var queenGenetics = null;
+  if (_hasInspected && queen && queen.present) {
+    function _hgLabel(v) { if (v < 0.4) return 'Low'; if (v <= 0.7) return 'Moderate'; return 'High'; }
+    function _tpLabel(v) { if (v < 0.4) return 'Calm'; if (v <= 0.7) return 'Variable'; return 'Defensive'; }
+    var hg = (typeof queen.hygieneGene === 'number') ? queen.hygieneGene : 0.45;
+    var tp = (typeof queen.temperamentGene === 'number') ? queen.temperamentGene : 0.35;
+    queenGenetics = h('div', { class: 'cross-meta-line', title: 'Hygiene (High) means workers detect and remove diseased brood — a natural varroa resistance trait.' },
+      'Hygiene: ' + _hgLabel(hg) + ' · Temperament: ' + _tpLabel(tp));
+  }
+
   /* --- Queen cells meta line ---------------------------------------- */
   var qcMeta = null;
   if (hasQCells) {
@@ -2606,6 +2772,7 @@ function _ui_buildHiveCross(colony) {
   if (demareeInfo) crossChildren.push(demareeInfo);
   if (qcMeta) crossChildren.push(qcMeta);
   crossChildren.push(h('div', { class: 'cross-meta-line' }, queenParts.join(' · ')));
+  if (queenGenetics) crossChildren.push(queenGenetics);
   crossChildren.push(h('div', { class: 'cross-meta-line' }, entranceLabel));
   crossChildren.push(h('div', { class: 'cross-click-hint' }, 'Click any box to manage frames'));
 
@@ -4015,6 +4182,14 @@ function _openInspectionModal(colony, report) {
       }
       modalBody.appendChild(summaryNode);
 
+      /* Engagement update — frame colour legend */
+      modalBody.appendChild(h('div', { class: 'frame-legend' }, [
+        h('span', { class: 'fl-item' }, [h('span', { class: 'fl-sw fl-honey' }), 'Honey']),
+        h('span', { class: 'fl-item' }, [h('span', { class: 'fl-sw fl-brood' }), 'Brood']),
+        h('span', { class: 'fl-item' }, [h('span', { class: 'fl-sw fl-pollen' }), 'Pollen']),
+        h('span', { class: 'fl-item' }, [h('span', { class: 'fl-sw fl-empty' }), 'Empty drawn comb'])
+      ]));
+
       var advice = _ui_inspectionAdvice(colony, report);
       if (advice.length) {
         var recRows = advice.map(function(a2) {
@@ -4353,4 +4528,195 @@ function _ui_buildCombLegend() {
     ]);
   });
   return h('div', { class: 'comb-legend' }, spans);
+}
+
+/* ====================================================================
+   ENGAGEMENT UPDATE — swarm naming, honey show entry, goals widget
+   ==================================================================== */
+
+function _ui_openSwarmNamingModal() {
+  if (!Game.flags || !Game.flags.pendingSwarm) return;
+  var ps = Game.flags.pendingSwarm;
+  var apiary = (Game.apiaries || []).find(function(a) { return a.id === ps.apiaryId; });
+  var nameInput;
+
+  var body = h('div', {}, [
+    h('p', { text: 'They have settled in well — a cluster of bees clinging to the bait frames inside, calm and orderly. Now they need a proper home. Give them a name and welcome them to ' + (apiary ? apiary.name : 'your apiary') + '.' }),
+    h('div', { class: 'field' }, [
+      h('label', { text: 'Colony name' }),
+      (nameInput = h('input', { type: 'text', value: ps.name, style: { width: '100%' } }))
+    ])
+  ]);
+
+  openModal({
+    title: 'Hive the Swarm',
+    body: body,
+    buttons: [{
+      label: 'Hive them',
+      cls: 'btn-primary',
+      act: function() {
+        var nm = (nameInput.value || '').trim() || ps.name;
+        var newCol = makeColony({
+          name: nm,
+          apiaryId: ps.apiaryId,
+          source: 'caught',
+          population: ps.pop,
+          year: gameYear()
+        });
+        newCol.origin = 'caught';
+        if (!Array.isArray(newCol.diary)) newCol.diary = [];
+        newCol.diary.unshift({
+          week: Game.week,
+          date: dateLabel(Game.week),
+          weather: Game.weatherType || 'mixed',
+          queenSeen: false, eggsFound: false,
+          queenCells: 'none', stores: 'unknown', varroa: null, disease: null,
+          note: 'Caught as a swarm. Origin unknown — run a varroa wash before trusting them.'
+        });
+        Game.colonies.push(newCol);
+        Game.stats.swarmsCaught = (Game.stats.swarmsCaught || 0) + 1;
+        Game.flags.pendingSwarm = null;
+        addXp(8);
+        logEvent('🐝', 'Caught swarm hived as ' + nm + '.', 'good');
+        toast(nm + ' is yours.', 'good');
+        closeModal();
+        saveGame();
+        render();
+      }
+    }]
+  });
+}
+
+function openHoneyShowEntry() {
+  var jars = (Game.inventory && Game.inventory.jars) || {};
+  var availTypes = Object.keys(jars).filter(function(t) { return (jars[t] || 0) >= 1; });
+  if (!availTypes.length) {
+    if (typeof closeModal === 'function') closeModal();
+    return;
+  }
+  var selected = {};
+  var honeyNames = { spring: 'Spring Blossom', summer: 'Summer Honey', heather: 'Heather', lime: 'Lime', oilseed: 'OSR', ivy: 'Ivy' };
+
+  function build() {
+    var rows = availTypes.map(function(t) {
+      var nm = honeyNames[t] || (HONEY_TYPES[t] && HONEY_TYPES[t].name) || t;
+      var checked = !!selected[t];
+      var row = h('label', { style: 'display:flex;gap:8px;padding:6px;border:1px solid var(--line);border-radius:4px;cursor:pointer;margin-bottom:4px;' }, [
+        h('input', {
+          type: 'checkbox',
+          checked: checked ? 'checked' : null,
+          onchange: function(e) {
+            selected[t] = e.target.checked;
+            /* Cap at 3 selected */
+            var cnt = 0;
+            Object.keys(selected).forEach(function(k) { if (selected[k]) cnt++; });
+            if (cnt > 3) {
+              selected[t] = false;
+              e.target.checked = false;
+              toast('You can enter at most 3 classes.', 'plain');
+            }
+          }
+        }),
+        h('span', { text: nm + ' (' + jars[t] + ' jars)' })
+      ]);
+      return row;
+    });
+    var body = h('div', {}, [
+      h('p', { text: 'Choose up to 3 honey types to enter. One jar is consumed per entry.' }),
+      h('div', {}, rows)
+    ]);
+    openModal({
+      title: 'Enter County Honey Show',
+      body: body,
+      buttons: [
+        { label: 'Submit entries', cls: 'btn-primary', act: function() {
+          var types = Object.keys(selected).filter(function(k) { return selected[k]; });
+          if (typeof enterHoneyShow === 'function') enterHoneyShow(types);
+        }},
+        { label: 'Cancel', cls: '', act: closeModal }
+      ]
+    });
+  }
+  build();
+}
+
+if (typeof window !== 'undefined') {
+  window.openHoneyShowEntry = openHoneyShowEntry;
+}
+
+/* Goals widget — compact list grouped by tier */
+function _ui_buildGoalsWidget() {
+  if (typeof GOALS === 'undefined') return null;
+  var done = (Game.flags && Game.flags.completedGoals) || [];
+  var tiers = [
+    { key: 'survival', label: 'Survival (Year 1)' },
+    { key: 'growth',   label: 'Growth (Year 2-3)' },
+    { key: 'mastery',  label: 'Mastery (Year 3+)' }
+  ];
+  var tierNodes = tiers.map(function(tier) {
+    var items = GOALS.filter(function(g) { return g.tier === tier.key; });
+    var rows = items.map(function(g) {
+      var isDone = done.indexOf(g.id) !== -1;
+      return h('div', { class: 'goal-item ' + (isDone ? 'done' : 'todo'), title: g.desc }, [
+        h('span', { class: 'goal-mark' }, isDone ? '✓' : '○'),
+        h('span', {}, [
+          h('b', { text: g.title }),
+          h('div', { style: 'font-size:11px;color:var(--ink-soft);' }, g.desc)
+        ])
+      ]);
+    });
+    return h('div', { class: 'goals-tier' }, [
+      h('div', { class: 'goals-tier-title' }, tier.label),
+      h('div', {}, rows)
+    ]);
+  });
+  return h('div', { class: 'goals-widget card' }, [
+    h('div', { class: 'card-title' }, '🎯 Goals'),
+    h('div', {}, tierNodes)
+  ]);
+}
+
+/* Diary panel — hive record book */
+function _ui_buildDiaryPanel(colony) {
+  if (!Array.isArray(colony.diary)) colony.diary = [];
+  if (!colony.diary.length) {
+    return h('div', { class: 'colony-known-note', text: 'No diary entries yet. Each inspection adds one automatically. You can write a note against any entry — it will be saved with the colony.' });
+  }
+  var WEATHER_ICONS = { fine: '☀️', mixed: '⛅', cool: '☁️', wet: '🌧️', cold: '❄️', storm: '🌬️', heatwave: '🔥' };
+  var entries = colony.diary.map(function(entry, idx) {
+    var badges = [];
+    if (entry.queenSeen) badges.push(h('span', { class: 'diary-badge good' }, '👑 Queen seen'));
+    if (entry.eggsFound) badges.push(h('span', { class: 'diary-badge good' }, '🥚 Eggs'));
+    if (entry.queenCells && entry.queenCells !== 'none') {
+      badges.push(h('span', { class: 'diary-badge warn' }, '👑 ' + entry.queenCells + ' cells'));
+    }
+    if (entry.disease) badges.push(h('span', { class: 'diary-badge bad' }, '🦠 ' + entry.disease));
+    if (entry.varroa && entry.varroa !== 'none' && entry.varroa !== 'unchecked') {
+      badges.push(h('span', { class: 'diary-badge' }, '🔴 varroa ' + entry.varroa));
+    }
+    if (entry.stores && entry.stores !== 'unknown') {
+      var sCls = (entry.stores === 'critical' || entry.stores === 'low') ? 'warn' : '';
+      badges.push(h('span', { class: 'diary-badge ' + sCls }, '🍯 ' + entry.stores));
+    }
+
+    var noteArea = h('textarea', {
+      class: 'diary-note',
+      placeholder: 'Add your own note...',
+      oninput: function(e) {
+        entry.note = e.target.value;
+        if (typeof saveGame === 'function') saveGame();
+      }
+    });
+    noteArea.value = entry.note || '';
+
+    return h('div', { class: 'diary-entry' }, [
+      h('div', { class: 'diary-head' }, [
+        h('b', { text: entry.date || ('Wk ' + entry.week) }),
+        h('span', { title: entry.weather }, WEATHER_ICONS[entry.weather] || '⛅')
+      ]),
+      badges.length ? h('div', { class: 'diary-badges' }, badges) : null,
+      noteArea
+    ]);
+  });
+  return h('div', { class: 'diary-list' }, entries);
 }

@@ -491,6 +491,27 @@ function inspectColony(colony) {
 
   colony.lastInspected = Game.week;
 
+  /* Goal flag: seenDisease — set when any disease/pest is observed */
+  if (knownDisease || (knownPests && knownPests.length)) {
+    if (Game.flags) Game.flags.seenDisease = true;
+  }
+
+  /* Push a diary entry capturing this inspection */
+  if (!Array.isArray(colony.diary)) colony.diary = [];
+  colony.diary.unshift({
+    week: Game.week,
+    date: (typeof dateLabel === 'function') ? dateLabel(Game.week) : ('Wk ' + Game.week),
+    weather: Game.weatherType || 'mixed',
+    queenSeen: !!queenFound,
+    eggsFound: !!sawEggs,
+    queenCells: (qcellsVisible && colony.queenCells.type !== 'none') ? colony.queenCells.type : 'none',
+    stores: storesBand,
+    varroa: miteVisible ? varroaBand : null,
+    disease: knownDisease || null,
+    note: ''
+  });
+  if (colony.diary.length > 30) colony.diary.length = 30;
+
   /* Log the inspection */
   logEvent('🔍', `Inspected ${colony.name}. ${report.findings.length} item${report.findings.length !== 1 ? 's' : ''} noted.`, 'plain');
 
@@ -1226,6 +1247,18 @@ function treatColony(colony, treatmentId) {
     warnings.push(`${t.name} only kills mites on the bees — it cannot reach mites sealed inside brood cells. With brood present efficacy drops to roughly 40%. For a proper knock-down, wait for the broodless period (mid-winter) or create an artificial brood break first.`);
   }
 
+  /* OA trickle re-application guard — once per broodless period only */
+  if (treatmentId === 'oxalicTrickle' && colony.lastOaTrickleWeek) {
+    var _weeksSinceTrickle = Game.week - colony.lastOaTrickleWeek;
+    if (_weeksSinceTrickle < 6) {
+      Game.inventory.treatStock[treatmentId] += 1;
+      return {
+        ok: false,
+        msg: 'OA trickle is safe once per broodless period only. Repeated application causes bee mortality. Your last application was ' + _weeksSinceTrickle + ' week' + (_weeksSinceTrickle === 1 ? '' : 's') + ' ago — wait until the next broodless period.'
+      };
+    }
+  }
+
   /* Edge 7 fix — double treatment guard: only one treatment can be active at a time.
      Applying a second over an active one would void the first course, create
      unpredictable mite kill curves, and is not legal practice.
@@ -1241,6 +1274,10 @@ function treatColony(colony, treatmentId) {
   }
 
   colony.treatment = { id: treatmentId, weeksLeft: t.weeks };
+
+  if (treatmentId === 'oxalicTrickle') {
+    colony.lastOaTrickleWeek = Game.week;
+  }
 
   /* XP: treating varroa is a core beekeeping skill — timing it correctly
      (broodless period, right temperature, supers off) is something real
@@ -1449,6 +1486,7 @@ function splitColony(colony) {
 
   Game.colonies.push(newColony);
   Game.stats.splitsMade++;
+  if (Game.flags) Game.flags.successfulSplits = (Game.flags.successfulSplits || 0) + 1;
 
   addXp(12);
   const _parentQueenDesc = (colony.queen && colony.queen.present && colony.queen.virgin)

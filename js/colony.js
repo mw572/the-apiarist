@@ -583,6 +583,11 @@ function makeColony(opts){
     newspaperWeeksInPlace: 0,
     _stackWarnings: [],
     _isDemareeStackPattern: false,
+
+    /* Engagement update */
+    diary: [],
+    lastOaTrickleWeek: null,
+    origin: source,
   };
 
   /* Build the initial stack from the colony's starting state */

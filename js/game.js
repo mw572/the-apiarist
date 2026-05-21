@@ -47,6 +47,18 @@ function earn(amount, desc){
   Game.cash += amount;
   Game.ledger.unshift({ week: Game.week, desc: desc || 'Income', amount: amount });
   if (Game.ledger.length > 400) Game.ledger.length = 400;
+  if (Game.yearStats) Game.yearStats.income = (Game.yearStats.income || 0) + amount;
+  /* Track best year honey income for goal */
+  if (Game.flags && desc && /honey/i.test(desc)) {
+    if (!Game.flags._yrHoneyIncome) Game.flags._yrHoneyIncome = { yr: gameYear(), val: 0 };
+    if (Game.flags._yrHoneyIncome.yr !== gameYear()) {
+      Game.flags._yrHoneyIncome = { yr: gameYear(), val: 0 };
+    }
+    Game.flags._yrHoneyIncome.val += amount;
+    if (Game.flags._yrHoneyIncome.val > (Game.flags.bestYearHoneyIncome || 0)) {
+      Game.flags.bestYearHoneyIncome = Game.flags._yrHoneyIncome.val;
+    }
+  }
   return true;
 }
 
@@ -90,6 +102,7 @@ function startNewGame(name, difficulty){
       honey: {}, jars: {}, cutComb: 0, wax: 0, rearedQueens: 0,
       sugar: 10,
       emptyJars: 0,
+      candles: 0,
       treatStock: {},
       broodBoxes: 0,       // extra brood boxes in stock (bought from Market → Supplies)
       supers: 0,           // super boxes in stock (bought from Market → Supplies)
@@ -107,9 +120,12 @@ function startNewGame(name, difficulty){
       beeBase: false, foodHygiene: false, tutorialStep: 0,
       seenExplainers: {}, swarmSeasonWarned: false,
       salesChannels: { gate: true }, lastWinterYear: 0,
+      pendingSwarm: null, completedGoals: [], honeyShowRibbons: [],
+      seenDisease: false, bestYearHoneyIncome: 0, successfulSplits: 0,
     },
     stats: { honeyHarvested:0, coloniesLost:0, swarmsLost:0, swarmsCaught:0,
-             wintersSurvived:0, splitsMade:0, queensReared:0, jarsSold:0 },
+             wintersSurvived:0, splitsMade:0, queensReared:0, jarsSold:0, showWins:0 },
+    yearStats: { honeyKg:0, income:0, coloniesStarted:0, coloniesLost:0 },
     ui: { view:'apiary', selectedApiary: 1, selectedColony: null },
   };
 
@@ -195,6 +211,12 @@ function _migrateSave(g) {
     if (typeof c._isDemareeStackPattern !== 'boolean') c._isDemareeStackPattern = false;
     /* Queen rearing cooldown stamp — null means never reared */
     if (typeof c._rearingQueensWeek !== 'number') c._rearingQueensWeek = 0;
+    /* Engagement update */
+    if (typeof c.lastOaTrickleWeek === 'undefined') c.lastOaTrickleWeek = null;
+    if (!Array.isArray(c.diary)) c.diary = [];
+    if (!c.queen) c.queen = {};
+    if (c.queen && typeof c.queen.hygieneGene !== 'number') c.queen.hygieneGene = Math.random() * 0.7 + 0.2;
+    if (c.queen && typeof c.queen.temperamentGene !== 'number') c.queen.temperamentGene = Math.random() * 0.5 + 0.15;
   });
 
   /* Inventory fields added with hive assembly mechanic */
@@ -207,6 +229,7 @@ function _migrateSave(g) {
     if (!g.inventory.jars  || typeof g.inventory.jars  !== 'object') g.inventory.jars  = {};
     if (typeof g.inventory.emptyJars !== 'number') g.inventory.emptyJars = 0;
     if (typeof g.inventory.wax !== 'number') g.inventory.wax = 0;
+    if (typeof g.inventory.candles !== 'number') g.inventory.candles = 0;
   }
 
   /* Stats — ensure all counters exist */
@@ -214,10 +237,19 @@ function _migrateSave(g) {
     g.stats = {};
   }
   var _statDefaults = ['honeyHarvested','jarsSold','swarmsLost','queensReared',
-    'coloniesLost','wintersSurvived','colonyDeaths','inspections'];
+    'coloniesLost','wintersSurvived','colonyDeaths','inspections','showWins','swarmsCaught','splitsMade'];
   _statDefaults.forEach(function(k) {
     if (typeof g.stats[k] !== 'number') g.stats[k] = 0;
   });
+
+  /* Engagement update — year stats accumulator */
+  if (!g.yearStats || typeof g.yearStats !== 'object') {
+    g.yearStats = { honeyKg: 0, income: 0, coloniesStarted: 0, coloniesLost: 0 };
+  }
+  if (typeof g.yearStats.honeyKg !== 'number') g.yearStats.honeyKg = 0;
+  if (typeof g.yearStats.income !== 'number') g.yearStats.income = 0;
+  if (typeof g.yearStats.coloniesStarted !== 'number') g.yearStats.coloniesStarted = 0;
+  if (typeof g.yearStats.coloniesLost !== 'number') g.yearStats.coloniesLost = 0;
 
   /* Flags — ensure object and required sub-keys exist */
   if (!g.flags || typeof g.flags !== 'object') g.flags = {};
@@ -228,6 +260,13 @@ function _migrateSave(g) {
     g.flags.salesChannels = { gate: true };
   }
   if (typeof g.flags.lastWinterYear !== 'number') g.flags.lastWinterYear = 0;
+  /* Engagement update flags */
+  if (typeof g.flags.pendingSwarm === 'undefined') g.flags.pendingSwarm = null;
+  if (!Array.isArray(g.flags.completedGoals)) g.flags.completedGoals = [];
+  if (!Array.isArray(g.flags.honeyShowRibbons)) g.flags.honeyShowRibbons = [];
+  if (typeof g.flags.seenDisease !== 'boolean') g.flags.seenDisease = false;
+  if (typeof g.flags.bestYearHoneyIncome !== 'number') g.flags.bestYearHoneyIncome = 0;
+  if (typeof g.flags.successfulSplits !== 'number') g.flags.successfulSplits = 0;
 
   /* Reputation — clamp to valid range; injected saves cannot have rep > 100 or < 0 */
   if (typeof g.reputation !== 'number' || isNaN(g.reputation)) g.reputation = 0;

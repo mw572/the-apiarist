@@ -127,6 +127,15 @@ function runWeek() {
   Game.week++;
   var week = Game.week;
 
+  /* Engagement update — pending swarm expiry (player missed the window) */
+  if (Game.flags.pendingSwarm && week > Game.flags.pendingSwarm.week + 1) {
+    var _lostAp = Game.apiaries ? Game.apiaries.find(function(a) { return a.id === Game.flags.pendingSwarm.apiaryId; }) : null;
+    logEvent('🐝', 'The swarm ' + (_lostAp ? 'at ' + _lostAp.name : '') + ' has moved on — they found somewhere else.', 'bad');
+    if (!Game.stats) Game.stats = {};
+    Game.stats.swarmsLost = (Game.stats.swarmsLost || 0) + 1;
+    Game.flags.pendingSwarm = null;
+  }
+
   /* 2. Year boundary -------------------------------------------------- */
   // (Game.week-1) % 52 === 0 means we have just entered a new game-year
   // (week 53 is year 2 start, etc.)
@@ -149,6 +158,51 @@ function runWeek() {
         c.swarmedThisYear    = false;
         c.productionThisYear = 0;
       }
+    }
+
+    /* Engagement update — year-end summary modal (only after year 1 has elapsed) */
+    if (_sim_yearsPlayed >= 1 && Game.yearStats) {
+      var _ys = Game.yearStats;
+      var _aliveNow = aliveColonies().length;
+      var _coloniesLostYr = _ys.coloniesLost || 0;
+      var _honeyKg = _ys.honeyKg || 0;
+      var _income = _ys.income || 0;
+
+      var _wentWell = '';
+      var _toWatch = '';
+      if (_aliveNow > 0 && _coloniesLostYr === 0) {
+        _wentWell = 'No colony losses this year — that is a real achievement.';
+      } else if (_honeyKg >= 30) {
+        _wentWell = 'A strong harvest of ' + _honeyKg.toFixed(1) + ' kg.';
+      } else if (_aliveNow > 0) {
+        _wentWell = 'You still have ' + _aliveNow + ' colon' + (_aliveNow === 1 ? 'y' : 'ies') + ' going into the new year.';
+      } else {
+        _wentWell = 'You learned what does not work.';
+      }
+      if (_coloniesLostYr >= 2) {
+        _toWatch = 'Multiple colony losses — review your varroa treatment timing and autumn feeding.';
+      } else if (_honeyKg < 10 && _aliveNow > 0) {
+        _toWatch = 'Honey yield was modest — strong colonies and the right supering matter most.';
+      } else {
+        _toWatch = 'Keep ahead of the swarm season and the autumn varroa window.';
+      }
+
+      var _yrNum = (typeof gameYear === 'function') ? gameYear() : 1;
+      presentables.push({
+        kind: 'modal',
+        title: 'Year ' + _yrNum + ' in Review',
+        body: '<p><strong>' + _coloniesLostYr + '</strong> coloni' + (_coloniesLostYr === 1 ? 'y' : 'es') + ' lost this year. ' +
+              '<strong>' + _aliveNow + '</strong> going into the new year.</p>' +
+              '<p>Honey harvested: <strong>' + _honeyKg.toFixed(1) + ' kg</strong>. ' +
+              'Income: <strong>' + fmtMoney(_income) + '</strong>.</p>' +
+              '<p><em>What went well:</em> ' + _wentWell + '</p>' +
+              '<p><em>What to watch:</em> ' + _toWatch + '</p>'
+      });
+
+      /* Reset year stats */
+      Game.yearStats = { honeyKg: 0, income: 0, coloniesStarted: _aliveNow, coloniesLost: 0 };
+      /* Reset yearly honey income tracker so a new annual figure starts fresh */
+      if (Game.flags) Game.flags._yrHoneyIncome = { yr: _yrNum + 1, val: 0 };
     }
 
     _sim_yearsPlayed++;
@@ -393,31 +447,25 @@ function runWeek() {
 
     /* ---- Bait hive swarm catch ------------------------------------ */
     // Swarm season weeks 15-32; requires bait hives in inventory.
-    if (Game.inventory.baitHives > 0 && wkInYear >= 15 && wkInYear <= 32) {
-      // Base catch chance per bait hive per week: ~4 % — hard cap at 75% to prevent certainty
+    // Engagement update: a swarm moving in triggers a naming moment (pendingSwarm),
+    // not an immediate colony creation. Player has one week to hive them.
+    if (Game.inventory.baitHives > 0 && wkInYear >= 15 && wkInYear <= 32 && !Game.flags.pendingSwarm) {
       var catchChance = Math.min(0.75, 0.04 * Game.inventory.baitHives);
-      // Higher chance if there are colonies swarming nearby
       if (Math.random() < catchChance) {
-        // Find an apiary with space (or use the first one)
         var targetApiary = apiary;
         var swarmCols = coloniesIn(targetApiary.id);
         if (swarmCols.length < 8) { // don't overcrowd
-          var newColony = makeColony({
-            name     : _sim_uniqueHiveName(),
-            apiaryId : targetApiary.id,
-            source   : 'caught',
-            population: SIM.caughtSwarmPop,
-            year     : gameYear(),
-          });
-          Game.colonies.push(newColony);
+          Game.flags.pendingSwarm = {
+            apiaryId: targetApiary.id,
+            name: _sim_uniqueHiveName(),
+            pop: SIM.caughtSwarmPop || Math.round((SIM.fullColonyPop || 21000) * 0.35),
+            week: Game.week
+          };
           Game.inventory.baitHives = Math.max(0, Game.inventory.baitHives - 1);
-          Game.stats.swarmsCaught++;
-          logEvent('🎣', 'A swarm moved into one of your bait hives at ' + targetApiary.name +
-            ' and is now hived as ' + newColony.name + '.', 'good');
+          logEvent('🐝', 'A swarm has moved into your bait hive at ' + targetApiary.name + '! You have one week to hive them before they move on.', 'good');
           presentables.push({
             kind: 'toast',
-            text: 'A swarm has taken to your bait hive at ' + targetApiary.name +
-              '. Meet ' + newColony.name + '.',
+            text: 'Swarm in your bait hive at ' + targetApiary.name + '! Hive them this week before they leave.',
             tone: 'good',
           });
         }
@@ -484,6 +532,57 @@ function runWeek() {
     }
   })();
 
+  /* Engagement update — Spring arrival event (once per year, weeks 8-11) */
+  var _wkInYrSp = ((Game.week - 1) % 52) + 1;
+  var _gYear = (typeof gameYear === 'function') ? gameYear() : 1;
+  if (_wkInYrSp >= 8 && _wkInYrSp <= 11 && !Game.flags['springArrival_yr' + _gYear] && aliveColonies().length > 0) {
+    Game.flags['springArrival_yr' + _gYear] = true;
+    presentables.push({
+      kind: 'modal',
+      title: 'Spring is coming',
+      body: '<p>The days are lengthening. Your bees are flying in numbers you have not seen since autumn — short cleansing flights at first, then real foraging trips as the temperature climbs.</p>' +
+            '<p>Now is the time to check winter stores, assess brood quality, and get ready for the spring build-up. Swarm season follows close behind.</p>'
+    });
+    logEvent('☀️', 'Spring build-up underway — inspect colonies and check stores.', 'good');
+  }
+
+  /* Engagement update — county honey show (week 34 each year) */
+  if (_wkInYrSp === HONEY_SHOW_WEEK && !Game.flags['showEntered_yr' + _gYear]) {
+    var _hasJars = Game.inventory.jars && Object.keys(Game.inventory.jars).some(function(t) {
+      return (Game.inventory.jars[t] || 0) >= 1;
+    });
+    if (_hasJars) {
+      presentables.push({
+        kind: 'modal',
+        title: 'County Honey Show',
+        body: '<p>The county agricultural show is this week. Beekeepers from across the area are entering their best honey.</p>' +
+              '<p>You have honey that could be entered. Classes: light honey, dark honey, single-variety, cut comb (if applicable).</p>' +
+              '<p><button class="btn btn-primary" onclick="openHoneyShowEntry()">Enter the show</button> ' +
+              '<button class="btn" onclick="closeModal()">Skip this year</button></p>'
+      });
+    }
+  }
+
+  /* Engagement update — goal completion check */
+  if (Array.isArray(GOALS)) {
+    GOALS.forEach(function(goal) {
+      if ((Game.flags.completedGoals || []).indexOf(goal.id) === -1) {
+        var met = false;
+        try { met = goal.check(Game); } catch(e) { met = false; }
+        if (met) {
+          Game.flags.completedGoals.push(goal.id);
+          if (typeof addXp === 'function') addXp(goal.xp);
+          presentables.push({
+            kind: 'modal',
+            title: '🎯 Goal complete: ' + goal.title,
+            body: '<p>' + goal.desc + '</p><p>+' + goal.xp + ' XP earned.</p>'
+          });
+          logEvent('🎯', 'Goal unlocked: ' + goal.title, 'good');
+        }
+      }
+    });
+  }
+
   /* 9. Return presentables ------------------------------------------ */
   return presentables;
 }
@@ -500,7 +599,30 @@ function _sim_resolveEvent(ev, week) {
 
     case 'died':
       Game.stats.coloniesLost++;
+      if (Game.yearStats) Game.yearStats.coloniesLost = (Game.yearStats.coloniesLost || 0) + 1;
       var reason = ev.reason || 'unknown cause';
+
+      /* Engagement update — death retrospective */
+      var _retro = [];
+      if (colony.known && colony.known.varroaCount) {
+        _retro.push('Last varroa count: ' + colony.known.varroaCount + ' mites per 100 bees.');
+      } else if (colony.known && colony.known.varroaSign && colony.known.varroaSign !== 'unchecked' && colony.known.varroaSign !== 'none') {
+        _retro.push('Last varroa reading: ' + colony.known.varroaSign + '.');
+      }
+      if (colony.lastTreatmentWeek) {
+        var _wkAgo = Game.week - colony.lastTreatmentWeek;
+        _retro.push('Last treatment: ' + _wkAgo + ' week' + (_wkAgo !== 1 ? 's' : '') + ' ago.');
+      }
+      if (colony.population < (SIM.fullColonyPop || 21000) * 0.2) {
+        _retro.push('Population had collapsed to below 20% of a healthy colony.');
+      }
+      var _highVarroa = (colony.known && (colony.known.varroaCount > 3 || colony.known.varroaSign === 'high' || colony.known.varroaSign === 'severe')) ||
+                       (colony.varroa && (typeof varroaInfestation === 'function') && varroaInfestation(colony) > 0.05);
+      if (_highVarroa) {
+        _retro.push('High varroa load is the most likely cause — treatment earlier in autumn would have given the winter bees a better chance.');
+      }
+      colony._deathRetrospective = _retro;
+
       logEvent('💀', colony.name + ' has died (' + reason + ').', 'bad');
       /* Push a persistent advisor item so the nav pip fires and the player notices */
       Game.advisor = Game.advisor || [];
@@ -522,12 +644,19 @@ function _sim_resolveEvent(ev, week) {
                   '<p>Leave the hive sealed for a week, then inspect carefully. If disease is suspected, do not reuse the comb without advice from your local bee inspector.</p>',
         });
       } else {
+        var _retroHtml = '';
+        if (colony._deathRetrospective && colony._deathRetrospective.length) {
+          _retroHtml = '<p><strong>What happened:</strong></p><ul>' +
+            colony._deathRetrospective.map(function(r) { return '<li>' + r + '</li>'; }).join('') +
+            '</ul>';
+        }
         out.push({
           kind : 'modal',
           title: colony.name + ' has died',
           text : colony.name + ' has died — ' + reason + '.',
           body : '<p><strong>' + colony.name + '</strong> has been lost.</p>' +
                  '<p><strong>Cause:</strong> ' + reason + '.</p>' +
+                 _retroHtml +
                  '<p>Inspect the hive in the next week or two before clearing it out — ' +
                  'understanding the cause helps you prevent it next time.</p>',
         });

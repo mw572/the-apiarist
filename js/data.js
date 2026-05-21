@@ -65,7 +65,7 @@ const SIM = {
   framesPerBrood: 11,
   peakLayPerWeek: 13000,        // a good queen at full tilt
   workerLifeSummer: 6,          // weeks
-  honeyPerSuper: 18,            // kg extractable from a full National super (11 drawn frames ~20-25 kg capped, ~18 kg extracted)
+  honeyPerSuper: 12,            // kg extractable from a full National super (realism fix; honey prices bumped 15% to compensate)
   broodBoxStoreCap: 22,         // kg the brood box can physically hold
   broodNestComfort: 7,          // kg of stores the colony likes to keep by the nest
   winterStoresNeed: 18,         // kg needed to be safe through winter
@@ -204,15 +204,14 @@ function honeyTypeForWeek(week, siteType){
 /* --- Honey types ----------------------------------------------------- */
 
 const HONEY_TYPES = {
-  spring:  { name:'Spring blossom honey', value:11.0, note:'Light and floral, from the spring flow.' },
-  oilseed: { name:'Oilseed rape honey', value:9.0, setsFast:true,
+  spring:  { name:'Spring blossom honey', value:12.65, note:'Light and floral, from the spring flow.' },
+  oilseed: { name:'Oilseed rape honey', value:10.35, setsFast:true,
              note:'Sets rock hard within weeks — extract it promptly or it sets in the comb.' },
-  summer:  { name:'Summer wildflower honey', value:12.0, note:'The classic main-crop honey.' },
-  lime:    { name:'Lime honey', value:14.0, note:'Prized, with a fresh minty edge.' },
-  borage:  { name:'Borage honey', value:13.0, note:'Water-white and very mild.' },
-  heather: { name:'Heather honey', value:20.0, thixotropic:true,
+  summer:  { name:'Summer wildflower honey', value:13.80, note:'The classic main-crop honey.' },
+  lime:    { name:'Lime honey', value:16.10, note:'Prized, with a fresh minty edge.' },
+  heather: { name:'Heather honey', value:23.00, thixotropic:true,
              note:'A jelly-like honey that must be pressed, not spun. The premium crop.' },
-  ivy:     { name:'Ivy honey', value:8.5, setsFast:true,
+  ivy:     { name:'Ivy honey', value:9.75, setsFast:true,
              note:'Strong, sets very hard and fast. Best left for the bees as winter stores.' },
 };
 
@@ -251,9 +250,9 @@ const DISEASES = {
   sacbrood:   { name:'Sacbrood', short:'Sac', notifiable:false, kind:'brood', curable:true,
                 sign:'a few larvae failed to pupate, lying like little fluid-filled sacs, heads dark and raised',
                 desc:'A virus. Usually minor and clears on its own as the colony grows.' },
-  nosema:     { name:'Nosema', short:'Nosema', notifiable:false, kind:'adult', curable:true,
-                sign:'streaks of dysentery on the comb and front of the hive; the colony slow to build in spring',
-                desc:'A gut parasite of adult bees. A comb change and requeening help; good apiary hygiene prevents it.' },
+  nosema:     { name:'Nosema ceranae', short:'Nosema', notifiable:false, kind:'adult', curable:true,
+                sign:'a silent decline — bees age and die before foraging age; the colony fails to build in spring with little outward sign',
+                desc:'Nosema ceranae — the dominant UK nosema species — causes a silent population collapse with little outward sign. Affected bees age rapidly and die before foraging age. Fumagillin is no longer licensed; thymol-based treatments and good nutrition are the main tools.' },
 };
 
 /* --- Pests (reference for explainers) -------------------------------- */
@@ -385,6 +384,50 @@ CATALOG.supplies = [
     desc:'A zinc grid that prevents the queen from moving up into the honey supers. Fit it between the brood box and the lowest super.' },
   { id:'newspaper', name:'Newspaper (uniting)', icon:'📰', price: 1,
     desc:'A sheet of newspaper placed between two hive bodies when uniting colonies using the newspaper method. Bees chew through it over 24–48 hours, mixing gradually to prevent fighting.' },
+];
+
+/* --- Engagement update: honey show, candles, goals ------------------- */
+
+var HONEY_SHOW_WEEK = 34;
+
+var CANDLE_WAX_PER_BATCH = 0.08;   // kg wax per batch
+var CANDLES_PER_BATCH    = 6;
+var CANDLE_PRICE         = 2.50;    // £ per candle
+
+var GOALS = [
+  /* Year 1 — Survival */
+  { id: 'first_winter', tier: 'survival', title: 'Through the dark',
+    desc: 'Get a colony through your first winter alive.', xp: 20,
+    check: function(g) {
+      return (typeof gameYear === 'function' ? gameYear() : 1) >= 2 &&
+             (typeof aliveColonies === 'function' ? aliveColonies().length : 0) > 0;
+    } },
+  { id: 'first_harvest', tier: 'survival', title: 'First honey',
+    desc: 'Harvest your first super.', xp: 15,
+    check: function(g) { return (g.stats && (g.stats.honeyHarvested || 0) > 0); } },
+  { id: 'first_disease', tier: 'survival', title: 'Know your enemy',
+    desc: 'Identify a disease or pest in an inspection.', xp: 10,
+    check: function(g) { return g.flags && g.flags.seenDisease; } },
+  /* Year 2-3 — Growth */
+  { id: 'three_colonies', tier: 'growth', title: 'Three up',
+    desc: 'Run 3 colonies simultaneously.', xp: 25,
+    check: function(g) { return (typeof aliveColonies === 'function' ? aliveColonies().length : 0) >= 3; } },
+  { id: 'five_hundred', tier: 'growth', title: 'Honey money',
+    desc: 'Earn £500 from honey sales in a single year.', xp: 30,
+    check: function(g) { return g.flags && (g.flags.bestYearHoneyIncome || 0) >= 500; } },
+  { id: 'successful_split', tier: 'growth', title: 'Make two from one',
+    desc: 'Successfully split a colony and both halves survive 4 weeks.', xp: 20,
+    check: function(g) { return g.flags && (g.flags.successfulSplits || 0) >= 1; } },
+  /* Year 3+ — Mastery */
+  { id: 'catch_swarm', tier: 'mastery', title: 'Catch a swarm',
+    desc: 'Successfully hive a swarm from a bait hive.', xp: 25,
+    check: function(g) { return g.stats && (g.stats.swarmsCaught || 0) >= 1; } },
+  { id: 'honey_show_first', tier: 'mastery', title: 'Blue ribbon',
+    desc: 'Win First Prize at the county honey show.', xp: 40,
+    check: function(g) { return g.stats && (g.stats.showWins || 0) >= 1; } },
+  { id: 'five_years', tier: 'mastery', title: 'Five seasons',
+    desc: 'Keep bees for five full years.', xp: 50,
+    check: function(g) { return (typeof gameYear === 'function' ? gameYear() : 1) >= 6; } }
 ];
 
 /* expose to other scripts explicitly too */
