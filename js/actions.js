@@ -695,7 +695,7 @@ function addSuper(colony) {
   }
 
   /* Warn (not block) if adding supers outside the active season */
-  const _superWkInYr = wkInYear(Game.week);
+  const _superWkInYr = ((Game.week - 1) % 52) + 1;
   let _superSeasonWarn = '';
   if (_superWkInYr >= 43 || _superWkInYr <= 8) {
     _superSeasonWarn = ' Note: it is late in the year and there is no nectar flow — supers are not needed in winter and will prevent varroa treatment. Remove them when you are ready to treat.';
