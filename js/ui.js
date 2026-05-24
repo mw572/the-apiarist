@@ -655,12 +655,14 @@ function _ui_buildTopbar() {
   var sl = (typeof skillLevel === 'function') ? skillLevel(xp) : 1;
 
   /* Match the rank to a figure portrait — Apprentice / Beekeeper /
-     Master tier. Done as a 24px painted thumbnail next to the title
-     so the chrome stays restrained but the role is recognisable at
-     a glance. */
+     Improver / Sideliner / Master tier. Done as a 28px painted
+     thumbnail next to the title so the chrome stays restrained but
+     the role is recognisable at a glance. */
   var rankPlate = 'figure-apprentice.png';
-  if (hc >= 30) rankPlate = 'figure-master.png';
-  else if (hc >= 2) rankPlate = 'figure-beekeeper.png';
+  if      (hc >= 30) rankPlate = 'figure-master.png';
+  else if (hc >= 12) rankPlate = 'figure-sideliner.png';
+  else if (hc >=  6) rankPlate = 'figure-improver.png';
+  else if (hc >=  2) rankPlate = 'figure-beekeeper.png';
 
   return h('div', { class: 'topbar' }, [
     h('div', { class: 'brand' }, 'The Apiarist'),
@@ -1114,20 +1116,27 @@ function _ui_buildApiaryView() {
 
   /* ----------------------------------------------------------------
      1. Season scene band — painted oil-on-canvas plate at the top.
-     The painting carries the seasonal mood; CSS object-fit handles
-     the crop. ---------------------------------------------------- */
-  var seasonPlateMap = {
-    spring: 'img/plates/scene-spring-buildup.png',
-    summer: 'img/plates/scene-summer-flow.png',
-    autumn: 'img/plates/scene-autumn-harvest.png',
-    winter: 'img/plates/scene-winter-apiary.png'
-  };
+     The hero plate is chosen by (siteType × season) so a beekeeper
+     at Rural Woodland in spring sees a different painting from one
+     at Moorland in spring. Falls back to a season-generic scene if
+     no site-specific plate exists yet. ---------------------------- */
   var seasonLabelMap = {
     spring: 'Spring build-up',
     summer: 'Summer flow',
     autumn: 'Autumn harvest',
     winter: 'Winter'
   };
+  var fallbackPlateMap = {
+    spring: 'img/plates/scene-spring-buildup.png',
+    summer: 'img/plates/scene-summer-flow.png',
+    autumn: 'img/plates/scene-autumn-harvest.png',
+    winter: 'img/plates/scene-winter-apiary.png'
+  };
+  var fallbackScene = fallbackPlateMap[season] || fallbackPlateMap.spring;
+  var scenePath = siteType
+    ? 'img/plates/scene-' + siteType + '-' + season + '.png'
+    : fallbackScene;
+
   var hbSeason = (HANDBOOK_LINKS.season && HANDBOOK_LINKS.season[season]) || null;
   var seasonBand = h('button', {
     type: 'button',
@@ -1137,7 +1146,15 @@ function _ui_buildApiaryView() {
   }, [
     h('img', {
       class: 'asb-plate',
-      src: seasonPlateMap[season] || seasonPlateMap.spring,
+      src: scenePath,
+      onerror: function(e) {
+        /* If a site-specific plate is missing on disk, fall back to
+           the season-generic painting so the band never breaks. */
+        var img = e && e.target;
+        if (img && img.src.indexOf(fallbackScene.split('/').pop()) === -1) {
+          img.src = fallbackScene;
+        }
+      },
       alt: (seasonLabelMap[season] || 'Season') + ' at the apiary'
     }),
     h('div', { class: 'asb-overlay' }),

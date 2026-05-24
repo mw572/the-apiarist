@@ -792,7 +792,7 @@ A colony without eggs or larvae under three days old cannot raise its own queen.
     id: 'queen-rearing',
     category: 'Queen Management',
     title: 'Raising Your Own Queens',
-    plate: 'bee-buckfast-queen.png',
+    plate: 'scene-queen-rearing.png',
     body: `Raising your own queens is one of beekeeping's most satisfying advanced skills. It allows you to propagate your best colonies, increase colony numbers cheaply, and maintain a supply of spare queens.
 
 ## The basics
@@ -1048,7 +1048,7 @@ If significant numbers remain, the escape may be blocked -- check before removin
     id: 'extracting',
     category: 'Honey & Hive Products',
     title: 'Extracting and Bottling',
-    plate: 'tool-extractor.png',
+    plate: 'scene-honey-extraction.png',
     body: `Extraction should happen in a clean, bee-proof environment. Work efficiently -- the smell of honey can trigger robbing quickly.
 
 ## The extraction process
