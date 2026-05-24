@@ -2206,20 +2206,27 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 
 /* ── Optional plate at the top of the article ───────────────────────── */
+/* Frame holds its own height regardless of image load state so we
+   never silently lose the painted plate to a half-loaded asset or a
+   browser that doesn't resolve `height: 100%` against an auto-height
+   parent. */
 .article-plate-frame {
   margin: 0 0 18px;
   border: 1px solid var(--ink);
   background: var(--paper-2);
   overflow: hidden;
   border-radius: 0;
+  aspect-ratio: 16 / 9;
   max-height: 320px;
+  width: 100%;
+  display: block;
 }
 .article-plate {
   display: block;
   width: 100%;
   height: 100%;
-  max-height: 320px;
   object-fit: cover;
+  object-position: center;
 }
 
 /* ── Glossary pane ──────────────────────────────────────────────────── */
@@ -2247,18 +2254,41 @@ button { font-family: var(--sans); cursor: pointer; }
    JOURNAL / LEDGER
    ==================================================================== */
 
+/* Journal entries — painterly, not chunky. Plain paper background,
+   a thin coloured rule on the left signals tone. No big rounded
+   pill backgrounds (those read like a flash-mode todo app, not a
+   beekeeper's journal). */
 .log-entry {
-  display: flex; gap: 9px; padding: 7px 8px; border-bottom: 1px solid var(--line);
-  font-size: 13px; border-radius: 5px; margin: 1px 0;
+  display: flex; gap: 14px;
+  padding: 10px 14px 10px 16px;
+  border-bottom: 1px solid var(--rule-soft);
+  border-left: 3px solid transparent;
+  font-family: var(--serif);
+  font-size: 14px;
+  line-height: 1.55;
+  border-radius: 0; margin: 0;
+  background: transparent;
+  color: var(--ink);
 }
-.log-entry .when { color: var(--ink-faint); font-size: 11px; white-space: nowrap; width: 92px; flex: none; }
-.log-entry .ico { flex: none; }
-.log-entry.good { background: var(--ok-bg); }
-.log-entry.good .txt { color: var(--leaf-dk); }
-.log-entry.bad  { background: var(--bad-bg); }
-.log-entry.bad  .txt { color: var(--bad); font-weight: 600; }
-.log-entry.warn { background: var(--warn-bg); }
-.log-entry.warn .txt { color: var(--warn); }
+.log-entry:hover { background: rgba(168, 120, 48, 0.04); }
+.log-entry .when {
+  color: var(--ink-faint);
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  width: 92px; flex: none;
+  padding-top: 2px;
+}
+.log-entry .ico { flex: none; opacity: 0.55; font-size: 13px; }
+.log-entry .txt { flex: 1; color: var(--ink); }
+.log-entry.good { border-left-color: var(--moss, #5a6a3a); background: transparent; }
+.log-entry.good .txt { color: var(--ink); font-weight: 400; }
+.log-entry.warn { border-left-color: var(--ochre, #a87830); background: transparent; }
+.log-entry.warn .txt { color: var(--ink); font-style: italic; }
+.log-entry.bad  { border-left-color: var(--brick, #8b3a1a); background: transparent; }
+.log-entry.bad  .txt { color: var(--ink); font-weight: 600; }
 
 .ledger-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ledger-table th { text-align: left; padding: 6px 8px; border-bottom: 2px solid var(--line-dk); font-size: 11px; text-transform: uppercase; color: var(--ink-soft); }
@@ -4664,6 +4694,31 @@ button { font-family: var(--sans); cursor: pointer; }
   border: 1px solid var(--ink-v2);
   border-radius: 4px;
   box-shadow: none;
+}
+/* Empty state inside a sample-card is more compact than a page-level
+   empty-state — chunky 40px padding turns a brief note into a 200px
+   block of dead parchment. */
+.samples-content .sample-card .empty-state {
+  padding: 16px 12px 4px;
+  text-align: left;
+  font-style: italic;
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+/* Journal log block needs visible structure on the painterly cream
+   background — a 1px ink-soft border framing the column, no extra
+   margins so it sits cleanly under the hero. */
+.records-view .journal-content .journal-spread {
+  border: 1px solid var(--rule-soft);
+  border-radius: 3px;
+  padding: 0;
+  background: var(--paper);
+  margin-top: 18px;
+}
+.records-view .journal-content .journal-spread .log-entry:last-child {
+  border-bottom: 0;
 }
 
 /* ====================================================================
