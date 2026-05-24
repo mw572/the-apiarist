@@ -64,6 +64,25 @@
   --line:       var(--rule-soft);
   --line-dk:    #8a7855;
 
+  /* ------------------------------------------------------------------
+     RECORDS PAINTERLY REGISTER — the Records view (Journal, Finances,
+     Samples) was built against a "v2" palette intended to read as
+     oil-on-canvas. The tokens below are the v2 namespace those
+     selectors reference. They alias the core paper/ink scale so the
+     Records chrome inherits the same cream/ink language as the rest
+     of the app while keeping its own room to drift later.
+     ------------------------------------------------------------------ */
+  --paper-v2:      var(--paper);
+  --paper-2-v2:    var(--paper-2);
+  --ink-v2:        var(--ink);
+  --ink-soft-v2:   var(--ink-soft);
+  --ink-faint-v2:  var(--ink-faint);
+  --serif-v2:      var(--serif);
+
+  /* --brick is referenced by .log-entry.bad and .fin-tile-expense.
+     Maps to the established --bad accent. */
+  --brick:         var(--bad);
+
   /* Shadows fade out as the new chrome avoids drop shadow, but legacy
      selectors still call --shadow / --shadow-lg. Soften them so they
      don't shout. */
@@ -2990,6 +3009,86 @@ button { font-family: var(--sans); cursor: pointer; }
   .map-hero-sub { font-size: 14px; }
 }
 
+/* Map: a small "+ Add another here" row that follows the apiary
+   list inside an active territory card. Distinct from a real apiary
+   line so it reads as an affordance, not as something already there. */
+.map-apiary-add {
+  border-top: 1px dashed var(--rule-soft);
+  padding-top: 6px;
+  margin-top: 6px;
+  justify-content: flex-end;
+}
+.map-apiary-add .btn { background: transparent; }
+
+/* Neighbours hero — 16:9 painted village scene at the top of the
+   Neighbours tab. Carries the same painterly weight as the map hero
+   so the tab feels alive even when no ads are running. */
+.neigh-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 220px;
+  background: var(--paper-2) center / cover no-repeat;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 0 0 16px;
+}
+.neigh-hero-scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(42,28,10,0) 35%, rgba(42,28,10,0.7) 100%);
+  pointer-events: none;
+}
+.neigh-hero-inner {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 14px 20px 14px;
+  color: #f5e8c8;
+}
+.neigh-hero-title {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.1;
+  margin: 0 0 4px;
+  color: #f5e8c8;
+}
+.neigh-hero-sub {
+  font-family: var(--serif);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.4;
+  color: rgba(245,232,200,0.88);
+  max-width: 640px;
+}
+@media (min-width: 768px) {
+  .neigh-hero { max-height: 280px; }
+  .neigh-hero-title { font-size: 34px; }
+  .neigh-hero-sub { font-size: 14px; }
+}
+
+/* Empty-state block for the Neighbours tab — sits below the hero
+   when no ads are running. Keeps the page feeling deliberate. */
+.neigh-empty {
+  padding: 24px 18px;
+  text-align: center;
+  background: var(--paper-2);
+  border: 1px dashed var(--rule-soft);
+  border-radius: 3px;
+}
+.neigh-empty-line {
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--ink);
+  margin: 0 0 4px;
+}
+.neigh-empty-sub {
+  font-family: var(--serif);
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
 /* Season strip — small parchment band beneath the hero. */
 .map-season-strip {
   display: flex; align-items: baseline; gap: 12px;
@@ -4450,16 +4549,20 @@ button { font-family: var(--sans); cursor: pointer; }
    ==================================================================== */
 .records-view { background: var(--paper-v2); }
 
+/* Tab pills. The Records view trio reads as a small section selector,
+   not as a full nav. Pills with a hairline rule (paper rests on paper)
+   give consistent spacing across all three tabs and keep the painterly
+   feel without printing-press hard corners. */
 .records-tabs {
   display: flex;
-  gap: 0;
+  gap: 6px;
   margin-bottom: 18px;
-  border-bottom: 1px solid var(--ink-v2);
+  border-bottom: 1px solid var(--rule-soft);
+  padding-bottom: 12px;
 }
 .records-tab {
-  padding: 9px 18px;
+  padding: 7px 16px;
   border: 1px solid var(--ink-v2);
-  border-bottom: none;
   background: var(--paper-2-v2);
   color: var(--ink-v2);
   font-family: var(--display);
@@ -4467,11 +4570,10 @@ button { font-family: var(--sans); cursor: pointer; }
   font-weight: 400;
   letter-spacing: 0.5px;
   cursor: pointer;
-  border-radius: 0;
-  margin-right: -1px;
-  margin-bottom: -1px;
-  transition: background-color 0.15s ease;
-  min-height: 36px;
+  border-radius: 999px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  min-height: 34px;
+  line-height: 1;
 }
 .records-tab:hover { background: var(--paper-v2); }
 .records-tab.active {
@@ -4480,6 +4582,17 @@ button { font-family: var(--sans); cursor: pointer; }
   border-color: var(--ink-v2);
   box-shadow: none;
   text-shadow: none;
+}
+
+/* Vertical rhythm — the records-view stacks: tabs, content wrapper,
+   goals widget. The wrappers (finances-content, samples-content,
+   journal-content) are not cards themselves, so .card + .card cannot
+   space the Goals card. Explicit gap here keeps the rhythm consistent
+   regardless of which tab is active. */
+.records-view > .finances-content + .goals-widget,
+.records-view > .samples-content + .goals-widget,
+.records-view > .journal-content + .goals-widget {
+  margin-top: 22px;
 }
 
 .ledger-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -4920,10 +5033,11 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 
 /* Rank pill — Apprentice / Beekeeper / Master. Same frame as cash but
-   for a different kind of value (status, not money). */
+   for a different kind of value (status, not money). Carries a small
+   painted figure portrait so the role is recognisable at a glance. */
 .topbar-rank {
-  display: inline-flex; align-items: center;
-  padding: 6px 14px;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 4px;
   background: transparent;
   border: 1px solid var(--rule-soft);
   border-radius: 3px;
@@ -4932,6 +5046,19 @@ button { font-family: var(--sans); cursor: pointer; }
   color: var(--ink);
   letter-spacing: 0.5px;
   line-height: 1;
+}
+.topbar-rank-portrait {
+  width: 28px; height: 28px;
+  border-radius: 2px;
+  object-fit: cover;
+  object-position: center 30%;
+  display: block;
+  flex: none;
+}
+.topbar-rank-label { display: inline-block; }
+@media (max-width: 720px) {
+  .topbar-rank { padding: 3px 10px 3px 3px; gap: 6px; }
+  .topbar-rank-portrait { width: 22px; height: 22px; }
 }
 
 /* Mobile: pills shrink, brand stays hidden (mobile media query already
@@ -5134,31 +5261,23 @@ button.plate-link {
   .map-view .map-hero { max-height: 240px; }
 }
 
-/* RECORDS — break the journal hero out of the narrow column. The
-   tabBar and content stay narrow; the painted scene stretches to the
-   page edges so it can finally breathe on desktop. */
+/* RECORDS — the journal hero sits flush inside the journal-content
+   card. Earlier iterations broke the plate out of the narrow column
+   using `width: 100vw` + negative margins; that pushed the panel-view's
+   scrollWidth past its clientWidth and introduced an inner horizontal
+   scrollbar at every desktop width. The plate now respects the column,
+   reads cleanly at every viewport, and the records-view itself blocks
+   any horizontal overflow defensively. */
+.records-view { overflow-x: hidden; }
 .records-view .journal-content .journal-header-plate {
-  margin-left: -26px;
-  margin-right: -26px;
+  margin: 0;
   border-radius: 0;
 }
 @media (min-width: 1024px) {
-  .records-view .journal-content .journal-header-plate {
-    height: 360px;
-    margin-left: calc(-50vw + 50%);
-    margin-right: calc(-50vw + 50%);
-    width: 100vw;
-    max-width: none;
-  }
-  .records-view .journal-content .journal-header-title { font-size: 54px; }
-  .records-view .journal-content .journal-header-titlebox { left: 60px; bottom: 32px; }
-  .records-view .journal-content .journal-header-rule { width: 80px; margin-bottom: 16px; }
-}
-@media (max-width: 720px) {
-  .records-view .journal-content .journal-header-plate {
-    margin-left: -13px;
-    margin-right: -13px;
-  }
+  .records-view .journal-content .journal-header-plate { height: 320px; }
+  .records-view .journal-content .journal-header-title { font-size: 48px; }
+  .records-view .journal-content .journal-header-titlebox { left: 36px; bottom: 28px; }
+  .records-view .journal-content .journal-header-rule { width: 72px; margin-bottom: 14px; }
 }
 
 /* ============================================================
@@ -5230,8 +5349,92 @@ button.plate-link {
   }
 }
 
+/* The season scene should scale with the viewport, not sit at a fixed
+   pixel height — at 1440x1200 a 320px scene looks postage-stamp and
+   leaves the body content stranded in the top half of the page. Using
+   vh keeps the hero proportionally dominant on tall screens. */
 @media (min-width: 1280px) {
-  .apiary-view-v2 > .apiary-season-band { height: 380px; }
+  .apiary-view-v2 > .apiary-season-band {
+    height: auto;
+    min-height: 380px;
+    max-height: 48vh;
+    aspect-ratio: 21 / 9;
+  }
+}
+
+/* Apiary body content fills the rest of the viewport so the page never
+   ends with an ocean of parchment. The yard grows to consume any
+   remaining vertical space; hive cards stretch to fill their grid
+   rows rather than sitting at their min-height. */
+@media (min-width: 980px) {
+  .apiary-view-v2 > .apiary-body > .apiary-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+  .apiary-view-v2 .apiary-yard.yard {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .apiary-view-v2 .hive-grid.yard-row {
+    flex: 1 1 auto;
+    align-content: start;
+  }
+  /* When there's a yard-empty-poster sibling, let it take any spare
+     room below the grid instead of leaving dead parchment. */
+  .apiary-view-v2 .yard-empty-poster {
+    flex: 0 0 auto;
+    margin-top: auto;
+  }
+}
+
+/* Apiary identity block — editorial layout. The site type sits ABOVE
+   the apiary name as a small-caps kicker line; the name is the
+   headline in IM Fell English. Switcher (when present) pushes to the
+   right on desktop. */
+.apiary-view-v2 .apiary-identity-v2 {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 0;
+  background: transparent;
+  border-bottom: 0;
+}
+.apiary-view-v2 .apiary-identity-v2 .apiary-identity-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.apiary-view-v2 .apiary-identity-v2 .apiary-kicker {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+.apiary-view-v2 .apiary-identity-v2 .apiary-name {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: 0.3px;
+  line-height: 1.05;
+  margin: 0;
+}
+.apiary-view-v2 .apiary-identity-v2 .apiary-switch {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+@media (min-width: 1024px) {
+  .apiary-view-v2 .apiary-identity-v2 .apiary-name { font-size: 36px; }
+}
+@media (max-width: 720px) {
+  .apiary-view-v2 .apiary-identity-v2 { flex-direction: column; align-items: stretch; gap: 10px; }
+  .apiary-view-v2 .apiary-identity-v2 .apiary-name { font-size: 24px; }
+  .apiary-view-v2 .apiary-identity-v2 .apiary-switch { margin: 0; }
 }
 
 /* Bigger hive cards on desktop — the painted state plate carries the
