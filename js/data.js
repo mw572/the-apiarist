@@ -93,6 +93,68 @@ const COSTS = {
 /* --- Equipment & livestock catalogue (the Market) -------------------- */
 
 /* ====================================================================
+   REGIONS — where in the world the player is keeping bees.
+   --------------------------------------------------------------------
+   The region drives which strains the market sells, the seasonal
+   forage calendar, the climate envelope, the pests present (Asian
+   hornet in France, giant hornet in Japan), and what equipment is
+   conventional (National hives in UK, Langstroth in US).
+
+   v1 ships UK as the only playable region. The other entries appear
+   in the title screen picker as "Coming soon" — they are locked so
+   the player can see the shape of the universe without us pretending
+   they work yet. Each unlocks in turn as we build region-specific
+   forage/strain/pest data.
+   ==================================================================== */
+const REGIONS = {
+  uk: {
+    label: 'United Kingdom',
+    icon: '🇬🇧',
+    blurb: 'National hives, mixed countryside forage, gentle winters and wet summers. The default region.',
+    available: true,
+    availableStrains: ['local', 'italian', 'carniolan', 'buckfast', 'native'],
+    hiveSystem: 'National',
+    pestProfile: 'varroa, occasional Asian hornet',
+  },
+  us_ne: {
+    label: 'US — Northeast',
+    icon: '🇺🇸',
+    blurb: 'Langstroth hives, intense summer flow, brutal winters. Italian and Russian stock common.',
+    available: false,
+    availableStrains: ['local', 'italian', 'carniolan', 'russian', 'saskatraz'],
+    hiveSystem: 'Langstroth',
+    pestProfile: 'varroa, small hive beetle, tracheal mites',
+  },
+  france: {
+    label: 'France',
+    icon: '🇫🇷',
+    blurb: 'Dadant hives, generous flora, real Asian hornet pressure. Buckfast and Black bee country.',
+    available: false,
+    availableStrains: ['local', 'buckfast', 'native', 'carniolan'],
+    hiveSystem: 'Dadant',
+    pestProfile: 'varroa, Asian hornet (severe)',
+  },
+  japan: {
+    label: 'Japan',
+    icon: '🇯🇵',
+    blurb: 'Apis cerana japonica alongside mellifera. Giant hornet (suzumebachi) attacks in autumn.',
+    available: false,
+    availableStrains: ['cerana_japonica', 'italian'],
+    hiveSystem: 'Langstroth (mellifera) / top-bar (cerana)',
+    pestProfile: 'varroa (mellifera only), giant hornet',
+  },
+  nz: {
+    label: 'New Zealand',
+    icon: '🇳🇿',
+    blurb: 'Premium manuka country. Italian stock dominant. Severe AFB pressure, no native bees.',
+    available: false,
+    availableStrains: ['local', 'italian', 'carniolan'],
+    hiveSystem: 'Langstroth',
+    pestProfile: 'varroa, AFB (managed under DECA)',
+  },
+};
+
+/* ====================================================================
    HIVE_STRAINS — UK-available honeybee strains.
    --------------------------------------------------------------------
    Each strain has trait multipliers applied where the corresponding

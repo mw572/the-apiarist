@@ -78,14 +78,19 @@ function notable(p){ if (p) _presentQueue.push(p); }
 
 /* --- new game -------------------------------------------------------- */
 
-function startNewGame(name, difficulty){
+function startNewGame(name, difficulty, region){
   if (!DIFFICULTY[difficulty]) difficulty = 'beekeeper';
+  /* Region defaults to UK — the only one playable in v1. Anything
+     locked or unknown is coerced to uk so a save file from a future
+     build that locked region 'us_ne' won't crash here. */
+  if (!region || !REGIONS[region] || !REGIONS[region].available) region = 'uk';
   name = (name || '').trim() || 'Beekeeper';
   var d = DIFFICULTY[difficulty];
 
   Game = {
     version: 2,
     difficulty: difficulty,
+    region:     region,
     beekeeperName: name,
     week: SIM.startWeek,
     cash: d.startCash,
@@ -172,6 +177,10 @@ function startNewGame(name, difficulty){
 */
 function _migrateSave(g) {
   if (!g || !Array.isArray(g.colonies)) return;
+  /* Region — added in v1.0 region picker. Default any pre-region
+     save to 'uk' since that was the implicit world the game already
+     simulated. */
+  if (typeof g.region !== 'string' || !REGIONS[g.region]) g.region = 'uk';
   /* Lab sample queues — added in honey-composition v1. Default to
      empty arrays so older saves don't crash on the weekly check. */
   if (!Array.isArray(g.pendingSamples))    g.pendingSamples    = [];

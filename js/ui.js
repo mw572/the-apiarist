@@ -245,11 +245,16 @@ function _ui_ensureToastStack() {
 }
 
 /**
- * toast(text, tone) — tone: 'good'|'bad'|'plain'
+ * toast(text, tone) — paper-note style notification.
+ *
+ * tone: 'good' | 'bad' | 'warn' | 'plain' (default plain). Each tone
+ * paints a thin left-edge accent (moss / earthy red / ochre-deep) on a
+ * paper-cream background. The styling is all in `.toast` and tone
+ * modifier classes — JS only assigns the class name.
  */
 function toast(text, tone) {
   var stack = _ui_ensureToastStack();
-  var cls = 'toast' + (tone && tone !== 'plain' ? ' ' + tone : '');
+  var cls = 'toast' + (tone && tone !== 'plain' ? ' toast-' + tone : ' toast-plain');
   var el = h('div', { class: cls, text: text });
   stack.appendChild(el);
   while (stack.children.length > 4) stack.removeChild(stack.firstChild);
@@ -273,8 +278,10 @@ function showExplainer(id, title, body) {
   if (Game.flags.seenExplainers[id]) return;
   Game.flags.seenExplainers[id] = true;
 
+  /* Editorial / field-notebook style: no decorative emoji art at the
+     top of the explainer. The title carries the visual weight; the
+     body reads like a page from a beekeeping journal. */
   var wrapper = h('div', { class: 'explainer' }, [
-    h('div', { class: 'explainer-art' }, _ui_explainerIcon(id)),
     h('div', { class: 'explainer-body', html: body })
   ]);
 
@@ -304,82 +311,184 @@ function _ui_explainerIcon(id) {
 /**
  * renderTitleScreen()
  * Renders the new-game / continue screen into #app.
+ *
+ * Plate-led layout (Stage 1 of the visual overhaul): hero scene plate
+ * with the title overlaid, parchment "page" beneath holding the name
+ * field, region picker (landscape plates as card backgrounds), and a
+ * difficulty picker (figure plates as character cards).
+ *
+ * The outer wrapper keeps the `.title-screen` class and the inner
+ * paper plate keeps `.title-card` so existing QA selectors still
+ * resolve. The figure/region cards keep `.diff-pick` / `.region-pick`
+ * for the same reason (battery.js / narrate.js click them by class).
  */
 function renderTitleScreen() {
   var app = document.getElementById('app');
   app.innerHTML = '';
 
   var chosenDiff = 'beekeeper';
+  var chosenRegion = 'uk';
   var nameInput;
+  var titlePage;
 
-  var diffCards = Object.keys(DIFFICULTY).map(function(key) {
-    var d = DIFFICULTY[key];
+  /* ----- Region cards: full landscape plates as the card surface.
+     Locked regions are desaturated and not clickable. ----- */
+  var regionPlate = {
+    uk:      'img/plates/region-uk.png',
+    us_ne:   'img/plates/region-us-northeast.png',
+    france:  'img/plates/region-france.png',
+    japan:   'img/plates/region-japan.png',
+    nz:      'img/plates/region-nz.png',
+  };
+  var regionCards = Object.keys(REGIONS).map(function (key) {
+    var r = REGIONS[key];
+    var plate = regionPlate[key] || '';
+    var classes = 'title-region region-pick';
+    if (key === chosenRegion) classes += ' selected sel';
+    if (!r.available) classes += ' locked';
     var card = h('div', {
-      class: 'diff-pick' + (key === chosenDiff ? ' sel' : ''),
-      onclick: function() {
-        chosenDiff = key;
-        var all = titleCard.querySelectorAll('.diff-pick');
-        all.forEach(function(c) { c.classList.remove('sel'); });
+      class: classes,
+      title: r.available ? r.blurb : (r.blurb + ' — coming soon'),
+      style: plate ? { backgroundImage: 'url("' + plate + '")' } : null,
+      onclick: function () {
+        if (!r.available) return;
+        chosenRegion = key;
+        var all = titlePage.querySelectorAll('.title-region');
+        all.forEach(function (c) { c.classList.remove('selected'); c.classList.remove('sel'); });
+        card.classList.add('selected');
         card.classList.add('sel');
       }
     }, [
-      h('div', { class: 'di' }, d.icon),
-      h('div', { class: 'dn' }, d.label),
-      h('div', { class: 'dd' }, d.blurb)
+      h('div', { class: 'title-region-label' }, r.label + (r.available ? '' : ' — soon'))
     ]);
     return card;
   });
 
+  /* ----- Difficulty cards: figure plate as the carrier, name + tag +
+     blurb below (or beside on mobile via CSS). ----- */
+  var figurePlate = {
+    apprentice: 'img/plates/figure-apprentice.png',
+    beekeeper:  'img/plates/figure-beekeeper.png',
+    master:     'img/plates/figure-master.png',
+  };
+  var difficultyTag = {
+    apprentice: 'Forgiving',
+    beekeeper:  'True to life',
+    master:     'No hand-holding',
+  };
+  var diffCards = Object.keys(DIFFICULTY).map(function (key) {
+    var d = DIFFICULTY[key];
+    var plate = figurePlate[key] || '';
+    var classes = 'title-diff diff-pick';
+    if (key === chosenDiff) classes += ' selected sel';
+    var card = h('div', {
+      class: classes,
+      onclick: function () {
+        chosenDiff = key;
+        var all = titlePage.querySelectorAll('.title-diff');
+        all.forEach(function (c) { c.classList.remove('selected'); c.classList.remove('sel'); });
+        card.classList.add('selected');
+        card.classList.add('sel');
+      }
+    }, [
+      h('div', {
+        class: 'title-diff-img',
+        style: plate ? { backgroundImage: 'url("' + plate + '")' } : null
+      }),
+      h('div', { class: 'title-diff-body' }, [
+        h('div', { class: 'title-diff-name dn' }, d.label),
+        h('div', { class: 'title-diff-tag' }, difficultyTag[key] || ''),
+        h('div', { class: 'title-diff-blurb dd' }, d.blurb),
+      ])
+    ]);
+    return card;
+  });
+
+  /* ----- Hero scene plate + overlaid title. ----- */
+  var hero = h('div', { class: 'title-hero' }, [
+    h('div', { class: 'title-hero-overlay' }, [
+      h('div', { class: 'title-hero-rule' }),
+      h('div', { class: 'title-hero-title' }, 'The Apiarist'),
+      h('div', { class: 'title-hero-sub' }, 'a beekeeping simulation for the curious and patient'),
+    ])
+  ]);
+
+  /* ----- Sections. ----- */
+  function sectionHead(label) {
+    return h('div', { class: 'title-section-head' }, [
+      h('span', { class: 'title-section-mark' }, label),
+      h('span', { class: 'title-section-rule' })
+    ]);
+  }
+
+  var nameSection = h('div', { class: 'title-section' }, [
+    sectionHead('Your name'),
+    (nameInput = h('input', {
+      class: 'title-input',
+      type: 'text',
+      placeholder: 'e.g. Eleanor Holt'
+    }))
+  ]);
+
+  var regionSection = h('div', { class: 'title-section' }, [
+    sectionHead('Where in the world'),
+    h('div', { class: 'title-region-grid' }, regionCards)
+  ]);
+
+  var diffSection = h('div', { class: 'title-section' }, [
+    sectionHead('Choose your standing'),
+    h('div', { class: 'title-diff-grid' }, diffCards)
+  ]);
+
+  /* ----- Buttons. Start is solid ink. Secondaries are ghost. ----- */
   var startBtn = h('button', {
-    class: 'btn btn-primary btn-lg btn-block',
-    style: { marginTop: '16px' },
+    class: 'title-btn btn-primary',
     text: 'Start beekeeping',
-    onclick: function() {
+    onclick: function () {
       var name = (nameInput.value || '').trim() || 'Beekeeper';
       if (typeof startNewGame === 'function') {
-        startNewGame(name, chosenDiff);
+        startNewGame(name, chosenDiff, chosenRegion);
       }
     }
   });
 
-  var children = [
-    h('div', { class: 'bee-crest' }, '🐝'),
-    h('div', { class: 'game-name' }, 'The Apiarist'),
-    h('div', { class: 'tagline' }, 'A beekeeping simulation for the curious and patient'),
-    h('div', { class: 'field' }, [
-      h('label', { text: 'Your name' }),
-      (nameInput = h('input', { type: 'text', placeholder: 'e.g. Eleanor Holt', style: { width: '100%' } }))
-    ]),
-    h('div', { class: 'field' }, [
-      h('label', { text: 'Difficulty' }),
-      h('div', { class: 'diff-picks' }, diffCards)
-    ]),
-    startBtn
-  ];
+  var actions = [startBtn];
 
   if (typeof hasSave === 'function' && hasSave()) {
-    var continueBtn = h('button', {
-      class: 'btn btn-lg btn-block',
-      style: { marginTop: '8px' },
+    actions.push(h('button', {
+      class: 'title-btn ghost',
       text: 'Continue saved game',
-      onclick: function() {
+      onclick: function () {
         if (typeof loadGame === 'function') {
           loadGame();
           render();
         }
       }
-    });
-    children.push(continueBtn);
+    }));
   }
 
-  children.push(h('button', {
-    class: 'btn btn-block', style: { marginTop: '8px' },
+  actions.push(h('button', {
+    class: 'title-btn ghost',
     text: 'Load a save file',
-    onclick: function() { _ui_pickSaveFile(); }
+    onclick: function () { _ui_pickSaveFile(); }
   }));
 
-  var titleCard = h('div', { class: 'title-card' }, children);
-  var screen = h('div', { class: 'title-screen' }, titleCard);
+  var actionsBlock = h('div', { class: 'title-actions' }, actions);
+
+  /* ----- The parchment "page" that everything below the hero lives on.
+     Marked as .title-card too so existing QA selectors find it. ----- */
+  titlePage = h('div', { class: 'title-page title-card' }, [
+    nameSection,
+    regionSection,
+    diffSection,
+    actionsBlock
+  ]);
+
+  var footer = h('div', { class: 'title-footer-note' },
+    'Bees reward attention. They punish neglect. Same as the real thing.');
+
+  var plate = h('div', { class: 'title-plate' }, [hero, titlePage, footer]);
+  var screen = h('div', { class: 'title-screen' }, plate);
   app.appendChild(screen);
 }
 
@@ -546,10 +655,7 @@ function _ui_buildTopbar() {
   var sl = (typeof skillLevel === 'function') ? skillLevel(xp) : 1;
 
   return h('div', { class: 'topbar' }, [
-    h('div', { class: 'brand' }, [
-      h('span', { class: 'bee' }, '🐝'),
-      ' The Apiarist'
-    ]),
+    h('div', { class: 'brand' }, 'The Apiarist'),
     h('div', { class: 'topbar-clock' }, [
       h('span', { class: 'weather-ico' }, wIcon),
       h('div', { class: 'when' }, [
@@ -558,21 +664,11 @@ function _ui_buildTopbar() {
       ])
     ]),
     h('div', { class: 'topbar-spacer' }),
-    h('div', { class: 'topbar-stat cash' }, [
+    h('div', { class: 'topbar-cash', title: 'Cash on hand' }, [
       h('b', { text: fmtMoney(Game.cash) }),
       h('small', { text: 'Cash' })
     ]),
-    h('div', { class: 'topbar-stat ev', title: 'Cash + honey + colonies + equipment at book value' }, [
-      h('b', { text: fmtMoney(typeof enterpriseValue === 'function' ? enterpriseValue() : 0) }),
-      h('small', { text: 'Business value' })
-    ]),
-    h('div', { class: 'topbar-stat skill' }, [
-      h('b', { text: titleName }),
-      h('small', { text: 'Skill level ' + sl })
-    ]),
-    h('button', {
-      class: 'topbar-btn', title: 'Save & Load', onclick: _ui_openSaveLoad
-    }, '💾')
+    h('div', { class: 'topbar-rank', title: 'Beekeeper rank' }, titleName)
   ]);
 }
 
@@ -585,19 +681,19 @@ function _ui_buildNavbar() {
 
   var badCount = (Game.advisor || []).filter(function(a) { return a.tone === 'bad'; }).length;
 
+  /* Painterly-treatise navbar — no emoji icons, just labels in IM Fell.
+     The painted plates carry visual weight inside each view; the nav
+     is restrained book-tab marks at the foot of the page. */
   var navItems = [
-    { key: 'apiary',   label: 'Apiary',   ico: '🏡', pip: badCount > 0 ? badCount : 0 },
-    { key: 'map',      label: 'Map',      ico: '🗺️' },
-    { key: 'market',   label: 'Market',   ico: '🛒' },
-    { key: 'handbook', label: 'Handbook', ico: '📗' },
-    { key: 'records',  label: 'Records',  ico: '📋' }
+    { key: 'apiary',   label: 'Apiary',   pip: badCount > 0 ? badCount : 0 },
+    { key: 'map',      label: 'Map'    },
+    { key: 'market',   label: 'Market' },
+    { key: 'handbook', label: 'Handbook' },
+    { key: 'records',  label: 'Records' }
   ];
 
   var btns = navItems.map(function(item) {
-    var children = [
-      h('span', { class: 'ico' }, item.ico),
-      item.label
-    ];
+    var children = [item.label];
     if (item.pip) {
       children.push(h('span', { class: 'pip' }, String(item.pip)));
     }
@@ -1005,7 +1101,44 @@ function _ui_buildApiaryView() {
   var siteLabel = siteInfo.label || siteType;
   var siteIcon = siteInfo.icon || '';
 
-  // Apiary switcher
+  /* ----------------------------------------------------------------
+     1. Season scene band — painted oil-on-canvas plate at the top.
+     The painting carries the seasonal mood; CSS object-fit handles
+     the crop. ---------------------------------------------------- */
+  var seasonPlateMap = {
+    spring: 'img/plates/scene-spring-buildup.png',
+    summer: 'img/plates/scene-summer-flow.png',
+    autumn: 'img/plates/scene-autumn-harvest.png',
+    winter: 'img/plates/scene-winter-apiary.png'
+  };
+  var seasonLabelMap = {
+    spring: 'Spring build-up',
+    summer: 'Summer flow',
+    autumn: 'Autumn harvest',
+    winter: 'Winter'
+  };
+  var hbSeason = (HANDBOOK_LINKS.season && HANDBOOK_LINKS.season[season]) || null;
+  var seasonBand = h('button', {
+    type: 'button',
+    class: 'apiary-season-band season-' + season + (hbSeason ? ' plate-link' : ''),
+    title: hbSeason ? 'Read about the beekeeping ' + season : '',
+    onclick: hbSeason ? function() { openHandbookArticle(hbSeason); } : null
+  }, [
+    h('img', {
+      class: 'asb-plate',
+      src: seasonPlateMap[season] || seasonPlateMap.spring,
+      alt: (seasonLabelMap[season] || 'Season') + ' at the apiary'
+    }),
+    h('div', { class: 'asb-overlay' }),
+    h('div', { class: 'asb-caption' }, [
+      h('span', { class: 'asb-season', text: seasonLabelMap[season] || 'Season' }),
+      forageNote ? h('span', { class: 'asb-forage', text: forageNote }) : null
+    ]),
+    hbSeason ? h('span', { class: 'plate-link-mark', text: '✣' }) : null
+  ]);
+
+  /* ----------------------------------------------------------------
+     2. Apiary identity strip — name, site type pill, switcher. ---- */
   var switcherBtns = [];
   if (apiaries.length > 1) {
     switcherBtns = apiaries.map(function(ap) {
@@ -1021,14 +1154,14 @@ function _ui_buildApiaryView() {
     });
   }
 
-  var apiaryHead = h('div', { class: 'apiary-head' }, [
-    h('h2', { text: apiary ? apiary.name : 'No Apiary' }),
-    siteType ? h('span', { class: 'site-tag' }, siteIcon + ' ' + siteLabel) : null,
-    h('span', { class: 'forage-note' }, forageNote ? 'Forage: ' + forageNote : ''),
+  var apiaryHead = h('div', { class: 'apiary-head apiary-identity' }, [
+    h('h2', { class: 'apiary-name', text: apiary ? apiary.name : 'No Apiary' }),
+    siteType ? h('span', { class: 'site-tag' }, (siteIcon ? siteIcon + ' ' : '') + siteLabel) : null,
     switcherBtns.length ? h('div', { class: 'apiary-switch' }, switcherBtns) : null
   ]);
 
-  // Hives
+  /* ----------------------------------------------------------------
+     3. Hive grid — clean grid of colony cards (no cartoon SVG). ---- */
   var colonies = [];
   if (apiary && typeof coloniesIn === 'function') {
     colonies = coloniesIn(apiary.id);
@@ -1038,47 +1171,75 @@ function _ui_buildApiaryView() {
     return _ui_buildHiveCard(col);
   });
 
-  // Spare hive slots — one card per empty hive box waiting to be populated
+  // Spare hive slots — one card per empty hive box awaiting a colony
   var spareCount = (Game.inventory && Game.inventory.spareHives) || 0;
   for (var si2 = 0; si2 < spareCount; si2++) {
     hiveNodes.push(h('div', {
-      class: 'spare-hive-slot',
+      class: 'hive hive-card hive-card-empty spare-hive-slot',
       onclick: function() { Game.ui.view = 'market'; render(); }
     }, [
-      h('div', { class: 'spare-hive-icon' }, '📦'),
-      h('span', { class: 'spare-hive-label' }, 'Empty hive'),
-      h('span', { class: 'spare-hive-sub' }, 'Ready for a colony — visit Market')
+      h('div', { class: 'hcp-icon hcp-icon-empty' }, h('span', { class: 'hcp-icon-mark' }, '⌂')),
+      h('div', { class: 'hcp-body' }, [
+        h('div', { class: 'hcp-name-row' }, h('span', { class: 'hcp-name', text: 'Empty hive' })),
+        h('div', { class: 'hcp-state', text: 'Ready for a colony — visit Market' })
+      ])
     ]));
   }
 
-  // Bait hive slots — one visible card per bait hive in inventory
+  // Bait hive slots — one card per bait hive in inventory
   var baitCount = (Game.inventory && Game.inventory.baitHives) || 0;
   for (var bi = 0; bi < baitCount; bi++) {
-    hiveNodes.push(h('div', { class: 'bait-hive-slot' }, [
-      h('div', { class: 'bait-hive-icon' }, '🪤'),
-      h('span', { class: 'bait-hive-label' }, 'Bait hive'),
-      h('span', { class: 'bait-hive-sub' }, 'Waiting for a swarm')
+    hiveNodes.push(h('div', { class: 'hive hive-card hive-card-bait bait-hive-slot' }, [
+      h('div', { class: 'hcp-icon hcp-icon-bait' }, h('span', { class: 'hcp-icon-mark' }, '◇')),
+      h('div', { class: 'hcp-body' }, [
+        h('div', { class: 'hcp-name-row' }, h('span', { class: 'hcp-name', text: 'Bait hive' })),
+        h('div', { class: 'hcp-state', text: 'Waiting for a swarm' })
+      ])
     ]));
   }
 
   var addSlot = h('div', {
-    class: 'add-hive-slot',
+    class: 'hive hive-card hive-card-add add-hive-slot',
     onclick: function() {
       Game.ui.view = 'market';
       render();
     }
   }, [
-    h('div', { class: 'plus' }, '+'),
-    h('span', { text: 'Add a colony' })
+    h('div', { class: 'hcp-icon hcp-icon-add' }, h('span', { class: 'hcp-icon-mark plus' }, '+')),
+    h('div', { class: 'hcp-body' }, [
+      h('div', { class: 'hcp-name-row' }, h('span', { class: 'hcp-name', text: 'Add a colony' })),
+      h('div', { class: 'hcp-state', text: 'Open the market to bring bees home' })
+    ])
   ]);
 
   hiveNodes.push(addSlot);
 
-  var yardRow = h('div', { class: 'yard-row' }, hiveNodes);
-  var scene = h('div', { class: 'yard-scene', html: _ui_apiaryScene(season, siteType, apiary ? apiary.id : 0) });
-  var yard = h('div', { class: 'yard ' + (season || 'spring') }, [scene, yardRow]);
+  var hiveGrid = h('div', { class: 'hive-grid yard-row' }, hiveNodes);
 
-  /* Engagement update — pending swarm alert for this apiary */
+  /* When there are no live colonies (just the Add slot), fill the
+     dead parchment with a painted yard scene so the page has weight
+     instead of an ocean of empty cream. */
+  var emptyPoster = null;
+  if (colonies.length === 0 && spareCount === 0 && baitCount === 0) {
+    emptyPoster = h('button', {
+      type: 'button',
+      class: 'yard-empty-poster plate-link',
+      title: 'Read about choosing your first bees',
+      onclick: function() { openHandbookArticle('first-bees'); }
+    }, [
+      h('img', { src: 'img/plates/scene-spring-buildup.png', alt: '' }),
+      h('div', { class: 'yep-scrim' }),
+      h('div', { class: 'yep-caption' }, [
+        h('div', { class: 'yep-title', text: 'A first hive in spring' }),
+        h('div', { class: 'yep-sub', text: 'Buy a nucleus from the market or set out a bait hive — your apiary starts with one decision.' })
+      ]),
+      h('span', { class: 'plate-link-mark', text: '✣' })
+    ]);
+  }
+
+  var yard = h('div', { class: 'apiary-yard yard season-' + season }, [hiveGrid, emptyPoster]);
+
+  /* Pending swarm alert for this apiary — kept above the grid. */
   var pendingSwarmAlert = null;
   if (Game.flags && Game.flags.pendingSwarm && apiary && Game.flags.pendingSwarm.apiaryId === apiary.id) {
     pendingSwarmAlert = h('div', { class: 'swarm-alert-card' }, [
@@ -1100,30 +1261,181 @@ function _ui_buildApiaryView() {
     yard
   ]);
 
-  // Sidebar
+  // Sidebar — winter letter / year-on-year / mentor / action list / advance bar
   var sidebar = _ui_buildSidebar();
 
-  return h('div', { class: 'apiary-view' }, [main, sidebar]);
+  return h('div', { class: 'apiary-view apiary-view-v2' }, [
+    seasonBand,
+    h('div', { class: 'apiary-body' }, [main, sidebar])
+  ]);
 }
 
 /* ====================================================================
    TERRITORY MAP VIEW — overview of all sites, forage, honey types
+
+   Plate-led rebuild (Stage 4 of the visual overhaul): hero band shows
+   the painted landscape of the player's primary apiary site. Each site
+   type below is a 16:9 card with its painted scene as the background,
+   a soft gradient scrim at the bottom, and the label set in IM Fell
+   English across the scrim. Active sites render a paper-dim band of
+   apiaries beneath; inactive sites show a soft "Establish →" prompt.
+
+   When `_ui_mapSelectedSite` is set, the view switches to a
+   single-site dossier: a giant landscape hero, the full tradition
+   essay, the facts table, and a deep link into the Handbook.
    ==================================================================== */
+var _ui_mapSelectedSite = null;
+
 function _ui_buildMapView() {
   var season = (typeof seasonOfWeek === 'function') ? seasonOfWeek(Game.week) : 'spring';
   var wkInYear = ((Game.week - 1) % 52) + 1;
   var apiaries = Game.apiaries || [];
 
-  /* All possible site types with their characteristics */
+  /* Each site is a small lesson — the painted plate is the hero, the
+     copy teaches what the site actually means for a beekeeper. Forage,
+     yield, honey character, strain affinity, and the tradition note
+     give the player a reason to spend time on this page beyond just
+     picking somewhere to put bees. */
   var SITE_META = {
-    rural:    { label: 'Rural Woodland', ico: '🌳', honey: 'Mixed summer blossom', color: '#6f8f44', textCol: '#fff', forage: 'Good all season' },
-    farmland: { label: 'Arable Farmland', ico: '🌾', honey: 'Oilseed rape (spring)', color: '#d4a020', textCol: '#2a1a00', forage: 'Strong spring, variable summer' },
-    urban:    { label: 'Urban Garden', ico: '🏘️', honey: 'Summer garden blend', color: '#7a8a9a', textCol: '#fff', forage: 'Diverse, long season' },
-    orchard:  { label: 'Orchard', ico: '🍎', honey: 'Spring blossom', color: '#8a4a20', textCol: '#fff', forage: 'Rich spring, quieter summer' },
-    moorland: { label: 'Moorland', ico: '🌿', honey: 'Heather (late summer)', color: '#6a3068', textCol: '#fff', forage: 'Sparse, heather peak Jul-Sep' }
+    rural:    {
+      label: 'Rural Woodland',
+      honey: 'Mixed summer wildflower',
+      forageNote: 'Hawthorn into bramble into lime',
+      foragePeriod: 'Apr — Sep',
+      yield: '20–30 kg per colony',
+      strain: 'Local mongrel · Buckfast',
+      tradition: 'The classic British apiary. A few hives at the edge of a wood, a hedgerow of hawthorn, clover in the meadow. Steady, dependable, never spectacular. The site real beekeepers describe with the most affection — there is always something coming into flower.',
+      plate: 'img/plates/region-uk.png'
+    },
+    farmland: {
+      label: 'Arable Farmland',
+      honey: 'Oilseed rape (spring), variable later',
+      forageNote: 'Oilseed rape April–May; thin afterwards',
+      foragePeriod: 'Apr — early Jul',
+      yield: '40–60 kg in a rape year',
+      strain: 'Italian · Carniolan (fast spring build)',
+      tradition: 'High early-season yield, but the rape sets rock-hard in the comb within weeks — you must extract promptly or lose the crop. After mid-summer the fields are bare and you may need to feed. A site for the active, not the leave-them-alone keeper.',
+      plate: 'img/plates/site-farmland.png'
+    },
+    urban:    {
+      label: 'Urban Garden',
+      honey: 'Summer garden blend',
+      forageNote: 'Lavender, lime, bramble, ivy — long tail',
+      foragePeriod: 'Mar — Nov',
+      yield: '15–25 kg per colony',
+      strain: 'Buckfast (calm) · Local',
+      tradition: 'A surprisingly forgiving site. Garden after garden of bee-friendly flora makes for a long, even season into late autumn ivy. Temperament matters — defensive bees risk neighbours. Yields are modest but the honey is distinctly floral.',
+      plate: 'img/plates/site-urban.png'
+    },
+    orchard:  {
+      label: 'Orchard',
+      honey: 'Apple and pear blossom',
+      forageNote: 'Fruit blossom in April, quieter after',
+      foragePeriod: 'Apr — Jul',
+      yield: '18–28 kg per colony',
+      strain: 'Carniolan (early flow) · Buckfast',
+      tradition: 'A spring site above all. Apple and pear blossom give a delicate, pale honey that commercial buyers will sometimes label by varietal. Beekeepers are often welcomed by orchard owners for pollination — sometimes free siting in exchange.',
+      plate: 'img/plates/site-orchard.png'
+    },
+    moorland: {
+      label: 'Moorland',
+      honey: 'Heather (Calluna) — the premium crop',
+      forageNote: 'Calluna heather, ling, bell heather',
+      foragePeriod: 'Aug — early Sep',
+      yield: '15–25 kg of heather honey',
+      strain: 'AMM Native · Local (hardy stock)',
+      tradition: 'A migration apiary. UK beekeepers haul colonies up to the moor in late July and back down a few weeks later, just for the heather flow. The honey is thixotropic — gel-like — and has to be pressed, not spun. Prices reach £20+ per jar. The premium crop of the British beekeeping year.',
+      plate: 'img/plates/scene-moorland.png'
+    }
   };
 
-  /* Map territory cards */
+  /* ── SITE DOSSIER ─────────────────────────────────────────────────
+     When a site is selected, the map view becomes a single-site deep
+     dive: giant landscape hero, the full tradition essay, facts table
+     and a deep link into the Handbook. The territory grid is replaced
+     entirely; a "Back to all territories" button restores it. */
+  if (_ui_mapSelectedSite && SITE_META[_ui_mapSelectedSite]) {
+    var ds = SITE_META[_ui_mapSelectedSite];
+    var dsActive = (Game.apiaries || []).filter(function(ap) { return ap.siteType === _ui_mapSelectedSite; });
+    var dsTotalCols = dsActive.reduce(function(sum, ap) {
+      return sum + ((typeof coloniesIn === 'function') ? coloniesIn(ap.id).filter(function(c) { return c.alive; }).length : 0);
+    }, 0);
+    var dsHbId = (HANDBOOK_LINKS.sites && HANDBOOK_LINKS.sites[_ui_mapSelectedSite]) || 'apiary-site';
+
+    var dossierHero = h('div', {
+      class: 'site-dossier-hero',
+      style: ds.plate ? { backgroundImage: 'url("' + ds.plate + '")' } : null
+    }, [
+      h('div', { class: 'site-dossier-scrim' }),
+      h('div', { class: 'site-dossier-hero-inner' }, [
+        h('div', { class: 'site-dossier-rule' }),
+        h('h1', { class: 'site-dossier-title', text: ds.label }),
+        h('div', { class: 'site-dossier-sub', text: ds.honey })
+      ])
+    ]);
+
+    var backBtn = h('button', {
+      class: 'site-dossier-back',
+      onclick: function() { _ui_mapSelectedSite = null; render(); }
+    }, '← All territories');
+
+    var dossierFacts = h('dl', { class: 'site-dossier-facts' }, [
+      h('dt', {}, 'Forage window'), h('dd', { text: ds.foragePeriod }),
+      h('dt', {}, 'Forage note'),   h('dd', { text: ds.forageNote }),
+      h('dt', {}, 'Honey'),         h('dd', { text: ds.honey }),
+      h('dt', {}, 'Typical yield'), h('dd', { text: ds.yield }),
+      h('dt', {}, 'Best strain'),   h('dd', { text: ds.strain }),
+      h('dt', {}, 'Your apiaries'), h('dd', { text: dsActive.length === 0
+        ? 'No apiary here yet'
+        : dsActive.length + ' site' + (dsActive.length === 1 ? '' : 's') + ' · ' + dsTotalCols + ' col' + (dsTotalCols === 1 ? 'ony' : 'onies') })
+    ]);
+
+    var dossierTradition = h('p', { class: 'site-dossier-tradition', text: ds.tradition });
+
+    var dossierActions = h('div', { class: 'site-dossier-actions' }, [
+      h('button', {
+        class: 'site-dossier-cta',
+        onclick: function() { openHandbookArticle(dsHbId); }
+      }, [
+        h('span', { class: 'site-dossier-cta-mark', text: '✣' }),
+        h('span', { class: 'site-dossier-cta-label', text: 'Read about siting in the Handbook' })
+      ]),
+      dsActive.length === 0
+        ? h('button', { class: 'site-dossier-establish', onclick: function() {
+            Game.ui.view = 'market';
+            _ui_marketTab = 'apiaries';
+            _ui_mapSelectedSite = null;
+            render();
+          } }, 'Establish an apiary here →')
+        : null
+    ]);
+
+    return h('div', { class: 'panel-view map-view site-dossier' }, [
+      dossierHero,
+      h('div', { class: 'map-content' }, [
+        backBtn,
+        dossierTradition,
+        dossierFacts,
+        dossierActions
+      ])
+    ]);
+  }
+
+  /* Primary apiary — used to choose the hero plate at the top of the
+     page. If the player has no apiaries yet, fall back to the rural
+     scene. */
+  var primaryApiary = null;
+  if (apiaries.length) {
+    primaryApiary = apiaries.reduce(function(best, ap) {
+      var n = (typeof coloniesIn === 'function') ? coloniesIn(ap.id).length : 0;
+      var bn = best ? ((typeof coloniesIn === 'function') ? coloniesIn(best.id).length : 0) : -1;
+      return (!best || n > bn) ? ap : best;
+    }, null);
+  }
+  var heroSite = primaryApiary ? primaryApiary.siteType : 'rural';
+  var heroMeta = SITE_META[heroSite] || SITE_META.rural;
+
+  /* Map territory cards — one per site type, plate as background. */
   var territoryCards = Object.keys(SITE_META).map(function(siteKey) {
     var meta = SITE_META[siteKey];
     var siteApiaries = apiaries.filter(function(ap) { return ap.siteType === siteKey; });
@@ -1136,7 +1448,7 @@ function _ui_buildMapView() {
       var count = (typeof coloniesIn === 'function') ? coloniesIn(ap.id).filter(function(c) { return c.alive; }).length : 0;
       return h('div', { class: 'map-apiary-line' }, [
         h('span', { class: 'map-ap-dot' }),
-        h('b', { text: ap.name }),
+        h('b', { class: 'map-ap-name', text: ap.name }),
         h('span', { class: 'map-ap-cols', text: count + ' colon' + (count === 1 ? 'y' : 'ies') }),
         h('button', { class: 'btn btn-xs', onclick: function() {
           Game.ui.selectedApiary = ap.id;
@@ -1146,44 +1458,87 @@ function _ui_buildMapView() {
       ]);
     });
 
-    return h('div', {
-      class: 'map-territory' + (isActive ? ' map-territory-active' : ''),
-      style: { '--territory-color': meta.color, '--territory-text': meta.textCol }
+    /* Plate band: 16:9 painted scene + scrim + label across the bottom.
+       Active card carries a small badge in the top-right. The whole
+       band is a button — click → site dossier (single-site full
+       page). The dossier has its own ✣ deep-link into the Handbook. */
+    var plateBand = h('button', {
+      type: 'button',
+      class: 'map-territory-plate plate-link' + (meta.plate ? '' : ' map-territory-plate-empty') + (isActive ? '' : ' map-territory-plate-dim'),
+      style: meta.plate ? { backgroundImage: 'url("' + meta.plate + '")' } : null,
+      title: 'Open ' + meta.label + ' dossier',
+      onclick: function() { _ui_mapSelectedSite = siteKey; render(); }
     }, [
-      h('div', { class: 'map-territory-header' }, [
-        h('span', { class: 'map-site-ico' }, meta.ico),
-        h('div', { class: 'map-site-info' }, [
-          h('b', { text: meta.label }),
-          h('span', { class: 'map-site-honey', text: '🍯 ' + meta.honey })
-        ]),
-        isActive ? h('span', { class: 'map-active-badge' }, totalCols + ' col' + (totalCols === 1 ? 'ony' : 'onies')) : null
+      h('div', { class: 'map-territory-scrim' }),
+      isActive ? h('div', { class: 'map-active-badge', text: totalCols + ' col' + (totalCols === 1 ? 'ony' : 'onies') }) : null,
+      h('div', { class: 'map-territory-label' }, [
+        h('div', { class: 'map-territory-title', text: meta.label }),
+        h('div', { class: 'map-territory-honey', text: meta.honey })
       ]),
-      h('div', { class: 'map-forage-strip', text: meta.forage }),
-      isActive ? h('div', { class: 'map-apiaries-list' }, apList) : h('div', { class: 'map-empty-site' }, [
-        h('span', { text: 'No apiary here yet.' }),
-        h('button', { class: 'btn btn-sm btn-leaf', onclick: function() {
-          Game.ui.view = 'market';
-          _ui_marketTab = 'apiaries';
-          render();
-        } }, 'Establish →')
+      h('span', { class: 'plate-link-mark', text: '✣' })
+    ]);
+
+    /* Rich body — three little facts tables + a tradition note that
+       teaches the player what this site actually means for a beekeeper.
+       The painted plate above carries the visual weight; this body
+       carries the wisdom. */
+    var facts = h('dl', { class: 'map-facts' }, [
+      h('dt', {}, 'Forage'),     h('dd', { text: meta.foragePeriod + ' · ' + meta.forageNote }),
+      h('dt', {}, 'Honey'),      h('dd', { text: meta.honey }),
+      h('dt', {}, 'Typical yield'), h('dd', { text: meta.yield }),
+      h('dt', {}, 'Best strain'),h('dd', { text: meta.strain })
+    ]);
+    var tradition = h('p', { class: 'map-tradition', text: meta.tradition });
+
+    return h('div', {
+      class: 'map-territory' + (isActive ? ' map-territory-active' : ' map-territory-inactive')
+    }, [
+      plateBand,
+      h('div', { class: 'map-territory-body' }, [
+        facts,
+        tradition,
+        isActive
+          ? h('div', { class: 'map-apiaries-list' }, apList)
+          : h('div', { class: 'map-empty-site' }, [
+              h('span', { class: 'map-empty-note', text: 'No apiary here yet' }),
+              h('button', { class: 'btn btn-sm', onclick: function() {
+                Game.ui.view = 'market';
+                _ui_marketTab = 'apiaries';
+                render();
+              } }, 'Establish →')
+            ])
       ])
     ]);
   });
 
-  /* Season strip — what's flowering now */
+  /* Season strip — restrained ink type, no emoji as chrome (season
+     name carries the weight). */
   var mo = (typeof monthOfWeek === 'function') ? monthOfWeek(wkInYear) : 0;
   var forageNote = (FORAGE && FORAGE.sources) ? FORAGE.sources[mo] : '';
   var seasonStrip = h('div', { class: 'map-season-strip ' + season }, [
-    h('span', { class: 'map-season-ico' }, season === 'spring' ? '🌸' : season === 'summer' ? '☀️' : season === 'autumn' ? '🍂' : '❄️'),
-    h('b', { text: season.charAt(0).toUpperCase() + season.slice(1) }),
-    forageNote ? h('span', { text: ' — ' + forageNote }) : null
+    h('span', { class: 'map-season-label', text: season.charAt(0).toUpperCase() + season.slice(1) }),
+    forageNote ? h('span', { class: 'map-season-forage', text: forageNote }) : null
   ]);
 
-  return h('div', { class: 'panel-view narrow' }, [
-    h('div', { class: 'page-title' }, '🗺️ Territory Map'),
-    h('div', { class: 'page-sub' }, 'Your apiaries across the landscape. Each site has its own forage, honey character, and seasonal rhythm.'),
-    seasonStrip,
-    h('div', { class: 'map-grid' }, territoryCards)
+  /* Hero band — 16:9 painted scene of the player's main site, title
+     set in IM Fell English across the bottom. */
+  var heroBand = h('div', {
+    class: 'map-hero',
+    style: heroMeta.plate ? { backgroundImage: 'url("' + heroMeta.plate + '")' } : null
+  }, [
+    h('div', { class: 'map-hero-scrim' }),
+    h('div', { class: 'map-hero-inner' }, [
+      h('h1', { class: 'map-hero-title', text: 'Territory Map' }),
+      h('div', { class: 'map-hero-sub', text: 'Your apiaries across the landscape. Each site has its own forage, honey character, and seasonal rhythm.' })
+    ])
+  ]);
+
+  return h('div', { class: 'panel-view map-view' }, [
+    heroBand,
+    h('div', { class: 'map-content' }, [
+      seasonStrip,
+      h('div', { class: 'map-grid' }, territoryCards)
+    ])
   ]);
 }
 
@@ -1196,135 +1551,93 @@ var HONEY_VISUAL_MAP = {
   moorland: { color: '#8b3a1a' }
 };
 
-/* Single hive card in the yard */
+/* Single hive card in the painterly apiary grid.
+   Compact card: painted-icon plate left, colony name (IM Fell) + one
+   state line right. Dot / badge / crown / swarm strip overlay the icon.
+   Click opens the existing hive-detail modal — behaviour unchanged.
+
+   PLATE-GAP: the Phase-2 hive-state plates (hive-icon-strong / building
+   / queenless / dead) are not generated yet. The card falls through to
+   an IM Fell letter form on paper-dim until they land. When a plate
+   exists, push an <img class="hcp-icon-img"> into the iconBlock and the
+   CSS positioning is ready. */
 function _ui_buildHiveCard(colony) {
   var known = colony.known;
+  var curWeek = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
+
+  /* Status dot — single coloured pip in the upper-right of the icon. */
   var dotCls;
   if (!colony.alive) dotCls = 'dead';
   else if (!known || known.heftOnly) dotCls = 'unknown';
   else dotCls = known.status || 'unknown';
 
+  /* Single state line. The "N weeks ago" age sits on the same row so
+     the card has just one row of state copy. */
   var statusLine;
-  var plaqueAgeStr = null;
-  if (!colony.alive) statusLine = colony.deadReason ? ('Lost — ' + colony.deadReason) : 'Colony lost';
-  else if (!known) statusLine = 'Not yet inspected';
-  else if (known.heftOnly) statusLine = 'Not yet inspected';
-  else {
-    statusLine = (known.populationBand
+  if (!colony.alive) {
+    statusLine = colony.deadReason ? ('Lost — ' + colony.deadReason) : 'Colony lost';
+  } else if (!known || known.heftOnly) {
+    statusLine = 'Not yet inspected';
+  } else {
+    var base = (known.populationBand
       ? known.populationBand.charAt(0).toUpperCase() + known.populationBand.slice(1)
       : (known.note || 'Inspected'));
-    if (colony.lastInspected > 0) {
-      var _ageW = ((typeof Game !== 'undefined' && Game) ? Game.week : 1) - colony.lastInspected;
-      if (_ageW > 0) plaqueAgeStr = _ageW === 1 ? '1 week ago' : _ageW + ' weeks ago';
-    }
+    var ageW = colony.lastInspected > 0 ? curWeek - colony.lastInspected : -1;
+    var ageSuffix = '';
+    if (ageW > 0) ageSuffix = ' · ' + (ageW === 1 ? '1 week ago' : ageW + ' weeks ago');
+    statusLine = base + ageSuffix;
   }
 
-  var showBadge = false;
-  var badgeGlyph = '';
-  var badgeCls = '';
+  /* Priority badge — first match wins. */
+  var showBadge = false, badgeGlyph = '', badgeCls = '';
   if (colony.alive) {
-    /* Single priority chain — first match wins.
-       Queen cells are shown via the roof crown, not the badge, so P1a removed. */
     if (known && known.disease) {
-      /* P1b: disease observed */
       showBadge = true; badgeGlyph = '🔴'; badgeCls = 'badge-bad';
     } else if (colony.queenCells && colony.queenCells.type === 'swarm' && colony.queenCells.state === 'capped') {
-      /* P2: swarm cells capped — IMMINENT */
       showBadge = true; badgeGlyph = '🚨'; badgeCls = 'badge-imminent';
     } else if (colony.queenCells && colony.queenCells.type === 'postSwarm' && colony.queenCells.state !== 'emerged') {
-      /* P2b: post-swarm — old queen gone, virgin in hive */
       showBadge = true; badgeGlyph = '🐝'; badgeCls = 'badge-warn';
     } else if (colony.demaree && !colony.demaree.checked && colony.demaree.age >= 1) {
-      /* P3: demaree needs checking */
       showBadge = true; badgeGlyph = '🔄'; badgeCls = 'badge-warn';
     } else if (colony.osrCrystallised) {
-      /* P4: OSR crystallisation risk */
       showBadge = true; badgeGlyph = '🍯'; badgeCls = 'badge-bad';
     } else if ((colony.honey || 0) < 1 && (colony._starvingWeeks || 0) > 0) {
-      /* P5: actively starving */
       showBadge = true; badgeGlyph = '❗'; badgeCls = 'badge-bad';
     } else if ((colony.honey || 0) < 3 && (colony._nearZeroStarvingWeeks || 0) > 0) {
-      /* P6: near-zero stores risk */
       showBadge = true; badgeGlyph = '⚠️'; badgeCls = 'badge-warn';
     }
   }
 
-  /* Inspection urgency: shown during swarm season.
-     Never-inspected colonies get an 'Unopened' nudge in swarm season. */
+  /* Inspection urgency badge (during swarm season only). */
   var inspectUrgency = null;
-  var _curWeek2 = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
-  var _inWin2   = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(_curWeek2) : false;
-  if (colony.alive && !colony.lastInspected && _inWin2) {
-    inspectUrgency = h('div', { class: 'hive-insp-badge insp-warn',
-      title: 'This colony has never been inspected — swarm season is underway' }, '!');
-  }
-  if (colony.alive && colony.lastInspected > 0) {
-    var _curWeek = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
-    var _inWin   = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(_curWeek) : false;
-    var _weeksSince = _curWeek - colony.lastInspected;
-    if (_inWin && _weeksSince >= 1) {
-      var _daysSince = _weeksSince * 7;
-      var _urgCls = _weeksSince >= 2 ? 'insp-urgent' : 'insp-warn';
-      inspectUrgency = h('div', { class: 'hive-insp-badge ' + _urgCls,
-        title: _daysSince + ' days since last inspection' },
-        _daysSince + 'd');
+  var inWin = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(curWeek) : false;
+  if (colony.alive && !colony.lastInspected && inWin) {
+    inspectUrgency = h('div', {
+      class: 'hive-insp-badge insp-warn',
+      title: 'This colony has never been inspected — swarm season is underway'
+    }, '!');
+  } else if (colony.alive && colony.lastInspected > 0 && inWin) {
+    var weeksSince = curWeek - colony.lastInspected;
+    if (weeksSince >= 1) {
+      var daysSince = weeksSince * 7;
+      var urgCls = weeksSince >= 2 ? 'insp-urgent' : 'insp-warn';
+      inspectUrgency = h('div', {
+        class: 'hive-insp-badge ' + urgCls,
+        title: daysSince + ' days since last inspection'
+      }, daysSince + 'd');
     }
   }
 
-  // Box stack: supers on top, brood boxes below
-  var boxes = [];
-  var superCount = colony.supers || 0;
-  // honey fill per super: full super ≈ 12 kg
-  var honeyPerSuper = superCount > 0 ? (colony.superHoney || 0) / superCount : 0;
-  var fillFrac = Math.min(1, honeyPerSuper / 12);
-  for (var s = 0; s < superCount; s++) {
-    boxes.push(h('div', { class: 'hive-box super', style: { '--honey-fill': Math.round(fillFrac * 100) + '%' } }));
-  }
-  var broodCount = colony.broodBoxes || 1;
-  for (var b = 0; b < broodCount; b++) boxes.push(h('div', { class: 'hive-box brood' }));
-
-  // Bees: count from colony size, scaled by how flyable the weather is.
-  // Cold, wet or stormy weather keeps the foragers in, so very few show.
-  // Foragers leave the entrance, climb and shrink into the distance;
-  // returning bees grow as they approach. Each faces the way it flies.
-  var beeNodes = [];
-  if (colony.alive) {
-    var pop = colony.population || 0;
-    var sizeBee = pop < 3500 ? 0 : pop < 11000 ? 3 : pop < 22000 ? 5 : pop < 36000 ? 8 : 12;
-    var fly = (typeof weather === 'function' && weather() && weather().fly != null) ? weather().fly : 0.6;
-    var nBees = Math.round(sizeBee * fly);
-    if (nBees === 0 && sizeBee > 0 && fly > 0.22) nBees = 1;
-    for (var bi = 0; bi < nBees; bi++) {
-      var out = Math.random() < 0.58;                  // most foragers are heading out
-      var side = Math.random() < 0.5 ? -1 : 1;
-      var dx = (side * (50 + Math.random() * 290)).toFixed(0);
-      var dy = (-(95 + Math.random() * 255)).toFixed(0);
-      var netX = out ? side : -side;                   // net direction of travel
-      var face = netX >= 0 ? -1 : 1;                   // flip glyph to face its heading
-      var tilt = ((Math.random() * 2 - 1) * 24).toFixed(0);
-      var dur = ((out ? 3.4 : 3.0) + Math.random() * 3.6).toFixed(1);
-      var del = (Math.random() * dur).toFixed(1);
-      var bob = (0.30 + Math.random() * 0.32).toFixed(2);
-      beeNodes.push(
-        h('span', { class: 'bee', style: {
-          left: (40 + Math.random() * 18) + '%',
-          bottom: (20 + Math.random() * 18) + '%',
-          '--dx': dx + 'px', '--dy': dy + 'px',
-          animationName: out ? 'bee-out' : 'bee-in',
-          animationDuration: dur + 's',
-          animationDelay: '-' + del + 's'
-        } }, h('span', { class: 'bee-face', style: { '--face': String(face), '--tilt': tilt + 'deg' } },
-          h('span', { class: 'bee-glyph', style: { '--bob': bob + 's' } }, '🐝')))
-      );
-    }
+  /* Queen-cell crown — subtle painted mark above the icon. */
+  var qcellCrown = null;
+  if (colony.alive && known && known.queenCells && known.queenCells !== 'none') {
+    qcellCrown = h('div', { class: 'hive-qcell-crown', title: 'Queen cells seen — check swarm control' }, '◆');
   }
 
-  /* Swarm pressure strip — visible in swarm season when pressure is notable */
+  /* Swarm pressure strip — bottom edge of the card. */
   var swarmStrip = null;
   if (colony.alive) {
     var sp = colony.swarmPressure || 0;
-    var week = (typeof Game !== 'undefined' && Game) ? Game.week : 1;
-    var inWin = (typeof _colony_inSwarmWindow === 'function') ? _colony_inSwarmWindow(week) : false;
     if (inWin && sp > 0.2) {
       var spColor = sp > 0.65 ? '#c03030' : sp > 0.4 ? '#d4820a' : '#4a9e5c';
       swarmStrip = h('div', {
@@ -1335,13 +1648,32 @@ function _ui_buildHiveCard(colony) {
     }
   }
 
-  /* Queen cell crown: shown when cells were observed last inspection */
-  var qcellCrown = null;
-  if (colony.alive && known && known.queenCells && known.queenCells !== 'none') {
-    qcellCrown = h('div', { class: 'hive-qcell-crown', title: 'Queen cells seen — check swarm control' }, '👑');
-  }
+  /* Painted hive icon. The hive-state plates carry the state visually;
+     the dot/badge/queen-cell crown overlay precise alerts on top. */
+  var iconState = !colony.alive ? 'dead'
+    : (known && known.disease) ? 'disease'
+    : (!known || known.heftOnly) ? 'unknown'
+    : 'strong';
+  /* Pick the painted plate by state. Building / strong / queenless / dead
+     are all generated; disease & unknown fall back to building (a healthy-
+     looking colony before more info). */
+  var platePath = 'img/plates/hive-state-' + (
+    iconState === 'dead' ? 'dead' :
+    iconState === 'disease' ? 'queenless' :
+    iconState === 'unknown' ? 'building' :
+    'strong'
+  ) + '.png';
+  var iconBlock = h('div', { class: 'hcp-icon hcp-icon-state-' + iconState }, [
+    h('img', { class: 'hcp-icon-img', src: platePath, alt: '' }),
+    h('div', { class: 'hive-dot ' + dotCls }),
+    showBadge ? h('div', { class: 'hive-badge ' + badgeCls }, badgeGlyph) : null,
+    inspectUrgency,
+    qcellCrown
+  ]);
 
-  var hiveCls = 'hive';
+  var statusBadge = _ui_buildStatusBadge(colony);
+
+  var hiveCls = 'hive hive-card';
   if (!colony.alive) hiveCls += ' is-dead';
   if (known && known.disease) hiveCls += ' has-disease';
 
@@ -1349,25 +1681,15 @@ function _ui_buildHiveCard(colony) {
     class: hiveCls,
     onclick: function() { openHiveDetail(colony); }
   }, [
-    h('div', { class: 'hive-dot ' + dotCls }),
-    showBadge ? h('div', { class: 'hive-badge ' + badgeCls }, badgeGlyph) : null,
-    inspectUrgency,
-    qcellCrown,
-    h('div', { class: 'hive-bees' }, beeNodes),
-    h('div', { class: 'hive-roof' }),
-    h('div', { class: 'hive-stack' }, boxes),
-    swarmStrip,
-    h('div', { class: 'hive-floor' }),
-    h('div', { class: 'hive-stand' }),
-    h('div', { class: 'hive-plaque' }, [
-      h('div', { class: 'nm' }, [
-        h('span', { text: colony.name }),
-        _ui_buildStatusBadge(colony)
+    iconBlock,
+    h('div', { class: 'hcp-body' }, [
+      h('div', { class: 'hcp-name-row' }, [
+        h('span', { class: 'hcp-name', text: colony.name }),
+        statusBadge
       ]),
-      h('div', { class: 'st', text: statusLine }),
-      plaqueAgeStr ? h('div', { class: 'st-age', text: plaqueAgeStr }) : null
+      h('div', { class: 'hcp-state', text: statusLine })
     ]),
-    _ui_buildHiveScene(colony, (typeof Game !== 'undefined' && Game) ? Game.week : 1)
+    swarmStrip
   ]);
 }
 
@@ -1460,8 +1782,12 @@ function _ui_buildSidebar() {
     mentorTone = 'ok';
   }
 
-  var mentorBlock = h('div', { class: 'mentor tone-' + mentorTone }, [
-    h('div', { class: 'mentor-face' }, '🧑‍🌾'),
+  /* Mentor portrait — the painted portrait of the apiary mentor sits
+     inside an ink-bordered paper-dim frame. The painting is the
+     voice of mentorLine(). */
+  var mentorBlock = h('div', { class: 'mentor mentor-card tone-' + mentorTone }, [
+    h('div', { class: 'mentor-face' },
+      h('img', { class: 'mentor-portrait-img', src: 'img/plates/mentor-portrait.png', alt: '' })),
     h('div', { class: 'mentor-bubble' }, [
       h('div', { class: 'mentor-who' }, 'Your mentor'),
       h('div', { class: 'mentor-text', text: mentorText })
@@ -1614,21 +1940,177 @@ function _ui_advanceToEvent() {
    MARKET VIEW
    ==================================================================== */
 
+/* Plate-path lookup tables for the redesigned market cards. A null /
+   missing entry tells the renderer to gracefully omit the plate. */
+var MARKET_PLATES = {
+  bees: {
+    'nuc':           'img/plates/bee-local-mongrel.png',
+    'nuc-italian':   'img/plates/bee-italian-queen.png',
+    'nuc-carniolan': 'img/plates/bee-carniolan-queen.png',
+    'nuc-buckfast':  'img/plates/bee-buckfast-queen.png',
+    'nuc-native':    'img/plates/bee-amm-native.png',
+    'colony':        'img/plates/bee-local-mongrel.png',  /* placeholder */
+    'matedqueen':    'img/plates/bee-local-mongrel.png'
+  },
+  /* Hive-class kit. Use the painted hive-state plates as proxies until
+     dedicated equipment portraits exist. */
+  hives: {
+    'hive':     'img/plates/hive-state-strong.png',  /* National hive — strong state stands in */
+    'nucbox':   'img/plates/tool-nucleus-box.png',
+    'baithive': 'img/plates/tool-bait-hive.png'
+  },
+  tools: {
+    'suit':          'img/plates/tool-suit.png',
+    'smoker':        'img/plates/tool-smoker.png',
+    'extractor':     'img/plates/tool-extractor.png',
+    'hiveTool':      'img/plates/tool-hive-tool.png',
+    'clearerBoard':  'img/plates/tool-clearer-board.png',
+    'refractometer': 'img/plates/tool-refractometer.png',
+    'gloves':        null,                            /* none yet */
+    'settlingTank':  null,                            /* none yet */
+    'uncappingKit':  null                             /* none yet */
+  },
+  supplies: {
+    'super':           'img/plates/frame-super.png',
+    'queenExcluder':   'img/plates/tool-queen-excluder.png',
+    'foundation':      'img/plates/frame-healthy-capped.png',
+    'frames':          'img/plates/frame-healthy-capped.png'
+  },
+  /* Forage plates lead the Sell cards. Phase 1 has hawthorn/lime/heather/
+     ivy/oilseed-rape/dandelion — the rest fall back to dandelion (closest
+     match: a mixed wildflower image) or render plain. */
+  honey: {
+    'spring':  'img/plates/forage-hawthorn.png',
+    'oilseed': 'img/plates/forage-oilseed-rape.png',
+    'summer':  'img/plates/forage-dandelion.png',     /* placeholder until clover/bramble */
+    'lime':    'img/plates/forage-lime.png',
+    'heather': 'img/plates/forage-heather.png',
+    'ivy':     'img/plates/forage-ivy.png',
+    'borage':  null
+  },
+  sites: {
+    'rural':    'img/plates/region-uk.png',
+    'moorland': 'img/plates/scene-moorland.png',
+    'farmland': null,                                 /* Phase 2 */
+    'urban':    null,                                 /* Phase 2 */
+    'orchard':  null                                  /* Phase 2 */
+  }
+};
+
+/* Handbook deep-link map. Catalog item id → handbook article id (the
+   `id` field inside ENCYCLOPEDIA, not the array index). Plates rendered
+   on the market/map/apiary surfaces use this to wire themselves up as
+   little hyperlinks into the codex. */
+var HANDBOOK_LINKS = {
+  bees: {
+    'nuc':           'first-bees',
+    'nuc-italian':   'first-bees',
+    'nuc-carniolan': 'first-bees',
+    'nuc-buckfast':  'first-bees',
+    'nuc-native':    'first-bees',
+    'colony':        'first-bees',
+    'matedqueen':    'queen-life'
+  },
+  hives: {
+    'hive':     'national-hive',
+    'nucbox':   'hive-types',
+    'baithive': 'catching-swarms'
+  },
+  tools: {
+    'suit':          'tools-kit',
+    'smoker':        'tools-kit',
+    'hiveTool':      'tools-kit',
+    'gloves':        'tools-kit',
+    'clearerBoard':  'harvesting',
+    'extractor':     'extracting',
+    'settlingTank':  'extracting',
+    'refractometer': 'extracting',
+    'uncappingKit':  'extracting'
+  },
+  supplies: {
+    'sugar':           'year-winter',
+    'jars':            'selling-honey',
+    'super':           'national-hive',
+    'queenExcluder':   'national-hive',
+    'newspaper':       'uniting',
+    'foundation':      'frames-comb',
+    'frames':          'frames-comb',
+    'varroa':          'varroa-treat'
+  },
+  sites: {
+    'rural':    'apiary-site',
+    'farmland': 'apiary-site',
+    'urban':    'apiary-site',
+    'orchard':  'apiary-site',
+    'moorland': 'apiary-site'
+  },
+  season: {
+    'spring': 'year-spring',
+    'summer': 'year-summer',
+    'autumn': 'year-autumn',
+    'winter': 'year-winter'
+  }
+};
+
+/* Open a handbook article by its `id` field. Resolves the array index
+   inside ENCYCLOPEDIA, sets the module-level selection, switches the
+   view to the handbook, and forces a render. Used by plate-link
+   onclicks across the app. */
+function openHandbookArticle(articleId) {
+  if (!articleId) return;
+  var enc = (typeof window !== 'undefined' && window.ENCYCLOPEDIA) || [];
+  var idx = null;
+  for (var i = 0; i < enc.length; i++) {
+    if (enc[i] && enc[i].id === articleId) { idx = String(i); break; }
+  }
+  if (idx !== null) {
+    _ui_handbookSelected = idx;
+    _ui_handbookGlossary = false;
+    _ui_handbookSearch = '';
+    _ui_handbookTocOpen = false;
+  }
+  if (typeof Game !== 'undefined' && Game.ui) Game.ui.view = 'handbook';
+  if (typeof render === 'function') render();
+}
+
+/* Build a square or 16:9 plate <img> for the painted card header.
+   Returns null when no plate is mapped, so the caller can omit it
+   cleanly. When `handbookId` is given the plate becomes a button that
+   opens the matching handbook article — a small ✣ mark sits in the
+   corner so the affordance is visible. */
+function _ui_plateImg(src, alt, aspect, handbookId) {
+  if (!src) return null;
+  var classes = 'plate-frame' + (aspect === '16x9' ? ' plate-16x9' : ' plate-1x1');
+  var img = h('img', { class: 'plate-img', src: src, alt: alt || '', loading: 'lazy' });
+  if (handbookId) {
+    return h('button', {
+      type: 'button',
+      class: classes + ' plate-link',
+      title: 'Read about this in the Handbook',
+      onclick: function(ev) {
+        if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+        openHandbookArticle(handbookId);
+      }
+    }, [ img, h('span', { class: 'plate-link-mark', text: '✣' }) ]);
+  }
+  return h('div', { class: classes }, [ img ]);
+}
+
 function _ui_buildMarketView() {
   var tabs = [
-    { key: 'bees',       label: 'Bees',       ico: '🐝' },
-    { key: 'hives',      label: 'Hives',      ico: '🪵' },
-    { key: 'tools',      label: 'Tools',      ico: '🔧' },
-    { key: 'supplies',   label: 'Supplies',   ico: '🛍️' },
-    { key: 'sell',       label: 'Sell',       ico: '🍯' },
-    { key: 'apiaries',   label: 'Apiaries',   ico: '🌳' },
-    { key: 'neighbours', label: 'Neighbours', ico: '🏘️' }
+    { key: 'bees',       label: 'Bees' },
+    { key: 'hives',      label: 'Hives' },
+    { key: 'tools',      label: 'Tools' },
+    { key: 'supplies',   label: 'Supplies' },
+    { key: 'sell',       label: 'Sell' },
+    { key: 'apiaries',   label: 'Apiaries' },
+    { key: 'neighbours', label: 'Neighbours' }
   ];
   var tabBtns = tabs.map(function(t) {
     return h('button', {
       class: 'market-tab' + (_ui_marketTab === t.key ? ' active' : ''),
       onclick: function() { _ui_marketTab = t.key; render(); }
-    }, [ h('span', { class: 'ico' }, t.ico), t.label ]);
+    }, t.label);
   });
 
   var content;
@@ -1645,12 +2127,23 @@ function _ui_buildMarketView() {
   } else if (_ui_marketTab === 'neighbours') {
     content = _ui_marketNeighboursTab();
   } else {
+    /* Filter the Bees catalogue by the strains available in the
+       player's region. UK v1 ships all five (local, italian,
+       carniolan, buckfast, native); other regions will surface
+       different stock when they unlock. */
+    var availStrains = (REGIONS[Game.region] && REGIONS[Game.region].availableStrains) || ['local'];
     content = _ui_marketBuyTab('Bees and colonies',
-      CATALOG.bees.filter(function(b) { return b.id !== 'matedqueen'; }), 'bees');
+      CATALOG.bees.filter(function(b) {
+        if (b.id === 'matedqueen') return false;
+        /* Full colony + plain nuc carry strain='local' so they pass
+           through anywhere the local strain is available. */
+        if (!b.strain) return true;
+        return availStrains.indexOf(b.strain) !== -1;
+      }), 'bees');
   }
 
-  return h('div', { class: 'panel-view narrow' }, [
-    h('div', { class: 'page-title' }, ['🛒 Market']),
+  return h('div', { class: 'panel-view narrow market-view' }, [
+    h('div', { class: 'page-title' }, 'Market'),
     h('div', { class: 'page-sub' }, 'Buy bees and equipment, sell your produce, and set up apiaries.'),
     _ui_marketHelp(),
     h('div', { class: 'market-tabs' }, tabBtns),
@@ -1672,31 +2165,36 @@ function _ui_marketHelp() {
     'artificial swarm the moment you find queen cells.' });
 }
 
-/* A buy tab: one card of clean shop rows, plus a summary of what you own */
+/* A buy tab: a section heading + a grid of painted plate cards. */
 function _ui_marketBuyTab(title, items, category) {
-  /* The 10-tile kit-strip used to sit under every shop list, restating
-     cash (already in topbar) and every minor stock count (visible inside
-     the hive detail and apiary views). At purchase time it was pure
-     noise — cut. */
-  var rows = (items || []).map(function(item) { return _ui_shopRow(item, category); });
+  var cards = (items || []).map(function(item) { return _ui_plateCard(item, category); });
   return h('div', {}, [
-    h('div', { class: 'card' }, [
-      h('div', { class: 'card-title' }, title),
-      h('div', { class: 'shop-list' }, rows)
+    h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, title),
+      h('div', { class: 'plate-grid' }, cards)
     ])
   ]);
 }
 
-/* A single clean shop row with one clear Buy button */
-function _ui_shopRow(item, category) {
+/* Painted plate card: square plate at the top, name + description below,
+   price + Buy/Owned action on the right. The card stays clickable target
+   the whole way; the Buy button sits inside its own zone, never on the
+   plate. */
+function _ui_plateCard(item, category) {
   var owned = (category === 'tools' && Game.inventory && Game.inventory.tools &&
                !!Game.inventory.tools[item.id]);
+  var lookup = MARKET_PLATES[category] || {};
+  var platePath = lookup[item.id] || null;
+  var hbLookup = HANDBOOK_LINKS[category] || {};
+  var hbId = hbLookup[item.id] || null;
+  var plate = _ui_plateImg(platePath, item.name, '1x1', hbId);
+
   var action;
   if (owned) {
-    action = h('span', { class: 'badge ok', text: 'Owned' });
+    action = h('span', { class: 'plate-owned', text: 'Owned' });
   } else {
     action = h('button', {
-      class: 'btn btn-primary shop-buy',
+      class: 'plate-buy',
       onclick: function() {
         var r = buyFromCatalog(category, item.id, 1);
         toast(r.msg, r.ok ? 'good' : 'bad');
@@ -1707,15 +2205,17 @@ function _ui_shopRow(item, category) {
           render();
         }
       }
-    }, [ 'Buy', h('span', { class: 'shop-price' }, fmtMoney(item.price)) ]);
+    }, [ h('span', { class: 'plate-buy-label' }, 'Buy'),
+         h('span', { class: 'plate-price' }, fmtMoney(item.price)) ]);
   }
-  return h('div', { class: 'shop-item' }, [
-    h('div', { class: 'ico' }, item.icon),
-    h('div', { class: 'meta' }, [
-      h('b', { text: item.name }),
-      h('p', { text: item.desc })
-    ]),
-    h('div', { class: 'shop-action' }, action)
+
+  return h('div', { class: 'plate-card' + (plate ? '' : ' no-plate') }, [
+    plate,
+    h('div', { class: 'plate-body' }, [
+      h('div', { class: 'plate-name' }, item.name),
+      item.desc ? h('div', { class: 'plate-desc' }, item.desc) : null,
+      h('div', { class: 'plate-foot' }, action)
+    ])
   ]);
 }
 
@@ -1748,41 +2248,48 @@ function _ui_marketKitStrip() {
 /* The Supplies tab — sugar, jars and varroa treatments held as stock */
 function _ui_marketSuppliesTab() {
   var inv = Game.inventory || {};
-  function buyRow(icon, name, desc, held, price, onBuy) {
-    return h('div', { class: 'shop-item' }, [
-      h('div', { class: 'ico' }, icon),
-      h('div', { class: 'meta' }, [
-        h('b', { text: name }),
-        h('p', { text: desc }),
-        h('span', { class: 'shop-held', text: 'In stock: ' + held })
-      ]),
-      h('div', { class: 'shop-action' }, h('button', {
-        class: 'btn btn-primary shop-buy',
-        onclick: function() {
-          var r = onBuy();
-          toast(r.msg, r.ok ? 'good' : 'bad');
-          if (r.ok) render();
-        }
-      }, ['Buy', h('span', { class: 'shop-price' }, fmtMoney(price))]))
+  /* A supplies plate-card: no plate yet for sugar/jars/etc., so the
+     cards lean on type + name + held + price. When Phase-2 supply plates
+     exist they'll slot into MARKET_PLATES.supplies and appear here. */
+  var SUPPLY_PLATES = MARKET_PLATES.supplies || {};
+  var SUPPLY_HB = HANDBOOK_LINKS.supplies || {};
+  function buyCard(itemId, name, desc, held, price, onBuy) {
+    var plate = _ui_plateImg(SUPPLY_PLATES[itemId] || null, name, '1x1', SUPPLY_HB[itemId] || null);
+    return h('div', { class: 'plate-card' + (plate ? '' : ' no-plate') }, [
+      plate,
+      h('div', { class: 'plate-body' }, [
+        h('div', { class: 'plate-name' }, name),
+        desc ? h('div', { class: 'plate-desc' }, desc) : null,
+        held ? h('div', { class: 'plate-held', text: 'In stock: ' + held }) : null,
+        h('div', { class: 'plate-foot' }, h('button', {
+          class: 'plate-buy',
+          onclick: function() {
+            var r = onBuy();
+            toast(r.msg, r.ok ? 'good' : 'bad');
+            if (r.ok) render();
+          }
+        }, [ h('span', { class: 'plate-buy-label' }, 'Buy'),
+             h('span', { class: 'plate-price' }, fmtMoney(price)) ]))
+      ])
     ]);
   }
 
-  var feedRows = (CATALOG.supplies || []).map(function(item) {
+  var feedCards = (CATALOG.supplies || []).map(function(item) {
     var held = item.id === 'sugarbag'       ? ((inv.sugar || 0) + ' kg of sugar')
              : item.id === 'jarpack'        ? ((inv.emptyJars || 0) + ' empty jars')
              : item.id === 'super'          ? ((inv.supers || 0) + ' in stock')
              : item.id === 'queenExcluder'  ? ((inv.queenExcluders || 0) + ' in stock')
              : item.id === 'newspaper'      ? ((inv.newspaper || 0) + ' sheets in stock')
-             : '0';
-    return buyRow(item.icon, item.name, item.desc, held, item.price,
+             : null;
+    return buyCard(item.id, item.name, item.desc, held, item.price,
       (function(id) { return function() { return buySupply(id, 1); }; })(item.id));
   });
 
-  var treatRows = Object.keys(TREATMENTS).map(function(id) {
+  var treatCards = Object.keys(TREATMENTS).map(function(id) {
     var t = TREATMENTS[id];
     var n = (inv.treatStock || {})[id] || 0;
     var held = n + (n === 1 ? ' treatment' : ' treatments');
-    return buyRow('💊', t.name, t.note, held, t.price,
+    return buyCard(id, t.name, t.note, held, t.price,
       (function(tid) { return function() { return buySupply(tid, 1); }; })(id));
   });
 
@@ -1794,10 +2301,10 @@ function _ui_marketSuppliesTab() {
 
   var bottleSection;
   if (honeyTypes.length === 0) {
-    bottleSection = h('div', { class: 'card' }, [
-      h('div', { class: 'card-title' }, '🫙 Extract & Bottle'),
-      h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', margin: 0 } },
-        'No bulk honey yet. Inspect a hive when the supers are heavy, then use the Harvest action to bring the honey in.')
+    bottleSection = h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Extract & Bottle'),
+      h('p', { class: 'market-section-blurb',
+        text: 'No bulk honey yet. Inspect a hive when the supers are heavy, then use the Harvest action to bring the honey in.' })
     ]);
   } else {
     var bottleRows = honeyTypes.map(function(ht) {
@@ -1817,7 +2324,7 @@ function _ui_marketSuppliesTab() {
       });
 
       var btn = h('button', {
-        class: 'btn btn-sm btn-primary',
+        class: 'plate-buy plate-buy-compact',
         text: 'Bottle',
         onclick: function() {
           var n = parseInt(input.value, 10) || 0;
@@ -1847,9 +2354,9 @@ function _ui_marketSuppliesTab() {
       ]);
     });
 
-    bottleSection = h('div', { class: 'card' }, [
-      h('div', { class: 'card-title' }, '🫙 Extract & Bottle'),
-      h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', margin: '0 0 10px' } },
+    bottleSection = h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Extract & Bottle'),
+      h('p', { class: 'market-section-blurb' },
         'Turn bulk honey into jars ready to sell. Each 227g jar takes ' + KG_PER_JAR + ' kg of honey. ' +
         (typeof Game !== 'undefined' && !(Game.inventory.tools && Game.inventory.tools.extractor)
           ? 'You\'ll hire the association extractor (' + fmtMoney(typeof COSTS !== 'undefined' ? COSTS.extractorHire : 15) + ' per session).'
@@ -1859,18 +2366,18 @@ function _ui_marketSuppliesTab() {
   }
 
   return h('div', {}, [
-    h('div', { class: 'card' }, [
-      h('div', { class: 'card-title' }, '🛍️ Feeding and bottling'),
-      h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', margin: '0 0 8px' },
+    h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Feeding and bottling'),
+      h('p', { class: 'market-section-blurb',
         text: 'Buy sugar for syrup and jars for your honey. Feeding and bottling draw on this stock.' }),
-      h('div', { class: 'shop-list' }, feedRows)
+      h('div', { class: 'plate-grid' }, feedCards)
     ]),
     bottleSection,
-    h('div', { class: 'card' }, [
-      h('div', { class: 'card-title' }, '💊 Varroa treatments'),
-      h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', margin: '0 0 8px' },
+    h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Varroa treatments'),
+      h('p', { class: 'market-section-blurb',
         text: 'Keep a treatment in stock so you can act the moment the honey crop is off.' }),
-      h('div', { class: 'shop-list' }, treatRows)
+      h('div', { class: 'plate-grid' }, treatCards)
     ])
   ]);
 }
@@ -1886,101 +2393,116 @@ function _ui_marketNeighboursTab() {
   var rows;
   if (!ads.length) {
     rows = [h('div', { class: 'empty-state' }, [
-      h('div', { class: 'big' }, '🏘️'),
       h('p', { text: 'No ads from neighbours this week. Check back — they post when they have surplus kit or spare nucs.' })
     ])];
   } else {
     rows = ads.map(function (ad) {
       var weeksLeft = 3 - (Game.week - ad.postedWeek);
       var badge = ad.isColony
-        ? h('span', { class: 'neigh-strain-pill' }, (HIVE_STRAINS && HIVE_STRAINS[ad.strain] && HIVE_STRAINS[ad.strain].icon || '🐝') + ' ' +
+        ? h('span', { class: 'neigh-strain-pill' },
             (HIVE_STRAINS && HIVE_STRAINS[ad.strain] && HIVE_STRAINS[ad.strain].short || 'Local'))
         : null;
       return h('div', { class: 'neigh-ad' }, [
+        h('div', { class: 'neigh-seller', text: ad.seller }),
         h('div', { class: 'neigh-ad-head' }, [
-          h('div', {}, [
-            h('b', { text: ad.name }),
-            badge,
-          ]),
-          h('span', { class: 'neigh-price' }, '£' + ad.price),
+          h('div', { class: 'neigh-name' }, [ ad.name, badge ]),
+          h('span', { class: 'neigh-price' }, '£' + ad.price)
         ]),
-        h('div', { class: 'neigh-seller' }, 'Posted by ' + ad.seller + ' · ' +
-          (weeksLeft <= 0 ? 'closing today' : (weeksLeft + ' week' + (weeksLeft === 1 ? '' : 's') + ' left'))),
+        h('div', { class: 'neigh-meta' },
+          (weeksLeft <= 0 ? 'Closing today' : (weeksLeft + ' week' + (weeksLeft === 1 ? '' : 's') + ' left'))),
         h('div', { class: 'neigh-desc', text: ad.desc }),
         h('div', { class: 'neigh-actions' }, [
           h('button', {
-            class: 'btn btn-sm btn-primary',
+            class: 'plate-buy plate-buy-compact',
             onclick: function () {
               var r = buyMarketplaceAd(ad.id);
               toast(r.msg, r.ok ? 'good' : 'bad');
               if (r.ok) render();
             }
-          }, 'Buy from neighbour'),
-        ]),
+          }, 'Buy from neighbour')
+        ])
       ]);
     });
   }
 
   return h('div', {}, [
-    h('div', { class: 'card', style: { marginBottom: '12px' } }, [
-      h('div', { class: 'card-title' }, '🏘️ Neighbours'),
-      h('div', { style: { fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '10px' } },
+    h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Neighbours'),
+      h('p', { class: 'market-section-blurb' },
         'Other beekeepers in your area sometimes have surplus kit, spare nucs in spring, or sugar to clear out. Ads run for three weeks.'),
-      h('div', {}, rows),
-    ]),
+      h('div', { class: 'neigh-list' }, rows)
+    ])
   ]);
 }
 
-/* The Apiaries tab — your sites, and a panel to establish a new one */
+/* The Apiaries tab — your existing sites rendered as full painted-header
+   cards, plus a site picker to establish a new one. */
 function _ui_marketApiariesTab() {
+  var siteLookup = MARKET_PLATES.sites || {};
   var list = (Game.apiaries || []).map(function(ap) {
     var site = SITE_TYPES[ap.siteType] || {};
     var count = (typeof coloniesIn === 'function')
       ? coloniesIn(ap.id).filter(function(c) { return c.alive; }).length : 0;
-    return h('div', { class: 'apiary-line' }, [
-      h('div', { class: 'ico' }, site.icon || '🌳'),
-      h('div', { class: 'meta' }, [
-        h('b', { text: ap.name }),
-        h('p', { text: (site.label || ap.siteType) + ' — ' +
-          count + ' colon' + (count === 1 ? 'y' : 'ies') })
+    var plate = _ui_plateImg(siteLookup[ap.siteType] || null,
+      (site.label || ap.siteType), '16x9');
+    return h('div', { class: 'site-card' + (plate ? '' : ' no-plate') }, [
+      plate,
+      h('div', { class: 'site-body' }, [
+        h('div', { class: 'site-name' }, ap.name),
+        h('div', { class: 'site-meta' },
+          (site.label || ap.siteType) + ' — ' +
+          count + ' colon' + (count === 1 ? 'y' : 'ies'))
       ])
     ]);
   });
 
   var siteKeys = Object.keys(SITE_TYPES);
   var selSite = siteKeys[0];
-  var picker = h('select', { class: 'book-search', style: { marginBottom: '6px' } },
+  var picker = h('select', { class: 'site-picker' },
     siteKeys.map(function(key) {
-      return h('option', { value: key }, SITE_TYPES[key].icon + '  ' + SITE_TYPES[key].label);
+      return h('option', { value: key }, SITE_TYPES[key].label);
     }));
-  var siteNote = h('p', { class: 'muted', style: { fontSize: '12px', margin: '0 0 10px' },
-    text: SITE_TYPES[selSite] ? SITE_TYPES[selSite].blurb : '' });
+
+  /* Live preview region — refreshes plate + blurb when the player picks
+     a different site. */
+  var previewBox = h('div', { class: 'site-preview' });
+  function renderPreview() {
+    while (previewBox.firstChild) previewBox.removeChild(previewBox.firstChild);
+    var s = SITE_TYPES[selSite] || {};
+    var p = _ui_plateImg(siteLookup[selSite] || null, s.label || selSite, '16x9');
+    if (p) previewBox.appendChild(p);
+    var blurb = h('p', { class: 'site-blurb', text: s.blurb || '' });
+    previewBox.appendChild(blurb);
+  }
+  renderPreview();
   picker.addEventListener('change', function() {
     selSite = picker.value;
-    siteNote.textContent = SITE_TYPES[selSite] ? SITE_TYPES[selSite].blurb : '';
+    renderPreview();
   });
+
   var cost = (typeof COSTS !== 'undefined' && COSTS) ? COSTS.newApiary : 95;
 
   return h('div', {}, [
-    h('div', { class: 'card' }, [
-      h('div', { class: 'card-title' }, '🌳 Your apiaries'),
-      list.length ? h('div', {}, list)
-        : h('p', { class: 'muted', style: { fontSize: '13px' }, text: 'No apiaries yet.' })
+    h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Your apiaries'),
+      list.length ? h('div', { class: 'site-grid' }, list)
+        : h('p', { class: 'market-section-blurb', text: 'No apiaries yet.' })
     ]),
-    h('div', { class: 'card' }, [
-      h('div', { class: 'card-title' }, 'Establish a new apiary'),
-      h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '8px' },
+    h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Establish a new apiary'),
+      h('p', { class: 'market-section-blurb',
         text: 'A second site spreads your forage and your risk. Pick a site type to read about it.' }),
       picker,
-      siteNote,
+      previewBox,
       h('button', {
-        class: 'btn btn-primary',
+        class: 'plate-buy plate-buy-wide',
         onclick: function() {
           var r = establishApiary(selSite);
           toast(r.msg, r.ok ? 'good' : 'bad');
           if (r.ok) render();
         }
-      }, [ 'Establish here', h('span', { class: 'shop-price' }, fmtMoney(cost)) ])
+      }, [ h('span', { class: 'plate-buy-label' }, 'Establish here'),
+           h('span', { class: 'plate-price' }, fmtMoney(cost)) ])
     ])
   ]);
 }
@@ -2010,7 +2532,8 @@ function _ui_marketSellTab() {
     ivy:      { color: '#2a2010', note: 'Dark and bitter. Niche market — price accordingly' }
   };
 
-  var jarRows = [];
+  var honeyPlates = MARKET_PLATES.honey || {};
+  var jarCards = [];
   Object.keys(HONEY_TYPES).forEach(function(htId) {
     var count = jars[htId] || 0;
     if (count <= 0) return;
@@ -2019,52 +2542,70 @@ function _ui_marketSellTab() {
     var ch = SALES[best];
     var price = (typeof marketPrice === 'function') ? marketPrice(htId, best) : ht.value;
     var batch = Math.min(count, ch.capacity);
-    jarRows.push(h('div', { class: 'shop-item' }, [
-      h('div', { class: 'honey-swatch', style: { background: vis.color } }),
-      h('div', { class: 'meta' }, [
-        h('b', { text: ht.name }),
-        h('p', { text: count + ' jar' + (count !== 1 ? 's' : '') + ' — ' + fmtMoney(price) + ' each via ' + ch.name }),
-        batch < count ? h('p', { class: 'honey-note', text: '⚑ Channel capacity: ' + batch + ' jars this sale (' + (count - batch) + ' remaining)' }) : null,
-        vis.note ? h('p', { class: 'honey-note', text: '⚠ ' + vis.note }) : null
-      ]),
-      h('div', { class: 'shop-action' }, h('button', {
-        class: 'btn btn-leaf shop-buy',
-        onclick: function() {
-          var r = sellHoney(best, htId, batch);
-          toast(r.msg, r.ok ? 'good' : 'bad');
-          if (r.ok) render();
-        }
-      }, [ 'Sell ' + batch, h('span', { class: 'shop-price' }, fmtMoney(price * batch)) ]))
+    var plate = _ui_plateImg(honeyPlates[htId] || null, ht.name, '1x1');
+    var notes = [];
+    if (batch < count) {
+      notes.push(h('div', { class: 'plate-note', text: 'Channel capacity: ' + batch + ' jars this sale (' + (count - batch) + ' remaining)' }));
+    }
+    if (vis.note) {
+      notes.push(h('div', { class: 'plate-note plate-note-warn', text: vis.note }));
+    }
+    jarCards.push(h('div', { class: 'plate-card honey-card' + (plate ? '' : ' no-plate') }, [
+      plate,
+      h('div', { class: 'plate-body' }, [
+        h('div', { class: 'plate-name' }, [
+          ht.name,
+          h('span', { class: 'honey-swatch', style: { background: vis.color } })
+        ]),
+        h('div', { class: 'plate-desc' },
+          count + ' jar' + (count !== 1 ? 's' : '') + ' — ' + fmtMoney(price) + ' each via ' + ch.name),
+        notes.length ? h('div', { class: 'plate-notes' }, notes) : null,
+        h('div', { class: 'plate-foot' }, h('button', {
+          class: 'plate-buy',
+          onclick: function() {
+            var r = sellHoney(best, htId, batch);
+            toast(r.msg, r.ok ? 'good' : 'bad');
+            if (r.ok) render();
+          }
+        }, [ h('span', { class: 'plate-buy-label' }, 'Sell ' + batch),
+             h('span', { class: 'plate-price' }, fmtMoney(price * batch)) ]))
+      ])
     ]));
   });
-  if (!jarRows.length) {
-    jarRows.push(h('p', { class: 'muted', style: { fontSize: '13px', fontStyle: 'italic' },
+  if (!jarCards.length) {
+    jarCards.push(h('p', { class: 'market-section-blurb',
       text: 'No jars ready yet. Inspect a hive, use its Harvest action, then bottle the honey.' }));
   }
-  cards.push(h('div', { class: 'card' }, [
-    h('div', { class: 'card-title' }, '🍯 Sell honey'),
-    h('div', { class: 'shop-list' }, jarRows)
+  cards.push(h('div', { class: 'market-section' }, [
+    h('div', { class: 'market-section-head' }, 'Sell honey'),
+    h('div', { class: 'plate-grid' }, jarCards)
   ]));
 
   var wax = inv.wax || 0;
   if (wax >= 0.3) {
-    cards.push(h('div', { class: 'card' }, [
-      h('div', { class: 'card-title' }, '🕯️ Sell wax'),
-      h('div', { class: 'shop-item' }, [
-        h('div', { class: 'ico' }, '🕯️'),
-        h('div', { class: 'meta' }, [
-          h('b', { text: 'Rendered beeswax' }),
-          h('p', { text: (Math.round(wax * 10) / 10) + ' kg in stock' })
-        ]),
-        h('div', { class: 'shop-action' }, h('button', {
-          class: 'btn btn-leaf shop-buy',
-          onclick: function() { var r = renderWax(); toast(r.msg, r.ok ? 'good' : 'bad'); if (r.ok) render(); }
-        }, 'Sell wax'))
+    cards.push(h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Sell wax'),
+      h('div', { class: 'plate-grid' }, [
+        h('div', { class: 'plate-card no-plate' }, [
+          h('div', { class: 'plate-body' }, [
+            h('div', { class: 'plate-name' }, 'Rendered beeswax'),
+            h('div', { class: 'plate-desc' },
+              (Math.round(wax * 10) / 10) + ' kg in stock'),
+            h('div', { class: 'plate-foot' }, h('button', {
+              class: 'plate-buy',
+              onclick: function() {
+                var r = renderWax();
+                toast(r.msg, r.ok ? 'good' : 'bad');
+                if (r.ok) render();
+              }
+            }, h('span', { class: 'plate-buy-label' }, 'Sell wax')))
+          ])
+        ])
       ])
     ]));
   }
 
-  /* Engagement update — Candles card (always shown if wax or candles present) */
+  /* Beeswax candles: a single full-width card with the make/sell controls. */
   var candleCount = inv.candles || 0;
   if (wax >= CANDLE_WAX_PER_BATCH || candleCount > 0) {
     var _wkInYr = ((Game.week - 1) % 52) + 1;
@@ -2074,8 +2615,8 @@ function _ui_marketSellTab() {
     var blurb = firstTime ? h('div', { class: 'candle-blurb' },
       'Cappings wax rendered clean and poured into moulds — ' + Math.round(CANDLE_WAX_PER_BATCH * 1000) + 'g of wax becomes ' + CANDLES_PER_BATCH + ' candles worth £' + (CANDLES_PER_BATCH * CANDLE_PRICE).toFixed(2) + ', vs about £' + (CANDLE_WAX_PER_BATCH * 14).toFixed(2) + ' of raw wax.') : null;
 
-    cards.push(h('div', { class: 'card candle-card' }, [
-      h('div', { class: 'card-title' }, '🕯️ Beeswax candles'),
+    cards.push(h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Beeswax candles'),
       blurb,
       h('div', { class: 'candle-stats' }, [
         h('span', {}, 'Wax: ' + wax.toFixed(2) + ' kg'),
@@ -2083,7 +2624,7 @@ function _ui_marketSellTab() {
       ]),
       h('div', { class: 'candle-actions' }, [
         h('button', {
-          class: 'btn btn-leaf',
+          class: 'plate-buy plate-buy-wide',
           disabled: (!_isWinter || maxBatches < 1) ? 'disabled' : null,
           onclick: function() {
             var r = makeCandles(1);
@@ -2092,7 +2633,7 @@ function _ui_marketSellTab() {
           }
         }, _isWinter ? ('Make 1 batch (' + CANDLES_PER_BATCH + ' candles)') : 'Winter only'),
         h('button', {
-          class: 'btn',
+          class: 'plate-buy plate-buy-ghost plate-buy-wide',
           disabled: candleCount < 1 ? 'disabled' : null,
           onclick: function() {
             var r = sellCandles(candleCount);
@@ -2107,23 +2648,36 @@ function _ui_marketSellTab() {
 
   var alive = (typeof aliveColonies === 'function') ? aliveColonies() : [];
   if (alive.length) {
-    var colRows = alive.map(function(col) {
+    var beePlate = MARKET_PLATES.bees || {};
+    var colCards = alive.map(function(col) {
       var val = (typeof colonyValue === 'function') ? colonyValue(col) : 0;
-      return h('div', { class: 'shop-item' }, [
-        h('div', { class: 'ico' }, '🐝'),
-        h('div', { class: 'meta' }, [
-          h('b', { text: col.name }),
-          h('p', { text: 'A buyer would pay around ' + fmtMoney(val) + ' for this colony.' })
-        ]),
-        h('div', { class: 'shop-action' }, h('button', {
-          class: 'btn shop-buy',
-          onclick: function() { var r = sellColony(col, false); toast(r.msg, r.ok ? 'good' : 'bad'); if (r.ok) render(); }
-        }, 'Sell colony'))
+      var strain = col.strain || 'local';
+      var platePath = strain === 'italian'   ? beePlate['nuc-italian']
+                    : strain === 'carniolan' ? beePlate['nuc-carniolan']
+                    : strain === 'buckfast'  ? beePlate['nuc-buckfast']
+                    : strain === 'native'    ? beePlate['nuc-native']
+                    : beePlate['nuc'];
+      var plate = _ui_plateImg(platePath || null, col.name, '1x1');
+      return h('div', { class: 'plate-card' + (plate ? '' : ' no-plate') }, [
+        plate,
+        h('div', { class: 'plate-body' }, [
+          h('div', { class: 'plate-name' }, col.name),
+          h('div', { class: 'plate-desc' },
+            'A buyer would pay around ' + fmtMoney(val) + ' for this colony.'),
+          h('div', { class: 'plate-foot' }, h('button', {
+            class: 'plate-buy plate-buy-ghost',
+            onclick: function() {
+              var r = sellColony(col, false);
+              toast(r.msg, r.ok ? 'good' : 'bad');
+              if (r.ok) render();
+            }
+          }, h('span', { class: 'plate-buy-label' }, 'Sell colony')))
+        ])
       ]);
     });
-    cards.push(h('div', { class: 'card' }, [
-      h('div', { class: 'card-title' }, '🐝 Sell colonies'),
-      h('div', { class: 'shop-list' }, colRows)
+    cards.push(h('div', { class: 'market-section' }, [
+      h('div', { class: 'market-section-head' }, 'Sell colonies'),
+      h('div', { class: 'plate-grid' }, colCards)
     ]));
   }
 
@@ -2149,20 +2703,30 @@ function _ui_totalJars(obj) {
 var _ui_handbookSelected = null;
 var _ui_handbookSearch = '';
 var _ui_handbookGlossary = false;
+// Track whether the mobile TOC drawer is open. On desktop the
+// <details> element is always treated as open (the summary is
+// hidden by CSS), so the flag only takes effect at narrow widths.
+var _ui_handbookTocOpen = true;
 
 function _ui_buildHandbookView() {
   var enc = (typeof window.ENCYCLOPEDIA !== 'undefined') ? window.ENCYCLOPEDIA : {};
   var gloss = (typeof window.GLOSSARY !== 'undefined') ? window.GLOSSARY : {};
 
-  // Group articles by category
+  // Group articles by category. ENCYCLOPEDIA is an array — iterating
+  // with Object.keys() yields numeric index strings that become the
+  // article _id the view reads.
   var byCategory = {};
+  var catOrder = [];
   var all = [];
   Object.keys(enc).forEach(function(id) {
     var art = enc[id];
     art._id = id;
     all.push(art);
     var cat = art.category || 'General';
-    if (!byCategory[cat]) byCategory[cat] = [];
+    if (!byCategory[cat]) {
+      byCategory[cat] = [];
+      catOrder.push(cat);
+    }
     byCategory[cat].push(art);
   });
 
@@ -2172,13 +2736,17 @@ function _ui_buildHandbookView() {
            (a.body || '').toLowerCase().indexOf(search) !== -1;
   }) : null;
 
-  // TOC
-  var tocItems = [];
+  // ─── Banner ──────────────────────────────────────────────────────────
+  var banner = h('div', { class: 'handbook-banner' }, [
+    h('h1', { class: 'handbook-title', text: 'The Beekeeper’s Handbook' }),
+    h('div', { class: 'handbook-rule' })
+  ]);
 
+  // ─── Search field (paper-and-ink underline style) ────────────────────
   var searchBox = h('input', {
     type: 'text',
     class: 'book-search',
-    placeholder: 'Search...',
+    placeholder: 'Search the handbook',
     value: _ui_handbookSearch,
     oninput: function() {
       _ui_handbookSearch = searchBox.value;
@@ -2187,60 +2755,91 @@ function _ui_buildHandbookView() {
       render();
     }
   });
-  tocItems.push(searchBox);
+  var searchWrap = h('div', { class: 'handbook-search-wrap' }, searchBox);
+
+  // ─── Table of contents ───────────────────────────────────────────────
+  var tocItems = [];
+
+  function tocLink(art) {
+    var isActive = _ui_handbookSelected === art._id && !_ui_handbookGlossary;
+    return h('div', {
+      class: 'book-link' + (isActive ? ' active' : ''),
+      onclick: function() {
+        _ui_handbookSelected = art._id;
+        _ui_handbookGlossary = false;
+        // On mobile (single-column), close the TOC so the freshly
+        // selected article jumps into view rather than sitting below
+        // a tall contents list.
+        if (window.innerWidth <= 720) _ui_handbookTocOpen = false;
+        render();
+      }
+    }, [
+      h('span', { class: 'book-link-mark', text: isActive ? '✣' : '' }),
+      h('span', { class: 'book-link-label', text: art.title || art._id })
+    ]);
+  }
 
   if (filtered) {
-    filtered.forEach(function(art) {
-      tocItems.push(h('div', {
-        class: 'book-link' + (_ui_handbookSelected === art._id && !_ui_handbookGlossary ? ' active' : ''),
-        text: art.title || art._id,
-        onclick: function() {
-          _ui_handbookSelected = art._id;
-          _ui_handbookGlossary = false;
-          render();
-        }
-      }));
-    });
+    if (filtered.length === 0) {
+      tocItems.push(h('div', { class: 'book-empty', text: 'No matches.' }));
+    } else {
+      filtered.forEach(function(art) { tocItems.push(tocLink(art)); });
+    }
   } else {
-    Object.keys(byCategory).forEach(function(cat) {
-      var catItems = byCategory[cat].map(function(art) {
-        return h('div', {
-          class: 'book-link' + (_ui_handbookSelected === art._id && !_ui_handbookGlossary ? ' active' : ''),
-          text: art.title || art._id,
-          onclick: function() {
-            _ui_handbookSelected = art._id;
-            _ui_handbookGlossary = false;
-            render();
-          }
-        });
-      });
-      tocItems.push(h('div', { class: 'book-cat' }, [
-        h('b', { text: cat }),
-        catItems
-      ]));
+    catOrder.forEach(function(cat) {
+      var catChildren = [
+        h('div', { class: 'book-cat-head' }, [
+          h('span', { class: 'book-cat-rule' }),
+          h('span', { class: 'book-cat-label', text: cat }),
+          h('span', { class: 'book-cat-rule' })
+        ])
+      ];
+      byCategory[cat].forEach(function(art) { catChildren.push(tocLink(art)); });
+      tocItems.push(h('div', { class: 'book-cat' }, catChildren));
     });
   }
 
   tocItems.push(h('div', {
-    class: 'book-link' + (_ui_handbookGlossary ? ' active' : ''),
-    text: '📖 Glossary',
+    class: 'book-link book-link-glossary' + (_ui_handbookGlossary ? ' active' : ''),
     onclick: function() {
       _ui_handbookGlossary = true;
       _ui_handbookSelected = null;
       render();
     }
-  }));
+  }, [
+    h('span', { class: 'book-link-mark', text: _ui_handbookGlossary ? '✣' : '' }),
+    h('span', { class: 'book-link-label', text: 'Glossary' })
+  ]));
 
-  var toc = h('div', { class: 'book-toc' }, tocItems);
+  // The TOC is wrapped in a <details> so it collapses cleanly on
+  // mobile (where stage width forces single-column). On desktop the
+  // <summary> is hidden by CSS and the details element behaves like a
+  // plain div, so we always render it open at desktop widths.
+  var tocAttrs = { class: 'book-toc' };
+  if (window.innerWidth > 720 || _ui_handbookTocOpen) tocAttrs.open = 'open';
+  var tocSummary = h('summary', { class: 'book-toc-summary', text: 'Contents' });
+  // Native <details> toggle fires before our handler — keep our flag
+  // in sync so re-renders preserve the user's choice.
+  var tocEl = h('details', tocAttrs, [
+    tocSummary,
+    h('div', { class: 'book-toc-list' }, tocItems)
+  ]);
+  tocEl.addEventListener('toggle', function() {
+    _ui_handbookTocOpen = tocEl.open;
+  });
+  var toc = tocEl;
 
-  // Article pane
+  // ─── Article pane ────────────────────────────────────────────────────
   var articlePane;
   if (_ui_handbookGlossary) {
     articlePane = _ui_buildGlossaryPane(gloss);
-  } else if (_ui_handbookSelected && enc[_ui_handbookSelected]) {
+  } else if (_ui_handbookSelected !== null && enc[_ui_handbookSelected]) {
     articlePane = _ui_buildArticlePane(enc[_ui_handbookSelected]);
   } else {
-    var firstArt = all[0];
+    // In search mode, default to the first matching result so the
+    // shown article reflects the query. Otherwise fall to the very
+    // first article in the encyclopedia.
+    var firstArt = (filtered && filtered.length) ? filtered[0] : all[0];
     if (firstArt) {
       _ui_handbookSelected = firstArt._id;
       articlePane = _ui_buildArticlePane(firstArt);
@@ -2252,30 +2851,53 @@ function _ui_buildHandbookView() {
   }
 
   var book = h('div', { class: 'book' }, [toc, articlePane]);
-  return h('div', { class: 'panel-view', style: { padding: '16px' } }, book);
+  return h('div', { class: 'panel-view handbook-view' }, [banner, searchWrap, book]);
 }
 
 function _ui_buildArticlePane(art) {
   var body = art.body || '';
-  var rendered = _ui_renderArticleBody(body);
+  var children = [];
 
-  return h('div', { class: 'book-article' }, [
-    h('h2', { text: art.title || '' }),
-    h('div', { class: 'acat', text: art.category || '' }),
-    rendered
-  ]);
+  // Optional painted plate at the top of the article. If the named
+  // file is missing on disk, the frame collapses to nothing via
+  // the onerror handler — the article still renders.
+  if (art.plate) {
+    var plateImg = h('img', {
+      class: 'article-plate',
+      src: 'img/plates/' + art.plate,
+      alt: art.title || '',
+      onerror: function(e) {
+        var img = e && e.target;
+        if (img) {
+          var frame = img.parentNode;
+          if (frame && frame.parentNode) frame.parentNode.removeChild(frame);
+        }
+      }
+    });
+    children.push(h('div', { class: 'article-plate-frame' }, plateImg));
+  }
+
+  children.push(h('div', { class: 'acat', text: art.category || '' }));
+  children.push(h('h2', { class: 'article-title', text: art.title || '' }));
+
+  var rendered = _ui_renderArticleBody(body);
+  children.push(rendered);
+
+  return h('div', { class: 'book-article' }, children);
 }
 
 function _ui_renderArticleBody(text) {
-  var container = h('div', {});
+  var container = h('div', { class: 'article-body' });
   var paragraphs = text.split(/\n\n+/);
+  var firstParaSeen = false;
+
   paragraphs.forEach(function(block) {
     block = block.trim();
     if (!block) return;
 
     // Heading
     if (block.indexOf('## ') === 0) {
-      container.appendChild(h('h4', { text: block.slice(3).trim() }));
+      container.appendChild(h('h4', { class: 'article-subhead', text: block.slice(3).trim() }));
       return;
     }
 
@@ -2294,7 +2916,10 @@ function _ui_renderArticleBody(text) {
       return;
     }
 
-    container.appendChild(h('p', { text: block }));
+    // The first running paragraph carries the drop-cap.
+    var pClass = !firstParaSeen ? 'article-lede' : '';
+    firstParaSeen = true;
+    container.appendChild(h('p', { class: pClass, text: block }));
   });
   return container;
 }
@@ -2302,9 +2927,9 @@ function _ui_renderArticleBody(text) {
 function _ui_buildGlossaryPane(gloss) {
   var terms = Object.keys(gloss).sort();
   var items = terms.map(function(term) {
-    return h('div', { class: 'stat-row' }, [
-      h('span', { class: 'lbl', style: { fontWeight: '700', minWidth: '160px' }, text: term }),
-      h('span', { text: gloss[term] || '' })
+    return h('div', { class: 'glossary-row' }, [
+      h('div', { class: 'glossary-term', text: term }),
+      h('div', { class: 'glossary-def', text: gloss[term] || '' })
     ]);
   });
 
@@ -2313,9 +2938,9 @@ function _ui_buildGlossaryPane(gloss) {
   }
 
   return h('div', { class: 'book-article' }, [
-    h('h2', { text: 'Glossary' }),
     h('div', { class: 'acat', text: 'Reference' }),
-    h('div', {}, items)
+    h('h2', { class: 'article-title', text: 'Glossary' }),
+    h('div', { class: 'glossary-body' }, items)
   ]);
 }
 
@@ -2334,11 +2959,11 @@ function _ui_buildRecordsView(startTab) {
 
   var tabBar = h('div', { class: 'records-tabs' }, [
     h('button', { class: 'records-tab' + (activeTab === 'journal'  ? ' active' : ''),
-      onclick: function() { setTab('journal'); } }, '📜 Journal'),
+      onclick: function() { setTab('journal'); } }, 'Journal'),
     h('button', { class: 'records-tab' + (activeTab === 'finances' ? ' active' : ''),
-      onclick: function() { setTab('finances'); } }, '💰 Finances'),
+      onclick: function() { setTab('finances'); } }, 'Finances'),
     h('button', { class: 'records-tab' + (activeTab === 'samples'  ? ' active' : ''),
-      onclick: function() { setTab('samples'); } }, '🧪 Samples')
+      onclick: function() { setTab('samples'); } }, 'Samples')
   ]);
 
   var content;
@@ -2347,7 +2972,7 @@ function _ui_buildRecordsView(startTab) {
   else                                content = _ui_buildJournalContent();
 
   var goalsWidget = _ui_buildGoalsWidget();
-  return h('div', { class: 'panel-view narrow' }, [tabBar, content, goalsWidget]);
+  return h('div', { class: 'panel-view narrow records-view' }, [tabBar, content, goalsWidget]);
 }
 
 /* ====================================================================
@@ -2441,7 +3066,46 @@ function _ui_buildSamplesContent() {
   return h('div', {}, [sendCard, pendingCard, doneCard].filter(Boolean));
 }
 
+function _journal_dingbatFor(entry) {
+  var tone = entry.tone || 'plain';
+  if (tone === 'good') return '·';
+  if (tone === 'warn') return '†';
+  if (tone === 'bad')  return '✕';
+  return '•';
+}
+
 function _ui_buildJournalContent() {
+  var log = (Game.log || []).slice();
+  var headerPlate = h('div', { class: 'journal-header-plate' }, [
+    h('img', { class: 'journal-header-img', src: 'img/plates/scene-summer-harvest.png',
+      alt: '', onerror: function () { this.style.display = 'none'; } }),
+    h('div', { class: 'journal-header-scrim' }),
+    h('div', { class: 'journal-header-titlebox' }, [
+      h('div', { class: 'journal-header-rule' }),
+      h('div', { class: 'journal-header-title', text: 'The keeper’s journal' })
+    ])
+  ]);
+  var entries = log.map(function(entry) {
+    return h('div', { class: 'log-entry ' + (entry.tone || 'plain') }, [
+      h('span', { class: 'when', text: (typeof dateLabel === 'function') ? dateLabel(entry.week) : ('Wk ' + entry.week) }),
+      h('span', { class: 'ico', text: _journal_dingbatFor(entry) }),
+      h('span', { class: 'txt', text: entry.text || '' })
+    ]);
+  });
+  if (!entries.length) {
+    return h('div', { class: 'journal-content' }, [headerPlate,
+      h('div', { class: 'empty-state' }, [
+        h('p', { class: 'empty-state-note',
+          text: 'Your journal is empty. Events and notes will appear here as you play.' })
+      ])
+    ]);
+  }
+  return h('div', { class: 'journal-content' }, [headerPlate,
+    h('div', { class: 'journal-spread' }, entries)
+  ]);
+}
+
+function _ui_buildJournalContent_OLD_UNUSED() {
   var log = (Game.log || []).slice();
   var entries = log.map(function(entry) {
     return h('div', { class: 'log-entry ' + (entry.tone || 'plain') }, [
@@ -4265,7 +4929,6 @@ function openInspection(colony) {
       title: 'Cannot inspect in deep winter',
       body: h('div', { class: 'modal-body' }, [
         h('div', { class: 'explainer' }, [
-          h('div', { class: 'explainer-art' }, '❄️'),
           h('div', { class: 'explainer-body' }, [
             h('p', { text: report.blockReason }),
             h('p', { html: '<b>What to do instead:</b> heft the hive from behind — if it feels light, slide a block of fondant under the crown board. No need to open it until March.' })
@@ -4285,7 +4948,6 @@ function openInspection(colony) {
       title: 'Conditions are not ideal',
       body: h('div', { class: 'modal-body' }, [
         h('div', { class: 'explainer' }, [
-          h('div', { class: 'explainer-art' }, '🌧️'),
           h('div', { class: 'explainer-body' }, [
             h('p', { text: report.blockReason }),
             h('p', { html: '<b>When to inspect:</b> choose a calm, dry day above 12°C when foragers are flying. Inspecting in poor conditions makes disease signs and queen cells harder to spot, and the bees more defensive.' })
@@ -5059,35 +5721,53 @@ if (typeof window !== 'undefined') {
   window.openHoneyShowEntry = openHoneyShowEntry;
 }
 
-/* Goals widget — compact list grouped by tier */
+/* Goals widget — illuminated checklist grouped by tier.
+
+   Plate-led rebuild: each tier opens with a small-caps display heading
+   over a thin gold rule. Each goal is a hand-drawn check-mark indicator
+   built from CSS (no emoji, no icon font) followed by the title in
+   Spectral. Completed goals: ochre-filled indicator + italic ink-soft
+   body. Pending goals: hollow indicator + ink body. The section
+   headings use IM Fell English to match the rest of the chrome. */
 function _ui_buildGoalsWidget() {
   if (typeof GOALS === 'undefined') return null;
   var done = (Game.flags && Game.flags.completedGoals) || [];
   var tiers = [
-    { key: 'survival', label: 'Survival (Year 1)' },
-    { key: 'growth',   label: 'Growth (Year 2-3)' },
-    { key: 'mastery',  label: 'Mastery (Year 3+)' }
+    { key: 'survival', label: 'Survival · Year 1' },
+    { key: 'growth',   label: 'Growth · Year 2-3' },
+    { key: 'mastery',  label: 'Mastery · Year 3+' }
   ];
   var tierNodes = tiers.map(function(tier) {
     var items = GOALS.filter(function(g) { return g.tier === tier.key; });
+    var doneCount = items.filter(function(g) { return done.indexOf(g.id) !== -1; }).length;
     var rows = items.map(function(g) {
       var isDone = done.indexOf(g.id) !== -1;
+      /* The check-mark indicator is a small SVG so the curve and tick
+         render cleanly at any zoom and on retina. CSS-only would lose
+         the hand-drawn feel. */
+      var mark = h('span', { class: 'goal-mark' + (isDone ? ' goal-mark-done' : ' goal-mark-todo'), title: isDone ? 'Completed' : 'Pending' });
+      mark.innerHTML = isDone
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" class="goal-mark-ring"></circle><path d="M7 12.5 L10.5 16 L17 9" class="goal-mark-tick"></path></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" class="goal-mark-ring"></circle></svg>';
       return h('div', { class: 'goal-item ' + (isDone ? 'done' : 'todo'), title: g.desc }, [
-        h('span', { class: 'goal-mark' }, isDone ? '✓' : '○'),
-        h('span', {}, [
-          h('b', { text: g.title }),
-          h('div', { style: 'font-size:11px;color:var(--ink-soft);' }, g.desc)
+        mark,
+        h('div', { class: 'goal-body' }, [
+          h('div', { class: 'goal-title', text: g.title }),
+          h('div', { class: 'goal-desc', text: g.desc })
         ])
       ]);
     });
     return h('div', { class: 'goals-tier' }, [
-      h('div', { class: 'goals-tier-title' }, tier.label),
-      h('div', {}, rows)
+      h('div', { class: 'goals-tier-head' }, [
+        h('span', { class: 'goals-tier-title', text: tier.label }),
+        h('span', { class: 'goals-tier-count', text: doneCount + ' / ' + items.length })
+      ]),
+      h('div', { class: 'goals-tier-list' }, rows)
     ]);
   });
   return h('div', { class: 'goals-widget card' }, [
-    h('div', { class: 'card-title' }, '🎯 Goals'),
-    h('div', {}, tierNodes)
+    h('div', { class: 'goals-widget-head' }, 'Goals'),
+    h('div', { class: 'goals-widget-body' }, tierNodes)
   ]);
 }
 

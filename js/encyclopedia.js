@@ -6,6 +6,7 @@ window.ENCYCLOPEDIA = [
     id: 'welcome',
     category: 'Getting Started',
     title: 'Welcome to Beekeeping',
+    plate: 'scene-spring-buildup.png',
     body: `Beekeeping is one of the most rewarding hobbies you can take on, but it is a genuine responsibility. You are caring for living creatures, and they depend on you for their health and survival.
 
 During swarm season, roughly April to July, you will need to inspect your colony every seven to nine days. Outside that window the commitment eases off considerably. Overall, expect to spend a few hours a week during the busy months, much less in winter.
@@ -26,6 +27,7 @@ Go in with realistic expectations and you will find beekeeping endlessly interes
     id: 'first-bees',
     category: 'Getting Started',
     title: 'Getting Your First Bees',
+    plate: 'tool-nucleus-box.png',
     body: `You have three main options for obtaining your first colony. Each has different pros, cons and costs.
 
 ## The nucleus colony (nuc)
@@ -49,6 +51,7 @@ Buy a local nuc from a reputable beekeeper. Local means the bees are adapted to 
     id: 'apiary-site',
     category: 'Getting Started',
     title: 'Choosing an Apiary Site',
+    plate: 'scene-moorland.png',
     body: `Where you put your hives matters nearly as much as how you keep the bees in them. A good site makes your beekeeping easier and your bees healthier and calmer.
 
 ## What to look for
@@ -75,6 +78,7 @@ Talk to your beekeeping association about what works in your area.`
     id: 'the-castes',
     category: 'The Honey Bee Colony',
     title: 'Queen, Workers and Drones',
+    plate: 'bee-italian-queen.png',
     body: `A honey bee colony is made up of three castes, each with a distinct role.
 
 ## The queen
@@ -94,6 +98,7 @@ Drones are males. They have no sting, do no foraging, build no comb and carry no
     id: 'brood-cycle',
     category: 'The Honey Bee Colony',
     title: 'The Brood Cycle',
+    plate: 'frame-brood.png',
     body: `Understanding the brood cycle is fundamental to reading your inspections correctly. Every bee starts as an egg and passes through the same stages.
 
 ## Egg
@@ -125,6 +130,7 @@ When a colony loses its queen and raises an emergency replacement from a young l
     id: 'colony-year',
     category: 'The Honey Bee Colony',
     title: 'The Colony Through the Year',
+    plate: 'scene-spring-buildup.png',
     body: `A honey bee colony is not a static thing. Its size, behaviour and needs change dramatically with the seasons.
 
 ## Winter
@@ -152,6 +158,7 @@ Workers change roles as they age. Young bees clean cells, then nurse larvae, the
     id: 'pheromones',
     category: 'The Honey Bee Colony',
     title: 'How the Colony Communicates',
+    plate: 'bee-italian-queen.png',
     body: `Honey bees have a sophisticated chemical and physical communication system. Understanding the basics helps you read colony behaviour.
 
 ## Queen mandibular pheromone (QMP)
@@ -177,6 +184,7 @@ A forager returning from a rich source performs a figure-of-eight waggle dance o
     id: 'national-hive',
     category: 'Hives & Equipment',
     title: 'The National Hive',
+    plate: 'frame-super.png',
     body: `The British Standard National is the most widely used hive in the UK. If you join a local association, borrow kit or ask for help, National equipment is what you are most likely to encounter. Stick to one hive type and everything becomes interchangeable.
 
 ## The main components from bottom to top
@@ -196,6 +204,7 @@ Each component is designed around bee space and the parts are interchangeable be
     id: 'frames-comb',
     category: 'Hives & Equipment',
     title: 'Frames, Foundation and Comb',
+    plate: 'frame-healthy-capped.png',
     body: `The frame is the basic unit of hive management. Everything you do at an inspection involves handling frames.
 
 ## Foundation
@@ -219,6 +228,7 @@ Brood boxes use deeper frames. Supers use shallower frames, which are lighter to
     id: 'tools-kit',
     category: 'Hives & Equipment',
     title: 'Tools and Protective Kit',
+    plate: 'tool-smoker.png',
     body: `You do not need much to get started, but the kit you do buy matters. Cheap kit that fails at the hive is a safety risk and a nuisance.
 
 ## At the hive
@@ -241,6 +251,7 @@ Brood boxes use deeper frames. Supers use shallower frames, which are lighter to
     id: 'hive-types',
     category: 'Hives & Equipment',
     title: 'Other Hive Types',
+    plate: 'hive-state-strong.png',
     body: `The National is the UK standard, but you may encounter other designs. Knowing the main ones helps when visiting other beekeepers or buying second-hand equipment.
 
 ## Common types
@@ -266,6 +277,7 @@ Stick to the National until you have experience.`
     id: 'year-winter',
     category: 'The Beekeeping Year',
     title: 'Winter (December-February)',
+    plate: 'scene-winter-apiary.png',
     body: `Winter is the beekeeper's quietest period, but there are important jobs to do and things to keep an eye on.
 
 ## What the bees are doing
@@ -286,6 +298,7 @@ The colony clusters tightly around the queen, vibrating their wing muscles to ge
     id: 'year-spring',
     category: 'The Beekeeping Year',
     title: 'Spring (March-May)',
+    plate: 'scene-spring-buildup.png',
     body: `Spring is one of the most important and risky times of year. The colony builds rapidly but forage may be patchy, leaving colonies vulnerable to starvation even as they grow.
 
 ## First inspection
@@ -311,6 +324,7 @@ Feed light syrup (1:1) if stores are low in early spring but stop once strong fo
     id: 'year-summer',
     category: 'The Beekeeping Year',
     title: 'Summer (June-August)',
+    plate: 'scene-summer-flow.png',
     body: `Summer is the most intensive period for the beekeeper and the colony alike.
 
 ## Weekly inspections
@@ -338,6 +352,7 @@ Once the honey crop is off, start your main varroa treatment. Thymol products (s
     id: 'year-autumn',
     category: 'The Beekeeping Year',
     title: 'Autumn (September-November)',
+    plate: 'scene-autumn-harvest.png',
     body: `Autumn is about setting the colony up to survive the winter in the best possible condition. Decisions made now directly affect whether the colony is alive in spring.
 
 ## Feeding
@@ -366,6 +381,7 @@ Combine weak or queenless colonies with stronger ones rather than trying to over
     id: 'how-to-inspect',
     category: 'Inspections',
     title: 'How to Inspect a Colony',
+    plate: 'frame-brood.png',
     body: `A good inspection is methodical, gentle and purposeful. You are gathering specific information, not just having a look.
 
 ## Before you open the hive
@@ -391,6 +407,7 @@ Do not crush bees; use the smoker sparingly but confidently; and always close th
     id: 'five-questions',
     category: 'Inspections',
     title: 'The Five Questions',
+    plate: 'frame-brood.png',
     body: `Every inspection should answer the same five questions. Having a checklist stops you from getting distracted by how fascinating the bees are and forgetting what you actually came to find out.
 
 ## The five questions
@@ -412,6 +429,7 @@ Record the answers after each inspection. A simple notebook or a phone app will 
     id: 'reading-brood',
     category: 'Inspections',
     title: 'Reading the Brood Pattern',
+    plate: 'frame-healthy-capped.png',
     body: `The brood pattern tells you a great deal about the health and status of your colony. Learning to read it quickly is one of the most valuable skills you will develop.
 
 ## A healthy pattern
@@ -436,6 +454,7 @@ Trust your pattern-reading over time; it becomes instinctive.`
     id: 'finding-queen',
     category: 'Inspections',
     title: 'Finding and Marking the Queen',
+    plate: 'bee-italian-queen.png',
     body: `You do not need to see the queen at every inspection -- eggs prove she was there. But finding and marking her helps you track her age and spot her quickly in future.
 
 ## How to find her
@@ -465,6 +484,7 @@ A dot of paint on the thorax -- never the abdomen -- makes her visible at a glan
     id: 'nectar-pollen',
     category: 'Forage & Nectar',
     title: 'Nectar, Pollen and Honey',
+    plate: 'forage-clover.png',
     body: `Bees collect four things from the environment: nectar, pollen, water and propolis. Each serves a different purpose in the colony.
 
 ## Nectar
@@ -492,6 +512,7 @@ Propolis is a resinous substance collected from tree buds and bark. Bees use it 
     id: 'forage-calendar',
     category: 'Forage & Nectar',
     title: 'The UK Forage Calendar',
+    plate: 'forage-dandelion.png',
     body: `Knowing what is flowering and when helps you anticipate the colony's needs and understand where your honey comes from.
 
 ## Spring (March-May)
@@ -511,6 +532,7 @@ Himalayan balsam flowers prolifically near waterways and is highly attractive to
     id: 'flow-dearth',
     category: 'Forage & Nectar',
     title: 'Honey Flows and Dearth',
+    plate: 'forage-lime.png',
     body: `The rhythm of the beekeeping year is shaped by flows and dearths -- periods of abundance alternating with periods of shortage.
 
 ## A honey flow
@@ -537,6 +559,7 @@ The June gap is the most predictable UK dearth -- plan for it every year.`
     id: 'why-swarm',
     category: 'Swarming',
     title: 'Why Bees Swarm',
+    plate: 'frame-queen-cells-swarm.png',
     body: `Swarming is how honey bee colonies reproduce. It is entirely natural and a sign of a healthy, thriving colony. Understanding why it happens is the first step to managing it.
 
 ## The biological drive
@@ -556,6 +579,7 @@ After the prime swarm leaves, virgin queens may emerge and leave with smaller gr
     id: 'swarm-signs',
     category: 'Swarming',
     title: 'Recognising Swarm Preparations',
+    plate: 'frame-queen-cells-supersedure.png',
     body: `Not all queen cells are the same. Knowing the difference between swarm cells, supersedure cells and emergency cells helps you understand what the colony is doing.
 
 ## Swarm cells
@@ -575,6 +599,7 @@ After sudden queen loss, the colony converts young worker larvae (up to three da
     id: 'swarm-control',
     category: 'Swarming',
     title: 'Swarm Control',
+    plate: 'frame-queen-cells-swarm.png',
     body: `When you find charged swarm cells, you must act. Simply removing queen cells almost never works -- the colony makes more, and you risk destroying them all and leaving it queenless.
 
 ## The artificial swarm (Pagden method)
@@ -594,6 +619,7 @@ Keeps the colony in one hive. The queen stays in the brood box; all sealed brood
     id: 'catching-swarms',
     category: 'Swarming',
     title: 'Catching a Swarm',
+    plate: 'tool-bait-hive.png',
     body: `A settled swarm on a branch or wall is usually remarkably calm. The bees have eaten well before leaving, have no home to defend, and are focused on finding a new one. Most can be collected with basic equipment.
 
 ## Collecting a settled swarm
@@ -615,6 +641,7 @@ An old hive body with a frame or two of dark comb, placed in a sheltered spot at
     id: 'queen-life',
     category: 'Queen Management',
     title: "The Queen's Life",
+    plate: 'bee-italian-queen.png',
     body: `The queen is the reproductive heart of the colony. Understanding her biology helps you decide when to intervene.
 
 ## Early life and mating
@@ -634,6 +661,7 @@ Many beekeepers replace the queen every one to two years, before performance dec
     id: 'requeening',
     category: 'Queen Management',
     title: 'Requeening',
+    plate: 'bee-carniolan-queen.png',
     body: `Replacing your queen is one of the most powerful management tools available. A new, young, well-mated queen improves the colony's temperament, productivity and swarm tendency.
 
 ## Why requeen
@@ -658,6 +686,7 @@ Never introduce a queen to a colony that still contains the old queen.`
     id: 'queen-problems',
     category: 'Queen Management',
     title: 'When the Queen Fails',
+    plate: 'frame-queen-cells-emergency.png',
     body: `Not all queen problems are obvious. Knowing what to look for helps you diagnose the situation correctly and choose the right response.
 
 ## A drone-laying queen
@@ -677,6 +706,7 @@ A colony without eggs or larvae under three days old cannot raise its own queen.
     id: 'queen-rearing',
     category: 'Queen Management',
     title: 'Raising Your Own Queens',
+    plate: 'bee-buckfast-queen.png',
     body: `Raising your own queens is one of beekeeping's most satisfying advanced skills. It allows you to propagate your best colonies, increase colony numbers cheaply, and maintain a supply of spare queens.
 
 ## The basics
@@ -698,6 +728,7 @@ A strong, well-fed cell-raising colony; mating nuclei for the virgin queens to b
     id: 'uniting',
     category: 'Queen Management',
     title: 'Uniting Colonies',
+    plate: 'frame-healthy-capped.png',
     body: `Sometimes two colonies are better combined into one. A strong united colony overwinters more reliably, builds faster in spring and is a better use of your resources than keeping a weak colony struggling alone.
 
 ## When to unite
@@ -724,6 +755,7 @@ The standard safe method for combining two colonies without fighting.
     id: 'varroa-intro',
     category: 'Varroa & Bee Health',
     title: 'Varroa: the Biggest Challenge',
+    plate: 'frame-mite-damage.png',
     body: `Varroa destructor is the single biggest threat to honey bee colonies in the UK and most of the world. Every colony in the UK has varroa. There is no eradication; the goal is management.
 
 ## What varroa does
@@ -741,6 +773,7 @@ Left untreated, varroa populations grow exponentially and the colony typically d
     id: 'varroa-monitor',
     category: 'Varroa & Bee Health',
     title: 'Monitoring Varroa',
+    plate: 'frame-drone-brood.png',
     body: `Treating without monitoring is guesswork. Monitoring lets you time treatments correctly and confirm they worked.
 
 ## Natural mite drop
@@ -766,6 +799,7 @@ Monitor before and after every treatment.`
     id: 'varroa-treat',
     category: 'Varroa & Bee Health',
     title: 'Treating for Varroa',
+    plate: 'frame-mite-damage.png',
     body: `Effective varroa management combines biotechnical methods with approved treatments. No single approach is sufficient on its own.
 
 ## Biotechnical methods
@@ -787,6 +821,7 @@ Always remove the honey crop before treating. Follow label instructions exactly.
     id: 'winter-losses',
     category: 'Varroa & Bee Health',
     title: 'Why Colonies Die in Winter',
+    plate: 'scene-winter-apiary.png',
     body: `UK winter colony losses typically run at 10-30% of colonies. Understanding the main causes helps you prevent them.
 
 ## Starvation
@@ -806,6 +841,7 @@ This is why autumn varroa treatment timing is so critical. Treat before the wint
     id: 'brood-diseases',
     category: 'Diseases & Pests',
     title: 'Brood Diseases',
+    plate: 'frame-afb.png',
     body: `Knowing the signs of brood disease is essential. Some are manageable; two are notifiable by law and must be reported immediately.
 
 ## American Foul Brood (AFB) -- NOTIFIABLE
@@ -829,6 +865,7 @@ A viral disease; larvae die and form a fluid-filled sac under the old skin. Norm
     id: 'adult-diseases',
     category: 'Diseases & Pests',
     title: 'Adult Bee Diseases',
+    plate: 'frame-efb.png',
     body: `Several diseases affect adult bees rather than brood. Most are manageable with good husbandry, though a few are serious.
 
 ## Nosema
@@ -848,6 +885,7 @@ Old, dark comb harbours pathogens and should be cycled out. Moving the colony to
     id: 'pests',
     category: 'Diseases & Pests',
     title: 'Pests of the Hive',
+    plate: 'frame-mite-damage.png',
     body: `Beyond varroa, several pests can damage colonies or their equipment.
 
 ## Wax moth
@@ -875,6 +913,7 @@ Other honey bee colonies will exploit a weak hive. In a dearth, keep entrances s
     id: 'asian-hornet',
     category: 'Diseases & Pests',
     title: 'The Asian Hornet',
+    plate: 'region-france.png',
     body: `Vespa velutina, the yellow-legged Asian hornet, is an invasive predator increasingly detected in the UK. It is a serious threat to honey bees and other pollinators.
 
 ## Identification
@@ -901,6 +940,7 @@ Reporting quickly is the most important action you can take.`
     id: 'harvesting',
     category: 'Honey & Hive Products',
     title: 'Harvesting Honey',
+    plate: 'scene-summer-harvest.png',
     body: `Harvesting is rewarding, but getting it right matters for honey quality and bee welfare.
 
 ## Only take ripe honey
@@ -922,6 +962,7 @@ If significant numbers remain, the escape may be blocked -- check before removin
     id: 'extracting',
     category: 'Honey & Hive Products',
     title: 'Extracting and Bottling',
+    plate: 'tool-extractor.png',
     body: `Extraction should happen in a clean, bee-proof environment. Work efficiently -- the smell of honey can trigger robbing quickly.
 
 ## The extraction process
@@ -942,6 +983,7 @@ All honey crystallises eventually; it is a natural process, not spoilage. Oilsee
     id: 'comb-wax',
     category: 'Honey & Hive Products',
     title: 'Comb Honey, Cut Comb and Wax',
+    plate: 'frame-super.png',
     body: `Beyond extracted liquid honey there are other valuable products from the hive.
 
 ## Comb honey and cut comb
@@ -965,6 +1007,7 @@ Propolis can be collected and used in tinctures. Pollen can be trapped and sold 
     id: 'selling-honey',
     category: 'Selling & Business',
     title: 'Selling Your Honey',
+    plate: 'scene-autumn-harvest.png',
     body: `Many beekeepers sell surplus honey. The rules around labelling are straightforward once you know them, and compliance is important.
 
 ## Sales channels
@@ -996,6 +1039,7 @@ Price your honey to reflect the quality and your time. Underpricing devalues the
     id: 'scaling-up',
     category: 'Selling & Business',
     title: 'From Hobby to Business',
+    plate: 'figure-master.png',
     body: `Most beekeepers start with one or two hives and expand gradually. Understanding the rough thresholds helps you make sensible decisions.
 
 ## The three tiers
@@ -1021,6 +1065,7 @@ Tax registration and business record-keeping requirements kick in once income ri
     id: 'registering',
     category: 'Law & Responsibility',
     title: 'Registering and the Law',
+    plate: 'mentor-portrait.png',
     body: `Beekeeping in the UK comes with legal responsibilities, most of which are simple to meet and exist to protect bees and other beekeepers.
 
 ## BeeBase registration
@@ -1047,6 +1092,7 @@ Vespa velutina is subject to a rapid response programme. Report sightings via th
     id: 'good-neighbour',
     category: 'Law & Responsibility',
     title: 'Being a Good Beekeeper',
+    plate: 'figure-beekeeper.png',
     body: `Beekeeping takes place in shared space. How you manage your bees affects your neighbours, the public and the reputation of beekeeping.
 
 ## Flight paths and hive placement
