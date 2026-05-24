@@ -2206,11 +2206,11 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 
 /* ── Painted plate at the top of every Handbook article ─────────────── */
-/* Image carries its own height directly so the plate renders even
-   when the browser would otherwise collapse `height: 100%` against
-   an auto-height parent (older Safari, certain cache states). */
+/* Plates render at their painted intrinsic aspect ratio — landscape
+   stays 16:9, specimens stay square — no enforced crop. Generous
+   max-height keeps it grounded but lets the painting breathe. */
 .article-plate-frame {
-  margin: 0 0 18px;
+  margin: 0 0 22px;
   border: 1px solid var(--ink);
   background: var(--paper-2);
   overflow: hidden;
@@ -2221,12 +2221,13 @@ button { font-family: var(--sans); cursor: pointer; }
 .article-plate {
   display: block;
   width: 100%;
-  height: 320px;
-  object-fit: cover;
-  object-position: center;
+  height: auto;
+  max-height: 720px;
+  object-fit: contain;
+  object-position: center top;
 }
 @media (max-width: 720px) {
-  .article-plate { height: 220px; }
+  .article-plate { max-height: 420px; }
 }
 
 /* ── Glossary pane ──────────────────────────────────────────────────── */
@@ -2620,8 +2621,7 @@ button { font-family: var(--sans); cursor: pointer; }
   .book-article .article-title { font-size: 22px; }
   .article-body { font-size: 14.5px; line-height: 1.65; }
   .article-body p.article-lede::first-letter { font-size: 46px; padding-right: 6px; }
-  .article-plate-frame { max-height: 220px; }
-  .article-plate { max-height: 220px; }
+  .article-plate { max-height: 420px; }
   .glossary-row { grid-template-columns: 1fr; gap: 4px; }
   .glossary-term { font-size: 13px; }
 
