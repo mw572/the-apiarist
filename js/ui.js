@@ -327,39 +327,47 @@ function renderTitleScreen() {
   app.innerHTML = '';
 
   var chosenDiff = 'beekeeper';
-  var chosenRegion = 'uk';
+  var chosenRegion = 'uk';     // UK is the only playable region in v1; selector hidden.
+  var chosenSite = 'rural';    // default starting apiary site type
   var nameInput;
   var titlePage;
 
-  /* ----- Region cards: full landscape plates as the card surface.
-     Locked regions are desaturated and not clickable. ----- */
-  var regionPlate = {
-    uk:      'img/plates/region-uk.png',
-    us_ne:   'img/plates/region-us-northeast.png',
-    france:  'img/plates/region-france.png',
-    japan:   'img/plates/region-japan.png',
-    nz:      'img/plates/region-nz.png',
-  };
-  var regionCards = Object.keys(REGIONS).map(function (key) {
-    var r = REGIONS[key];
-    var plate = regionPlate[key] || '';
-    var classes = 'title-region region-pick';
-    if (key === chosenRegion) classes += ' selected sel';
-    if (!r.available) classes += ' locked';
+  /* ----- Site cards: the player picks where they'll set up their
+     first apiary. The painted spring scene for each site doubles as
+     the card surface — same plate set the apiary view renders from,
+     so the title screen reads as a preview of what you'll see in
+     the game. ----- */
+  var SITE_PICKER = [
+    { key: 'rural',    label: 'Rural Woodland',  blurb: 'Steady, hedgerow forage all season',
+      plate: 'img/plates/scene-rural-spring.png' },
+    { key: 'farmland', label: 'Arable Farmland', blurb: 'Spring rape bonanza, June dearth',
+      plate: 'img/plates/scene-farmland-spring.png' },
+    { key: 'urban',    label: 'Urban Garden',    blurb: 'Long mild season, neighbour-aware',
+      plate: 'img/plates/scene-urban-spring.png' },
+    { key: 'orchard',  label: 'Orchard',         blurb: 'Spring blossom flow, pollination work',
+      plate: 'img/plates/scene-orchard-spring.png' },
+    { key: 'moorland', label: 'Moor Edge',       blurb: 'Sparse most months, premium heather in August',
+      plate: 'img/plates/scene-moorland-spring.png' }
+  ];
+  var siteCards = SITE_PICKER.map(function (s) {
+    var classes = 'title-site site-pick';
+    if (s.key === chosenSite) classes += ' selected sel';
     var card = h('div', {
       class: classes,
-      title: r.available ? r.blurb : (r.blurb + ' — coming soon'),
-      style: plate ? { backgroundImage: 'url("' + plate + '")' } : null,
+      title: s.blurb,
+      style: s.plate ? { backgroundImage: 'url("' + s.plate + '")' } : null,
       onclick: function () {
-        if (!r.available) return;
-        chosenRegion = key;
-        var all = titlePage.querySelectorAll('.title-region');
+        chosenSite = s.key;
+        var all = titlePage.querySelectorAll('.title-site');
         all.forEach(function (c) { c.classList.remove('selected'); c.classList.remove('sel'); });
         card.classList.add('selected');
         card.classList.add('sel');
       }
     }, [
-      h('div', { class: 'title-region-label' }, r.label + (r.available ? '' : ' — soon'))
+      h('div', { class: 'title-site-label' }, [
+        h('div', { class: 'title-site-name', text: s.label }),
+        h('div', { class: 'title-site-blurb', text: s.blurb })
+      ])
     ]);
     return card;
   });
@@ -430,9 +438,9 @@ function renderTitleScreen() {
     }))
   ]);
 
-  var regionSection = h('div', { class: 'title-section' }, [
-    sectionHead('Where in the world'),
-    h('div', { class: 'title-region-grid' }, regionCards)
+  var siteSection = h('div', { class: 'title-section' }, [
+    sectionHead('Where will you keep your bees'),
+    h('div', { class: 'title-site-grid' }, siteCards)
   ]);
 
   var diffSection = h('div', { class: 'title-section' }, [
@@ -447,7 +455,7 @@ function renderTitleScreen() {
     onclick: function () {
       var name = (nameInput.value || '').trim() || 'Beekeeper';
       if (typeof startNewGame === 'function') {
-        startNewGame(name, chosenDiff, chosenRegion);
+        startNewGame(name, chosenDiff, chosenRegion, chosenSite);
       }
     }
   });
@@ -479,7 +487,7 @@ function renderTitleScreen() {
      Marked as .title-card too so existing QA selectors find it. ----- */
   titlePage = h('div', { class: 'title-page title-card' }, [
     nameSection,
-    regionSection,
+    siteSection,
     diffSection,
     actionsBlock
   ]);

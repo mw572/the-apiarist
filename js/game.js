@@ -78,12 +78,16 @@ function notable(p){ if (p) _presentQueue.push(p); }
 
 /* --- new game -------------------------------------------------------- */
 
-function startNewGame(name, difficulty, region){
+function startNewGame(name, difficulty, region, startingSite){
   if (!DIFFICULTY[difficulty]) difficulty = 'beekeeper';
   /* Region defaults to UK — the only one playable in v1. Anything
      locked or unknown is coerced to uk so a save file from a future
      build that locked region 'us_ne' won't crash here. */
   if (!region || !REGIONS[region] || !REGIONS[region].available) region = 'uk';
+  /* Starting apiary site type — picked on the title screen. Falls
+     back to rural so older saves and tests that don't pass the
+     fourth arg keep working. */
+  if (!startingSite || !SITE_TYPES[startingSite]) startingSite = 'rural';
   name = (name || '').trim() || 'Beekeeper';
   var d = DIFFICULTY[difficulty];
 
@@ -138,7 +142,7 @@ function startNewGame(name, difficulty, region){
   };
 
   Game.apiaries.push({ id: Game.nextApiaryId++, name: APIARY_NAMES[0],
-                       siteType: 'rural', founded: Game.week });
+                       siteType: startingSite, founded: Game.week });
   Game.ui.selectedApiary = Game.apiaries[0].id;
 
   logEvent('🌼', 'You set up as a beekeeper. ' + APIARY_NAMES[0] + ' is ready for its first colony.', 'good');
