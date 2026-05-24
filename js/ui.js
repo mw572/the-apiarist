@@ -1537,10 +1537,7 @@ function _ui_buildSidebar() {
         h('span', { class: 'urgency-label' }, urgencyLabel)
       ]);
 
-      var openBtn = matchCol ? h('button', {
-        class: 'btn btn-xs action-open-btn',
-        onclick: function() { openHiveDetail(matchCol, 'actions'); }
-      }, 'Open →') : null;
+      var openBtn = matchCol ? _ui_advisorActionButton(item, matchCol) : null;
 
       return h('div', { class: 'action-item tone-' + (item.tone || 'info') }, [
         urgencyRow,
@@ -2309,17 +2306,48 @@ function _ui_buildJournalContent() {
   return h('div', { class: 'card' }, entries);
 }
 
+/* ====================================================================
+   _finance_categorise(desc, amount) -> 'income' | 'operating' | 'equipment'
+   A ledger entry might be £-44 "1 super box" — that is a durable
+   asset that will last 10+ seasons, not an operating cost of THIS
+   year's beekeeping. Conflating the two makes year 1 look like a
+   failure when it is actually a year of investment. This helper
+   separates them so the Finances view can show operating surplus
+   independently of capital outlay.
+   ==================================================================== */
+function _finance_categorise(desc, amount) {
+  if (amount > 0) return 'income';
+  var d = (desc || '').toLowerCase();
+  /* Durable kit — hives, supers, brood boxes, excluders, extractors,
+     nuc boxes, bait hives, clearer boards. One-time purchase, multi-
+     year lifespan. */
+  if (/national hive|bait hive|nuc(leus)? box(?!es)|super box|brood box|queen excluder|extractor(?! hire)|clearer board|smoker|hive tool|suit|gloves|refractometer|uncapping/i.test(d)) {
+    return 'equipment';
+  }
+  /* Everything else that costs money is operating: sugar, jars,
+     treatments, extractor hire, market stall, postage, nucs bought
+     to add or replace a colony, requeen, candle wicks. */
+  return 'operating';
+}
+
 function _ui_buildFinancesContent() {
   var ledger = (Game.ledger || []).slice();
   var stats = Game.stats || {};
 
-  /* Income vs spend summary */
-  var income = 0, spend = 0;
+  /* Income vs operating spend vs equipment investment, this year. */
+  var income = 0, operating = 0, equipment = 0;
   (Game.ledger || []).forEach(function(e) {
     var yr = (typeof gameYear === 'function') ? gameYear() : 1;
     var entryYr = Math.ceil(e.week / 52);
-    if (entryYr === yr) { if (e.amount > 0) income += e.amount; else spend += e.amount; }
+    if (entryYr !== yr) return;
+    var cat = _finance_categorise(e.desc, e.amount);
+    if (cat === 'income') income += e.amount;
+    else if (cat === 'equipment') equipment += e.amount;
+    else operating += e.amount;
   });
+  /* operating + equipment are both negative; operating surplus =
+     income + operating (so income £400, operating -£140 → +£260). */
+  var operatingSurplus = income + operating;
 
   var ledgerRows = ledger.map(function(entry) {
     var isPos = entry.amount > 0;
@@ -2346,13 +2374,30 @@ function _ui_buildFinancesContent() {
     ]);
   });
 
+  function tile(value, label, color) {
+    return h('div', {}, [
+      h('div', { style:{ fontSize:'22px', fontFamily:'var(--serif)', color: color, fontWeight:'700' } }, fmtMoney(value)),
+      h('small', { style:{color:'var(--ink-soft)'} }, label)
+    ]);
+  }
+  var surplusColor = operatingSurplus >= 0 ? 'var(--ok)' : 'var(--bad)';
+
   return h('div', {}, [
     h('div', { class: 'card', style: { marginBottom: '12px' } }, [
-      h('div', { class: 'card-title' }, 'This year'),
+      h('div', { class: 'card-title' }, 'This year — operating'),
       h('div', { style: { display:'flex', gap:'16px', flexWrap:'wrap' } }, [
-        h('div', {}, [ h('div', { style:{ fontSize:'22px', fontFamily:'var(--serif)', color:'var(--ok)', fontWeight:'700' } }, fmtMoney(income)), h('small', { style:{color:'var(--ink-soft)'} }, 'Income') ]),
-        h('div', {}, [ h('div', { style:{ fontSize:'22px', fontFamily:'var(--serif)', color:'var(--bad)', fontWeight:'700' } }, fmtMoney(spend)),  h('small', { style:{color:'var(--ink-soft)'} }, 'Spend') ]),
-        h('div', {}, [ h('div', { style:{ fontSize:'22px', fontFamily:'var(--serif)', color:'var(--honey-dk)', fontWeight:'700' } }, fmtMoney(Game.cash)), h('small', { style:{color:'var(--ink-soft)'} }, 'Cash') ])
+        tile(income,    'Income (honey, sales)',  'var(--ok)'),
+        tile(operating, 'Operating costs',         'var(--bad)'),
+        tile(operatingSurplus, 'Operating surplus', surplusColor),
+      ])
+    ]),
+    h('div', { class: 'card', style: { marginBottom: '12px' } }, [
+      h('div', { class: 'card-title' }, 'This year — capital'),
+      h('div', { style: { fontSize: '12px', color: 'var(--ink-soft)', marginBottom: '8px', fontStyle: 'italic' } },
+        'Durable kit lasts 10+ seasons. It belongs to the apiary, not to one year\'s honey crop.'),
+      h('div', { style: { display:'flex', gap:'16px', flexWrap:'wrap' } }, [
+        tile(equipment, 'Equipment invested', 'var(--ink)'),
+        tile(Game.cash, 'Cash in hand',       'var(--honey-dk)'),
       ])
     ]),
     h('div', { class: 'card', style: { marginBottom: '12px' } }, [
@@ -3117,7 +3162,7 @@ function _ui_openBoxDetail(colony, boxType, boxIdx) {
 
     var detailSide = h('div', { class: 'fm-comb-side' }, [
       h('div', { class: 'fm-frame-state' }, stateParts.join(' · ')),
-      boxType === 'brood' ? _ui_buildCombLegend() : null,
+      boxType === 'brood' ? _ui_buildCombLegend(colony) : null,
       boxType === 'brood' ? h('div', { class: 'fm-comb-tip' }, [
         h('b', {}, 'Reading the comb: '),
         'The brood nest sits centrally — eggs (pale) at the heart, larvae around them, capped brood (brown) on the outer ring. Pollen bands hug the brood; honey arches over the top and fills the outer frames.'
@@ -4218,7 +4263,7 @@ function _openInspectionModal(colony, report) {
         ]) : (fr.hasQueen && isFlipped ? h('div', { class: 'find-result found' }, [
           h('span', { class: 'queen-mini' }), ' Queen on face A — flip back to see her'
         ]) : null),
-        _ui_buildCombLegend()
+        _ui_buildCombLegend(frames)
       ])
     ]));
 
@@ -4256,12 +4301,21 @@ function _openInspectionModal(colony, report) {
             : '. Look again at the ones you misjudged; that is how your eye sharpens.')));
       }
 
-      var summaryNode = h('div', { class: 'inspect-summary' }, [
-        h('h4', {}, 'The five questions'),
-        h('ul', {}, (report.summary || []).map(function(s) {
-          return h('li', { class: (/^Urgent:/.test(s) ? 'sum-urgent' : null), text: s });
-        }))
-      ]);
+      /* Top-of-summary verdict: one calibrated sentence so the player
+         knows whether what they just saw is normal for this stage of
+         the colony. Without it, a brand-new player has read 11 frames
+         but has no baseline to judge them against. Computed from the
+         report's own summary lines plus colony size. */
+      var verdict = _ui_inspectionVerdict(colony, report);
+      var summaryChildren = [];
+      if (verdict) {
+        summaryChildren.push(h('div', { class: 'inspect-verdict' }, verdict));
+      }
+      summaryChildren.push(h('h4', {}, 'The five questions'));
+      summaryChildren.push(h('ul', {}, (report.summary || []).map(function(s) {
+        return h('li', { class: (/^Urgent:/.test(s) ? 'sum-urgent' : null), text: s });
+      })));
+      var summaryNode = h('div', { class: 'inspect-summary' }, summaryChildren);
       if (report.lesson) {
         summaryNode.appendChild(h('div', { class: 'explain lesson', style: { marginTop: '10px' } }, [
           h('b', { text: 'To learn: ' }), report.lesson
@@ -4594,21 +4648,135 @@ function _ui_buildComb(frame) {
   return comb;
 }
 
-function _ui_buildCombLegend() {
+/* ====================================================================
+   _ui_advisorDirectAction(itemText, colonyName) -> { key, label } | null
+   Pure function: maps an advisor message to the specific in-game
+   action the player should take, with a labelled CTA. Used by the
+   apiary action-list to render "Treat Rose →" / "Feed Rose →" / etc.
+   Returns null when no specific action matches (caller falls back to
+   the generic "Open →" hive-detail button).
+   Pure to make it easy to test without DOM rendering.
+   ==================================================================== */
+function _ui_advisorDirectAction(itemText, colonyName) {
+  var t = itemText || '';
+  if (/varroa/i.test(t)) {
+    return { key: 'treat', label: 'Treat ' + colonyName + ' →' };
+  }
+  if (/short of food|low on stores|critically low|starve|feed/i.test(t)) {
+    return { key: 'feed', label: 'Feed ' + colonyName + ' →' };
+  }
+  if (/swarm cells|artificial swarm/i.test(t)) {
+    return { key: 'artificialSwarm', label: 'Artificial swarm →' };
+  }
+  return null;
+}
+
+/* Build the action-list button for one advisor item — direct shortcut
+   when we can, generic "Open →" fallback otherwise. */
+function _ui_advisorActionButton(item, matchCol) {
+  if (!item || !matchCol) return null;
+  var direct = _ui_advisorDirectAction(item.text || '', matchCol.name);
+  if (direct && typeof _ui_actionDialog === 'function') {
+    return h('button', {
+      class: 'btn btn-xs action-open-btn',
+      onclick: function () {
+        try { closeModal(); } catch (e) {}
+        _ui_actionDialog(direct.key, matchCol);
+      }
+    }, direct.label);
+  }
+  return h('button', {
+    class: 'btn btn-xs action-open-btn',
+    onclick: function () { openHiveDetail(matchCol, 'actions'); }
+  }, 'Open →');
+}
+
+/* ====================================================================
+   _ui_inspectionVerdict(colony, report) -> string|null
+   One calibrated sentence the player walks away from an inspection
+   with — "is what I just saw normal for this colony at this stage?"
+   A real mentor's first sentence when a new beekeeper hands back the
+   frame. Without it, the summary is a list of facts and the player
+   has no baseline to judge them against.
+   ==================================================================== */
+function _ui_inspectionVerdict(colony, report) {
+  if (!report || !report.summary) return null;
+  var name = colony && colony.name ? colony.name : 'The colony';
+  var summary = report.summary;
+  var hasUrgent = summary.some(function (s) { return /^urgent/i.test(s || ''); });
+  if (hasUrgent) {
+    return name + ' needs your attention — see the urgent items below.';
+  }
+  var queenOk    = summary.some(function (s) { return /Queen: present|fresh eggs confirm/i.test(s || ''); });
+  var diseaseFlag = summary.some(function (s) { return /foulbrood|signs of|heavy varroa infestation/i.test(s || ''); });
+  if (!queenOk) {
+    return name + ' has no confirmed queen yet — the headline of the inspection. Look again in a few days.';
+  }
+  if (diseaseFlag) {
+    return name + ' has a health issue to act on — see Health in the summary.';
+  }
+  var fob = 0;
+  try { if (typeof framesOfBees === 'function') fob = framesOfBees(colony) || 0; } catch (e) {}
+  if (fob >= 9) {
+    return name + ' reads as a strong colony — brood in the centre, stores on the outside. Nothing alarming.';
+  }
+  if (fob >= 4) {
+    return name + ' reads as a building colony — exactly what a nuc should look like at this stage.';
+  }
+  return name + ' is a small colony for now — watch the build-up and inspect again in 7-9 days.';
+}
+
+/* Comb legend — colour key for the hex cells in the comb pattern.
+   Originally rendered all 11 cell types every time, which dropped 11
+   labels on a first-time player who has only ever seen 4 of them in
+   their colony. Now context-aware: pass a colony and the legend shows
+   only the cell types actually present in any of its frames, plus the
+   always-relevant baselines (Empty + Eggs + Larva + Capped brood +
+   Honey). Rare types — Disease, Mite, Drone brood, Queen cell — only
+   surface in the legend the day they first appear in the colony,
+   making their first appearance a real landing moment instead of a
+   permanent fixture in the key. */
+function _ui_buildCombLegend(framesOrColony) {
   var items = [
-    { cls: 'empty',    label: 'Empty' },
-    { cls: 'eggs',     label: 'Eggs' },
-    { cls: 'larva',    label: 'Larva' },
-    { cls: 'capbrood', label: 'Capped brood' },
-    { cls: 'dronebr',  label: 'Drone brood' },
-    { cls: 'honey',    label: 'Honey' },
-    { cls: 'nectar',   label: 'Nectar' },
-    { cls: 'pollen',   label: 'Pollen' },
-    { cls: 'qcell',    label: 'Queen cell' },
-    { cls: 'disease',  label: 'Disease' },
-    { cls: 'mite',     label: 'Mite' }
+    { cls: 'empty',    label: 'Empty',        always: true  },
+    { cls: 'eggs',     label: 'Eggs',         always: true  },
+    { cls: 'larva',    label: 'Larva',        always: true  },
+    { cls: 'capbrood', label: 'Capped brood', always: true  },
+    { cls: 'dronebr',  label: 'Drone brood',  always: false, key: 'dronebr' },
+    { cls: 'honey',    label: 'Honey',        always: true  },
+    { cls: 'nectar',   label: 'Nectar',       always: false, key: 'nectar' },
+    { cls: 'pollen',   label: 'Pollen',       always: false, key: 'pollen' },
+    { cls: 'qcell',    label: 'Queen cell',   always: false, key: 'qcell' },
+    { cls: 'disease',  label: 'Disease',      always: false, key: 'disease' },
+    { cls: 'mite',     label: 'Mite',         always: false, key: 'mite' }
   ];
-  var spans = items.map(function(it) {
+
+  /* Accept either a frames[] array (from an inspection report) or a
+     colony object that exposes one. Collect the cell-type keys actually
+     present so the legend can hide rare types until they appear. */
+  var present = null;
+  var fs = null;
+  if (Array.isArray(framesOrColony)) {
+    fs = framesOrColony;
+  } else if (framesOrColony && Array.isArray(framesOrColony.knownFrames || framesOrColony.frames)) {
+    fs = framesOrColony.knownFrames || framesOrColony.frames;
+  }
+  if (fs) {
+    present = {};
+    fs.forEach(function (fr) {
+      Object.keys((fr && fr.cells) || {}).forEach(function (k) {
+        if (fr.cells[k] > 0) present[k] = true;
+      });
+    });
+  }
+
+  var keepers = items.filter(function (it) {
+    if (it.always) return true;
+    if (!present) return true;          /* no colony context — preserve old behaviour */
+    return !!present[it.key];
+  });
+
+  var spans = keepers.map(function (it) {
     return h('span', {}, [
       h('i', { class: 'cell ' + it.cls, style: { clipPath: 'none', borderRadius: '2px' } }),
       it.label

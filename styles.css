@@ -465,6 +465,19 @@ button { font-family: var(--sans); cursor: pointer; }
   line-height: 1.45;
 }
 
+/* Calibrated verdict line at the top of the inspection summary —
+   the one sentence a real mentor would say first. Distinct from the
+   five-questions list so the player reads it before parsing detail. */
+.inspect-verdict {
+  background: var(--info-bg);
+  border-left: 3px solid var(--info);
+  padding: 10px 13px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  font-size: 14px; line-height: 1.5;
+  color: var(--ink); font-style: italic;
+}
+
 /* A one-line year-on-year reminder rendered just above the mentor
    bubble in spring of year 2+. Calm typography — the player should
    feel reminded, not scored. */

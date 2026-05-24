@@ -1081,15 +1081,23 @@ function buildAdvisor() {
       if (dis.notifiable) badCount++; else warnCount++;
     }
 
-    /* Known varroa status */
-    if (k.varroaSign === 'high' || k.varroaSign === 'severe') {
+    /* Known varroa status.
+       Master mode is meant to be "no hand-holding" — the mite count is
+       still visible in the hive detail, so the player can read it
+       themselves, but the advisor doesn't flag it. That makes the
+       autumn varroa decision a true skill check: did you look at the
+       data, or were you waiting for the game to tell you? Apprentice
+       and Beekeeper keep the flags because the difficulty contract on
+       both is "the mentor warns / advises". */
+    var _suppressVarroaFlag = (Game.difficulty === 'master');
+    if (!_suppressVarroaFlag && (k.varroaSign === 'high' || k.varroaSign === 'severe')) {
       items.push({
         tone: 'bad',
         icon: '🔴',
         text: col.name + ': varroa infestation is ' + k.varroaSign + '. Treat before winter bees are damaged. Consider Apiguard, Apivar or oxalic acid.',
       });
       badCount++;
-    } else if (k.varroaSign === 'unchecked' && (wkInYear >= 28 && wkInYear <= 44)) {
+    } else if (!_suppressVarroaFlag && k.varroaSign === 'unchecked' && (wkInYear >= 28 && wkInYear <= 44)) {
       /* After week 36 the winter bee cohort is already being raised — untreated
          varroa now causes silent colony death in January. Escalate to 'bad'. */
       var _varroaTone = wkInYear >= 36 ? 'bad' : 'warn';
