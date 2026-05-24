@@ -158,6 +158,11 @@ function openModal(opts) {
   opts = opts || {};
   closeModal();
 
+  /* Clear any lingering toasts before a modal opens — they were drifting
+     in over modal content and reading as cross-talk between two screens. */
+  var _toastStack = document.querySelector('.toast-stack');
+  if (_toastStack) _toastStack.innerHTML = '';
+
   _ui_currentOnClose = opts.onClose || null;
 
   var bodyNode;
@@ -1459,7 +1464,17 @@ function _ui_buildSidebar() {
   var notes = advisor.filter(function(a) { return a !== top; });
   var actionItems;
   if (!notes.length) {
-    actionItems = [h('div', { class: 'advisor-empty' }, 'No further flags — you\'re on top of things.')];
+    /* Don't say "on top of things" when the mentor just raised a crisis.
+       Calibrate the empty message to what the mentor is actually saying. */
+    var _emptyMsg;
+    if (top && top.tone === 'bad') {
+      _emptyMsg = 'Handle the urgent item above first — nothing else flagged.';
+    } else if (top && top.tone === 'warn') {
+      _emptyMsg = 'Watch the note above. Otherwise looking steady.';
+    } else {
+      _emptyMsg = 'No flags — you\'re on top of things.';
+    }
+    actionItems = [h('div', { class: 'advisor-empty' }, _emptyMsg)];
   } else {
     actionItems = notes.map(function(item) {
       /* Try to match a colony by name appearing at the start of the text */
@@ -3329,7 +3344,14 @@ function _ui_buildActionButtons(colony) {
       }
     } else {
       var qParts = [];
-      if (q.age) qParts.push('year ' + q.age);
+      /* queen.age counts in WEEKS, not years. Show a beekeeper-style age:
+         "X weeks old" for first-year queens, then "year 2", "year 3"
+         once she has overwintered. Previously rendered as "year 14"
+         when the queen was only 14 weeks old. */
+      if (q.age != null) {
+        if (q.age < 52) qParts.push(q.age + ' week' + (q.age === 1 ? '' : 's') + ' old');
+        else qParts.push('year ' + (Math.floor(q.age / 52) + 1));
+      }
       if (q.marked) qParts.push('marked');
       if (q.clipped) qParts.push('clipped');
       icon = '👑';

@@ -1518,9 +1518,12 @@ button { font-family: var(--sans); cursor: pointer; }
   .panel-view { padding: 14px 13px; }
   .panel-view.narrow { max-width: 100%; }
 
-  /* --- market: tabs scroll horizontally, no wrap --- */
+  /* --- market: tabs scroll horizontally, no wrap. Fade the right edge
+     so the user can see there are tabs hidden off-screen. --- */
   .market-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
-                 padding-bottom: 4px; gap: 4px; }
+                 padding-bottom: 4px; gap: 4px;
+                 -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 88%, transparent 100%);
+                         mask-image: linear-gradient(90deg, #000 0%, #000 88%, transparent 100%); }
   .market-tab { flex: none; padding: 8px 12px; font-size: 12px; }
   .kit-item { min-width: 0; flex: 1 1 45%; }
   .shop-item .ico { font-size: 22px; width: 28px; }
@@ -1564,16 +1567,18 @@ button { font-family: var(--sans); cursor: pointer; }
   .hive-tab-panel { overflow-y: visible; }
 
   /* --- inspection: frames scroll sideways, detail stacks --- */
-  .inspect-box-inner { justify-content: flex-start; overflow-x: auto; padding-bottom: 4px; }
+  .inspect-box-inner { justify-content: flex-start; overflow-x: auto; padding-bottom: 4px;
+                       -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 88%, transparent 100%);
+                               mask-image: linear-gradient(90deg, #000 0%, #000 88%, transparent 100%); }
   .inspect-detail { flex-direction: column; }
   /* bigger frame touch targets */
   .box-frame { width: 44px; height: 120px; }
 
-  /* --- statusbar: compact on mobile --- */
-  .statusbar { height: 36px; padding: 0 8px; gap: 0; }
-  .sb-stat { padding: 0 6px; }
-  .sb-lbl { display: none; }
-  .sb-val { font-size: 12px; }
+  /* --- statusbar: hide on mobile. It used to render in the document
+     flow at the bottom of #app, where the fixed bottom navbar sits on
+     top of it on mobile — the user could never see it. Cash already
+     lives in the topbar; the other resources live in Records → Finances. --- */
+  .statusbar { display: none; }
   .sb-divider { margin: 0 2px; }
 
   /* --- spare hive slot: match hive card width on mobile --- */
@@ -1925,28 +1930,19 @@ button { font-family: var(--sans); cursor: pointer; }
 .ledger-table { min-width: 380px; }
 
 @media (max-width: 640px) {
-  /* Advance week FAB */
-  .advance-fab {
-    display: flex; align-items: center; justify-content: center;
-    position: fixed;
-    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
-    right: 16px; z-index: 90;
-    width: 56px; height: 56px; border-radius: 50%;
-    background: linear-gradient(145deg, var(--honey), var(--honey-deep));
-    border: none; box-shadow: 0 4px 14px rgba(0,0,0,0.28);
-    font-size: 22px; color: #fff;
-    transition: transform 0.1s;
-  }
-  .advance-fab:active { transform: scale(0.93); }
-  .advance-fab.pulse  { animation: fab-pulse 2s ease-in-out infinite; }
-  .advance-fab.urgent { animation: fab-urgent 1.2s ease-in-out infinite; }
-@keyframes fab-urgent {
-  0%, 100% { transform: scale(1);    box-shadow: 0 4px 14px rgba(180,40,40,0.35); background: linear-gradient(145deg, #d4582a, #b03010); }
-  50%       { transform: scale(1.06); box-shadow: 0 6px 22px rgba(180,40,40,0.6);  background: linear-gradient(145deg, #e06030, #c03818); }
-}
+  /* The FAB used to be the mobile-only advance-week affordance, but the
+     same advance button now lives inline at the foot of the apiary view
+     where it is easier to find and does not float over the Skip-to-event
+     button. Keep the FAB hidden on mobile too. */
+  .advance-fab { display: none; }
 
   /* btn-xs gets the same 44px floor as btn-sm */
   .btn-xs { min-height: 44px; padding: 10px 12px; }
+}
+
+@keyframes fab-urgent {
+  0%, 100% { transform: scale(1);    box-shadow: 0 4px 14px rgba(180,40,40,0.35); background: linear-gradient(145deg, #d4582a, #b03010); }
+  50%       { transform: scale(1.06); box-shadow: 0 6px 22px rgba(180,40,40,0.6);  background: linear-gradient(145deg, #e06030, #c03818); }
 }
 
 /* ====================================================================

@@ -243,8 +243,9 @@ function buyFromCatalog(category, id, qty) {
 
     var colDesc = item.name + ' (' + newColony.name + ')';
     logEvent('📦', 'Bought ' + colDesc + ' for ' + fmtMoney(totalCost) + '.', 'good');
-    toast(newColony.name + ' is installed and ready.', 'good');
-    return { ok: true, msg: newColony.name + ' installed at ' + (apiaryOk ? 'your selected apiary' : 'your apiary') + '.' };
+    /* No internal toast — the UI handler toasts r.msg, and a second
+       toast here was firing back-to-back with a near-identical message. */
+    return { ok: true, msg: newColony.name + ' is installed and ready.' };
   }
 
   return { ok: false, msg: 'Unhandled catalogue category.' };
