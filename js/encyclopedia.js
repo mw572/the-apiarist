@@ -78,7 +78,7 @@ Talk to your beekeeping association about what works in your area.`
     id: 'site-rural',
     category: 'Sites & Territories',
     title: 'Rural Woodland',
-    plate: 'region-uk.png',
+    plate: 'scene-rural-spring.png',
     body: `A rural woodland apiary is the kind of site every beekeeper sketches in their head before they ever own a hive. A clearing at the edge of mixed broadleaf, oak and ash leaning in from one side, a hawthorn hedge behind the stands to break the prevailing wind, and a track wide enough to bring a wheelbarrow down in October. The bees do not need any of this to be picturesque. They do need what the picturesque tends to bring with it: variety, depth of forage, and a calendar of bloom that overlaps from March to September with very few empty weeks.
 
 The forage character of a woodland edge is layered rather than dramatic. Sallow and blackthorn open the season in late March, willow catkins yellow with pollen along the wet ground, dandelions filling every ditch verge by mid-April. Then comes hawthorn, which is the genuine spring set-piece of the British rural year. A good hawthorn flow lasts ten or twelve days and can fill a brood box and a super in a strong colony, though it is famously unreliable. Cold winds at flowering, late frosts, an early heatwave that runs the bloom out in three days; any of these wipes the year's hawthorn out. The bees know this and will pile it on while they can. Sycamore and field maple add weight to the same window without ever taking the lead.
@@ -270,7 +270,7 @@ A forager returning from a rich source performs a figure-of-eight waggle dance o
     id: 'national-hive',
     category: 'Hives & Equipment',
     title: 'The National Hive',
-    plate: 'frame-super.png',
+    plate: 'hive-state-strong.png',
     body: `The British Standard National is the most widely used hive in the UK. If you join a local association, borrow kit or ask for help, National equipment is what you are most likely to encounter. Stick to one hive type and everything becomes interchangeable.
 
 ## The main components from bottom to top
@@ -814,7 +814,7 @@ A strong, well-fed cell-raising colony; mating nuclei for the virgin queens to b
     id: 'uniting',
     category: 'Queen Management',
     title: 'Uniting Colonies',
-    plate: 'frame-healthy-capped.png',
+    plate: 'supplies-newspaper.png',
     body: `Sometimes two colonies are better combined into one. A strong united colony overwinters more reliably, builds faster in spring and is a better use of your resources than keeping a weak colony struggling alone.
 
 ## When to unite
@@ -1093,7 +1093,7 @@ Propolis can be collected and used in tinctures. Pollen can be trapped and sold 
     id: 'selling-honey',
     category: 'Selling & Business',
     title: 'Selling Your Honey',
-    plate: 'scene-autumn-harvest.png',
+    plate: 'supplies-jars.png',
     body: `Many beekeepers sell surplus honey. The rules around labelling are straightforward once you know them, and compliance is important.
 
 ## Sales channels
@@ -1125,7 +1125,7 @@ Price your honey to reflect the quality and your time. Underpricing devalues the
     id: 'scaling-up',
     category: 'Selling & Business',
     title: 'From Hobby to Business',
-    plate: 'figure-master.png',
+    plate: 'figure-sideliner.png',
     body: `Most beekeepers start with one or two hives and expand gradually. Understanding the rough thresholds helps you make sensible decisions.
 
 ## The three tiers
