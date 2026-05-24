@@ -149,15 +149,11 @@ function startNewGame(name, difficulty){
 
   if (typeof showExplainer === 'function'){
     showExplainer('welcome', 'Welcome to beekeeping',
-      '<p>It is <b>' + dateLabel(Game.week) + '</b>, and you have an empty hive, a suit and a ' +
+      '<p>It is <b>' + dateLabel(Game.week) + '</b>. You have an empty hive, a suit and a ' +
       'smoker. Time to get some bees.</p>' +
       '<div class="explain lesson"><b>Your first job.</b> Open the <b>Market</b> and buy a ' +
-      '<b>nucleus</b> — a "nuc" is five frames of bees, brood and a laying queen. It is the ' +
-      'gentlest way to start.</div>' +
-      '<p>Then watch the seasons turn. Inspect when the weather is kind, keep them fed, stay ' +
-      'ahead of the varroa mite, and get them safely through to spring. The mentor in the ' +
-      'sidebar will guide you, and the <b>Handbook</b> explains everything.</p>' +
-      '<p class="muted tiny">Good luck. Bees reward attention and punish neglect, just like the real thing.</p>');
+      '<b>nucleus</b> — five frames of bees, brood and a laying queen. The gentlest way to start.</div>' +
+      '<p class="muted tiny">Bees reward attention and punish neglect, just like the real thing.</p>');
   }
 }
 
@@ -477,16 +473,110 @@ function _present(list){
 /* Returns one short, contextual line of advice, or null. Loud early on,
    then quietens as the beekeeper finds their feet. */
 
+/* ====================================================================
+   The Winter Letter
+   --------------------------------------------------------------------
+   In real beekeeping the deep-winter months (December through February
+   in the UK) are dormant — the colony is clustered, you cannot open the
+   hive, and there is nothing to do but listen. The game has reflected
+   this faithfully and, in doing so, created a retention void: a player
+   who closes the app in mid-winter has nothing pulling them back.
+
+   The Winter Letter is the answer. It is an in-world note that
+   summarises, in a calm and seasonal voice, what each living colony
+   is sitting with — population, stores, queen age, the most recent
+   unresolved thing about her — and gives one specific anticipation
+   the player should be carrying into spring. The same content a real
+   beekeeper's January notebook would carry.
+
+   It surfaces as a soft inline block at the top of the apiary view
+   whenever the season is winter and at least one colony is alive.
+   Nothing else changes about the simulation — the letter is a UI
+   surface over existing state.
+
+   The 100× change identified by the gamification critique: turning
+   the dormancy period from a retention void into a feature.
+   ==================================================================== */
+function buildWinterLetter() {
+  if (!Game) return null;
+  var season = seasonOfWeek(Game.week);
+  if (season !== 'winter') return null;
+  var alive = aliveColonies();
+  if (!alive.length) return null;
+
+  var wkInYr = ((Game.week - 1) % 52) + 1;
+  /* "Mid-February" style date — uses the same dateLabel the topbar uses. */
+  var when = dateLabel(Game.week);
+
+  var lines = [];
+
+  alive.forEach(function (c) {
+    var pop = Math.round(c.population || 0);
+    var stores = Math.round((c.honey || 0) * 10) / 10;
+    var queenLabel = '';
+    if (c.queen && c.queen.present) {
+      var ya = c.queen.age || 0;
+      queenLabel = ya < 52
+        ? c.queen.age + 'wk queen'
+        : 'year ' + (Math.floor(ya / 52) + 1) + ' queen';
+    } else {
+      queenLabel = 'queen status unclear';
+    }
+
+    /* The one anticipation — pick the most pressing unresolved thing. */
+    var anticipation;
+    if (!c.lastInspected) {
+      anticipation = 'never been inspected — plan for it in the first mild spell.';
+    } else if (stores < 12) {
+      anticipation = 'stores look light. When the first warm day comes, heft the back of the hive before opening.';
+    } else if (pop < 5000) {
+      anticipation = 'small cluster. Cold snaps will press hard — keep the entrance reduced and the lid undisturbed.';
+    } else if (c.queen && c.queen.age && c.queen.age > 100) {
+      anticipation = 'queen is in her third year. Watch her laying pattern when brood-rearing restarts.';
+    } else if (wkInYr >= 4 && wkInYr <= 8) {
+      anticipation = 'first brood should be hatching soon. The cluster will start to break.';
+    } else {
+      anticipation = 'going steady. Listen at the entrance on the next still afternoon.';
+    }
+
+    lines.push({
+      name: c.name,
+      meta: pop + ' bees · ' + stores + 'kg stores · ' + queenLabel,
+      anticipation: anticipation,
+    });
+  });
+
+  /* Closing one-liner — context for what the season is doing. */
+  var closing;
+  if (wkInYr >= 49 || wkInYr <= 2) {
+    closing = 'The shortest days are now. Bees are inside, queen has paused. The least you do, the better.';
+  } else if (wkInYr <= 5) {
+    closing = 'Daylight is creeping back. The queen will start to lay again on the first mild spell.';
+  } else {
+    closing = 'Spring is coming, but not yet. Heft for weight. Do not open the hive in cold weather.';
+  }
+
+  return { when: when, lines: lines, closing: closing };
+}
+
 function mentorLine(){
   if (!Game) return null;
   var wk = ((Game.week - 1) % 52) + 1;
   var alive = aliveColonies();
   var experienced = skillLevel(Game.skillXp) >= 5 && gameYear() > 2;
+  /* Master mode is explicitly "no hand-holding" — match that in voice
+     from the very first line. Apprentice keeps the warm full sentence
+     that genuinely teaches; Master speaks like a senior beekeeper who
+     assumes you already know what a nuc is. */
+  var isMaster = Game.difficulty === 'master';
 
   if (alive.length === 0){
-    if (Game.inventory.spareHives > 0)
+    if (Game.inventory.spareHives > 0) {
+      if (isMaster) return 'A hive is ready. The Market opens when you need it.';
       return 'You have a hive ready and waiting. Head to the Market and buy a nucleus — five ' +
              'frames of bees with a laying queen, the kindest way to start.';
+    }
+    if (isMaster) return 'No hive, no bees. Both live in the Market.';
     return 'You will need a hive before you can house any bees. Complete National hives are in the Market.';
   }
 

@@ -415,6 +415,56 @@ button { font-family: var(--sans); cursor: pointer; }
 /* time-controls — see action list section below */
 
 /* mentor — an on-screen teaching companion with a speech bubble */
+/* ====================================================================
+   WINTER LETTER — soft "January notebook" inline block.
+
+   Appears at the top of the apiary view during deep-winter weeks. The
+   look is intentionally not a UI panel — it should read like a piece
+   of paper resting on the surface of the app. The hand-script header,
+   the muted parchment fill, the gentle border are doing real work:
+   they signal "this is for reading, not for clicking" so the player
+   does not mistake it for an action prompt.
+   ==================================================================== */
+.winter-letter {
+  margin: 12px 14px; padding: 14px 16px;
+  background: linear-gradient(180deg, #fdf7e7, #f5ecd0);
+  border: 1px solid #d9c79a;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(120,90,30,0.10);
+  color: #4a3a20;
+  font-family: var(--serif);
+}
+.winter-letter .wl-head {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px dashed #c9b687; padding-bottom: 8px;
+}
+.winter-letter .wl-ico { font-size: 16px; }
+.winter-letter .wl-when {
+  font-size: 16px; font-weight: 600; color: var(--honey-dk);
+  letter-spacing: 0.2px;
+}
+.winter-letter .wl-body { display: flex; flex-direction: column; gap: 10px; }
+.winter-letter .wl-colony {
+  border-left: 3px solid var(--honey); padding-left: 10px;
+}
+.winter-letter .wl-name {
+  font-size: 14px; font-weight: 600; color: var(--ink);
+}
+.winter-letter .wl-meta {
+  font-size: 11px; color: var(--ink-soft); letter-spacing: 0.2px;
+  margin: 2px 0 4px;
+}
+.winter-letter .wl-antic {
+  font-size: 13px; line-height: 1.45; color: #5b4828;
+  font-style: italic;
+}
+.winter-letter .wl-closing {
+  margin-top: 12px; padding-top: 10px; border-top: 1px dashed #c9b687;
+  font-size: 12px; color: var(--ink-soft); font-style: italic;
+  line-height: 1.45;
+}
+
 .mentor { display: flex; gap: 10px; align-items: flex-start; margin: 12px 14px; }
 .mentor-face {
   flex: none; width: 44px; height: 44px; font-size: 25px;
@@ -590,6 +640,16 @@ button { font-family: var(--sans); cursor: pointer; }
   padding-bottom: 12px; border-bottom: 2px solid var(--honey);
 }
 .action-primary-row .btn { font-size: 14px; padding: 10px 16px; }
+/* On the very first inspection, give the Inspect CTA its own full
+   row so it visually owns the moment and the four secondary actions
+   don't compete with it. They sit calmly below in the management group. */
+.action-primary-row.first-inspection {
+  flex-direction: column;
+}
+.action-primary-row.first-inspection .btn-primary {
+  width: 100%; justify-content: center; padding: 14px 18px; font-size: 15px;
+}
+.action-primary-row.first-inspection > :not(.btn-primary) { display: none; }
 .btn-action {
   background: var(--paper-2); border-color: var(--line-dk);
 }

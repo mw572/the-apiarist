@@ -953,21 +953,14 @@ function buildAdvisor() {
 
   var aliveCols = aliveColonies();
 
-  /* ---- No colonies ------------------------------------------------- */
+  /* ---- No colonies -------------------------------------------------
+     Don't repeat the mentor's job here. When there are no colonies, the
+     mentor bubble is already telling the player exactly what to do (with
+     better voice). Pushing a parallel "buy a nuc" item into the action
+     list creates two surfaces saying the same thing — and a "1" pip on
+     the navbar that isn't really a task. Leave the action list quiet
+     so the mentor's instruction is the single signal. */
   if (aliveCols.length === 0) {
-    if (Game.inventory.spareHives > 0) {
-      items.push({
-        tone: 'info',
-        icon: '📦',
-        text: 'You have an empty hive ready. Visit the market to buy a nucleus colony and get started.',
-      });
-    } else {
-      items.push({
-        tone: 'info',
-        icon: '🛒',
-        text: 'No bees yet. Head to the market, buy a complete hive and a nucleus colony, and choose an apiary site.',
-      });
-    }
     Game.advisor = items;
     return;
   }

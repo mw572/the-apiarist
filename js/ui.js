@@ -975,6 +975,14 @@ function _ui_sceneUrban(season) {
 }
 
 function _ui_buildApiaryView() {
+  /* Re-derive the advisor right before we render the action list.
+     advanceWeek() rebuilds it weekly, but in-week actions (buying a
+     nuc, completing an inspection, harvesting) change state too. Without
+     this call the action list would keep telling you to "buy a nucleus"
+     even after Rose is sitting in the apiary. */
+  if (typeof buildAdvisor === 'function') {
+    try { buildAdvisor(); } catch (e) {}
+  }
   var apiaries = Game.apiaries || [];
   if (!Game.ui) Game.ui = {};
   var selId = Game.ui.selectedApiary;
@@ -1460,6 +1468,33 @@ function _ui_buildSidebar() {
     ])
   ]);
 
+  /* === Winter Letter — surfaces in the apiary view during the dormant
+     months. The real beekeeping experience of January: nothing to do,
+     much to know. Gives the player something specific to anticipate
+     and pulls them back to spring rather than letting the dormancy
+     period silently end the session. */
+  var winterLetterBlock = null;
+  if (typeof buildWinterLetter === 'function') {
+    var letter = buildWinterLetter();
+    if (letter) {
+      var lineNodes = letter.lines.map(function (l) {
+        return h('div', { class: 'wl-colony' }, [
+          h('div', { class: 'wl-name' }, l.name),
+          h('div', { class: 'wl-meta' }, l.meta),
+          h('div', { class: 'wl-antic' }, l.anticipation),
+        ]);
+      });
+      winterLetterBlock = h('div', { class: 'winter-letter' }, [
+        h('div', { class: 'wl-head' }, [
+          h('span', { class: 'wl-ico' }, '✉️'),
+          h('span', { class: 'wl-when' }, letter.when),
+        ]),
+        h('div', { class: 'wl-body' }, lineNodes),
+        h('div', { class: 'wl-closing' }, letter.closing),
+      ]);
+    }
+  }
+
   /* Guided action items — urgency-ranked, click-to-open-colony where possible */
   var notes = advisor.filter(function(a) { return a !== top; });
   var actionItems;
@@ -1536,6 +1571,7 @@ function _ui_buildSidebar() {
   }, 'Skip to next event');
 
   return h('div', { class: 'apiary-side' }, [
+    winterLetterBlock,
     mentorBlock,
     h('div', { class: 'side-section' }, [
       h('div', { class: 'side-head' }, [
@@ -1628,13 +1664,16 @@ function _ui_marketHelp() {
 
 /* A buy tab: one card of clean shop rows, plus a summary of what you own */
 function _ui_marketBuyTab(title, items, category) {
+  /* The 10-tile kit-strip used to sit under every shop list, restating
+     cash (already in topbar) and every minor stock count (visible inside
+     the hive detail and apiary views). At purchase time it was pure
+     noise — cut. */
   var rows = (items || []).map(function(item) { return _ui_shopRow(item, category); });
   return h('div', {}, [
     h('div', { class: 'card' }, [
       h('div', { class: 'card-title' }, title),
       h('div', { class: 'shop-list' }, rows)
-    ]),
-    _ui_marketKitStrip()
+    ])
   ]);
 }
 
@@ -1822,8 +1861,7 @@ function _ui_marketSuppliesTab() {
       h('p', { style: { fontSize: '13px', color: 'var(--ink-soft)', margin: '0 0 8px' },
         text: 'Keep a treatment in stock so you can act the moment the honey crop is off.' }),
       h('div', { class: 'shop-list' }, treatRows)
-    ]),
-    _ui_marketKitStrip()
+    ])
   ]);
 }
 
@@ -3334,6 +3372,18 @@ function _ui_buildActionButtons(colony) {
         h('span', { class: 'qs-text' }, 'Colony lost — ' + (colony.deadReason || 'unknown cause'))
       ]);
     }
+    /* Fog of war: until the colony has been inspected, the queen's state
+       is genuinely not known to the player. The cross-section area says
+       "Queen status unknown — inspect to find out" — we used to contradict
+       it here with "Queen present — 14 weeks old" pulled straight from
+       the data model. Mirror the fog-of-war so the two surfaces agree. */
+    var _hasInspectedQS = colony.known && !colony.known.heftOnly;
+    if (!_hasInspectedQS) {
+      return h('div', { class: 'queen-summary qs-unknown' }, [
+        h('span', { class: 'qs-ico' }, '❔'),
+        h('span', { class: 'qs-text' }, 'Queen status unknown — inspect to find out')
+      ]);
+    }
     var q = colony.queen;
     var icon, text, cls;
     if (!q || !q.present) {
@@ -3364,9 +3414,14 @@ function _ui_buildActionButtons(colony) {
     ]);
   })();
 
+  /* Before first inspection there's nothing useful you can DO without
+     looking inside the hive. Make the Inspect button visually own the
+     row alone for that first beat — it's the one action that earns the
+     others. After a first inspection, it returns to the normal lineup. */
+  var _firstInspection = !(colony.known && !colony.known.heftOnly);
   var inspectBtn = h('button', {
-    class: 'btn btn-sm btn-primary',
-    text: '🔍 Inspect the hive',
+    class: 'btn btn-sm btn-primary' + (_firstInspection ? ' btn-block' : ''),
+    text: _firstInspection ? '🔍 Inspect the hive (start here)' : '🔍 Inspect the hive',
     onclick: function() {
       if (dead) { toast('This colony has died.', 'bad'); return; }
       closeModal();
@@ -3376,7 +3431,7 @@ function _ui_buildActionButtons(colony) {
   if (dead) inspectBtn.disabled = true;
 
   /* === Primary actions === */
-  var primary = h('div', { class: 'action-primary-row' }, [
+  var primary = h('div', { class: 'action-primary-row' + (_firstInspection ? ' first-inspection' : '') }, [
     inspectBtn,
     abtn('🍯 Harvest', 'btn-leaf', 'harvest',
       dead || (colony.supers || 0) === 0 || (colony.superHoney || 0) === 0,
