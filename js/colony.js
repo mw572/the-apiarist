@@ -500,6 +500,10 @@ function makeColony(opts){
                   : ((typeof Game !== 'undefined' && Game) ? Game.nextColonyId++ : 1)),
     name:        opts.name || 'Hive',
     apiaryId:    opts.apiaryId || 0,
+    /* Genetic strain. Defaults to 'local' (no trait modifiers); buying
+       a strain-tagged nuc from the market overrides this. Old saves
+       without the field are migrated to 'local' in loadGame. */
+    strain:      (opts.strain && HIVE_STRAINS[opts.strain]) ? opts.strain : 'local',
 
     alive:       true,
     deadReason:  null,
@@ -807,6 +811,12 @@ function colonyWeeklyUpdate(colony, ctx){
   let baseMort;
   if (season === 'winter'){
     baseMort = 0.028 + (1 - colony.winterBeeHealth) * 0.20;  // unhealthy winter bees die fast
+    /* Strain trait: winterHardiness reduces baseline winter mortality.
+       AMM native (1.30) → 30% better cluster survival; Italian (0.85)
+       → 15% worse (they keep brood late and burn through stores). */
+    var _winStrain = (typeof HIVE_STRAINS !== 'undefined' && colony.strain && HIVE_STRAINS[colony.strain])
+      ? HIVE_STRAINS[colony.strain].winterHardiness : 1.0;
+    baseMort = baseMort / _winStrain;
   } else if (season === 'spring'){
     baseMort = 0.085;
   } else if (season === 'summer'){
@@ -848,7 +858,12 @@ function colonyWeeklyUpdate(colony, ctx){
   const hornetPenalty = 1 - colony.hornet * 0.5;
   const effForage     = ctx.nectar * ctx.weather.fly * hornetPenalty;
 
-  const nectarIncome  = foragers * effForage * SIM.nectarRate * ctx.diff.yieldBonus;
+  /* Strain trait: honeyYield multiplies nectar collection per forager.
+     Buckfast (1.18) and Italian (1.12) outperform local stock; AMM
+     native (0.92) is slightly more frugal/lower yielding. */
+  const _yieldStrain = (typeof HIVE_STRAINS !== 'undefined' && colony.strain && HIVE_STRAINS[colony.strain])
+    ? HIVE_STRAINS[colony.strain].honeyYield : 1.0;
+  const nectarIncome  = foragers * effForage * SIM.nectarRate * ctx.diff.yieldBonus * _yieldStrain;
   const pollenIncome  = foragers * ctx.pollen * ctx.weather.fly * SIM.pollenRate;
 
   // Consumption
@@ -1220,12 +1235,17 @@ function colonyWeeklyUpdate(colony, ctx){
     const popFactor  = _colony_clamp((colony.population - 10000) / 30000, 0, 1);
     const condFactor = ctx.nectar * ctx.weather.fly;
 
+    /* Strain trait: swarmTendency multiplies the per-week swarm-
+       pressure increase. Carniolan (1.30) builds pressure 30% faster,
+       Buckfast (0.65) about a third slower than local stock (1.00). */
+    var _swStrain = (typeof HIVE_STRAINS !== 'undefined' && colony.strain && HIVE_STRAINS[colony.strain])
+      ? HIVE_STRAINS[colony.strain].swarmTendency : 1.0;
     colony.swarmPressure = _colony_clamp(
       colony.swarmPressure
-        + cong          * 0.08
-        + ageFactor     * 0.02
-        + popFactor     * 0.03
-        + condFactor    * 0.02,
+        + (cong          * 0.08
+        +  ageFactor     * 0.02
+        +  popFactor     * 0.03
+        +  condFactor    * 0.02) * _swStrain,
       0, 1);
 
     // Demaree keeps pressure suppressed while active

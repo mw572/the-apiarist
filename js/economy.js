@@ -218,7 +218,11 @@ function buyFromCatalog(category, id, qty) {
     // Consume one spare hive.
     Game.inventory.spareHives -= 1;
 
-    var source = (id === 'nuc') ? 'nuc' : 'colony';
+    /* Anything with id starting "nuc" creates a nuc-source colony.
+       "colony" creates an established full colony. The strain comes
+       from the catalogue item, defaulting to local if absent. */
+    var source = (id.indexOf('nuc') === 0) ? 'nuc' : (id === 'colony' ? 'colony' : 'nuc');
+    var strain = (item.strain && HIVE_STRAINS[item.strain]) ? item.strain : 'local';
     var apiaryId = Game.ui.selectedApiary;
 
     // Validate the selected apiary exists.
@@ -233,6 +237,7 @@ function buyFromCatalog(category, id, qty) {
     var queenQuality = 0.7 + Math.random() * 0.3 * diff().robustQueens;
     var newColony = makeColony({
       source:       source,
+      strain:       strain,
       apiaryId:     apiaryId,
       name:         _econ_freeName(HIVE_NAMES, _econ_usedHiveNames()),
       week:         Game.week,

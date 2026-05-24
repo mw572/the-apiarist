@@ -2882,6 +2882,13 @@ function _ui_buildHiveCross(colony) {
   crossChildren.push(h('div', { class: 'cross-meta-line' }, queenParts.join(' · ')));
   if (queenGenetics) crossChildren.push(queenGenetics);
   crossChildren.push(h('div', { class: 'cross-meta-line' }, entranceLabel));
+  /* Strain label — surfaces the genetic stock visible at a glance.
+     Uses HIVE_STRAINS to look up the icon + short name. */
+  if (typeof HIVE_STRAINS !== 'undefined' && colony.strain && HIVE_STRAINS[colony.strain]) {
+    var _strain = HIVE_STRAINS[colony.strain];
+    crossChildren.push(h('div', { class: 'cross-meta-line strain', title: _strain.desc },
+      _strain.icon + ' Strain: ' + _strain.label));
+  }
   crossChildren.push(h('div', { class: 'cross-click-hint' }, 'Click any box to manage frames'));
 
   return h('div', { class: 'hive-cross' }, crossChildren);

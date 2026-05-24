@@ -92,13 +92,78 @@ const COSTS = {
 
 /* --- Equipment & livestock catalogue (the Market) -------------------- */
 
+/* ====================================================================
+   HIVE_STRAINS — UK-available honeybee strains.
+   --------------------------------------------------------------------
+   Each strain has trait multipliers applied where the corresponding
+   behaviour fires in the simulation. The "local" strain is the baseline
+   (all multipliers 1.0) and is the default for old saves and for the
+   cheapest nuc on the market.
+
+   Real beekeeping context: most UK colonies are "local mongrels" — a
+   genetic mix of whatever drones flew through the area. Pure imported
+   strains like Italian or Carniolan cost more and exhibit clearer traits,
+   but their daughters (once they mate with local drones) revert toward
+   local stock over a generation or two. This is captured below in the
+   `pureGen` field which Phase 2 will use for hybrid mechanics.
+   ==================================================================== */
+const HIVE_STRAINS = {
+  local: {
+    label: 'Local mongrel', short: 'Local', priceMul: 1.00, pureGen: 0,
+    icon: '🐝',
+    desc: 'A mix of whatever drones flew through the local area. Hardy, well-adapted, but variable in temperament and yield.',
+    buildup: 1.00, honeyYield: 1.00, swarmTendency: 1.00, winterHardiness: 1.00,
+    temperament: 0.45, diseaseResistance: 0.50,
+  },
+  italian: {
+    label: 'Italian (A. m. ligustica)', short: 'Italian', priceMul: 1.19, pureGen: 1,
+    icon: '🇮🇹',
+    desc: 'The world\'s most popular bee. Fast spring build-up, high honey crops, very gentle. Pays in extra winter feed — they keep brood late into autumn and burn through stores.',
+    buildup: 1.18, honeyYield: 1.12, swarmTendency: 1.00, winterHardiness: 0.85,
+    temperament: 0.20, diseaseResistance: 0.45,
+  },
+  carniolan: {
+    label: 'Carniolan (A. m. carnica)', short: 'Carniolan', priceMul: 1.19, pureGen: 1,
+    icon: '🌲',
+    desc: 'Slovenian native. Explosive spring expansion when the first flow hits, frugal in winter, exceptionally gentle. Strong swarming tendency — needs attentive swarm control.',
+    buildup: 1.25, honeyYield: 1.10, swarmTendency: 1.30, winterHardiness: 1.15,
+    temperament: 0.18, diseaseResistance: 0.55,
+  },
+  buckfast: {
+    label: 'Buckfast (Adam hybrid)', short: 'Buckfast', priceMul: 1.35, pureGen: 1,
+    icon: '⛪',
+    desc: 'Brother Adam\'s composite hybrid, bred at Buckfast Abbey for resilience and gentle temperament. Steady build-up, low swarming, excellent yields, calm.',
+    buildup: 1.10, honeyYield: 1.18, swarmTendency: 0.65, winterHardiness: 1.05,
+    temperament: 0.20, diseaseResistance: 0.65,
+  },
+  native: {
+    label: 'Native (A. m. mellifera)', short: 'AMM', priceMul: 1.27, pureGen: 1,
+    icon: '🌿',
+    desc: 'The Dark European native, B-IBKA stock. Slow spring build-up but rock-solid winter cluster. More defensive temperament — bring a good suit. Adapted to wet British weather.',
+    buildup: 0.85, honeyYield: 0.92, swarmTendency: 0.85, winterHardiness: 1.30,
+    temperament: 0.70, diseaseResistance: 0.65,
+  },
+};
+
 const CATALOG = {
   bees: [
-    { id:'nuc', name:'Nucleus colony (nuc)', icon:'📦', price:130,
-      desc:'Five frames of bees, brood and a laying queen. The recommended way to start.' },
-    { id:'colony', name:'Full colony', icon:'🏠', price:180,
+    /* The Bees tab now offers strain-tagged nucs at strain-priced multiples
+       of the base £130 nuc. The local mongrel is the cheapest by design —
+       a real first-year beekeeper buying their first nuc usually gets
+       whatever the association has spare, and "spare" means local stock. */
+    { id:'nuc', strain:'local', name:'Nucleus — Local mongrel', icon:'🐝', price:130,
+      desc:'Five frames, laying queen, local stock. The traditional way to start — adapted to your area\'s weather and forage.' },
+    { id:'nuc-italian', strain:'italian', name:'Nucleus — Italian', icon:'🇮🇹', price:155,
+      desc:'Italian queen, fast build-up and gentle temperament. Burns through winter stores — needs more autumn feeding.' },
+    { id:'nuc-carniolan', strain:'carniolan', name:'Nucleus — Carniolan', icon:'🌲', price:155,
+      desc:'Explosive spring expansion. Calm bees. Watch them closely in swarm season — they want to leave.' },
+    { id:'nuc-buckfast', strain:'buckfast', name:'Nucleus — Buckfast', icon:'⛪', price:175,
+      desc:'Brother Adam\'s hybrid, the steady all-rounder. Calm, productive, low swarming. The expensive but easy option.' },
+    { id:'nuc-native', strain:'native', name:'Nucleus — Native (AMM)', icon:'🌿', price:165,
+      desc:'British dark native stock. Slow start, bombproof winter. More defensive — needs a proper suit.' },
+    { id:'colony', strain:'local', name:'Full colony', icon:'🏠', price:180,
       desc:'An established colony on a full brood box. More bees sooner, more to go wrong.' },
-    { id:'matedqueen', name:'Mated queen', icon:'👑', price:42,
+    { id:'matedqueen', strain:'local', name:'Mated queen', icon:'👑', price:42,
       desc:'A laying queen of known stock, for requeening or making up a colony.' },
   ],
   hives: [

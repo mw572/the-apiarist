@@ -170,6 +170,13 @@ function startNewGame(name, difficulty){
 function _migrateSave(g) {
   if (!g || !Array.isArray(g.colonies)) return;
   g.colonies.forEach(function(c) {
+    /* Strain — added in the bee-strains v1 commit. Default any pre-
+       strain colony to 'local' so legacy saves keep behaving as
+       baseline (all trait multipliers 1.0). */
+    if (typeof c.strain !== 'string' ||
+        (typeof HIVE_STRAINS !== 'undefined' && !HIVE_STRAINS[c.strain])) {
+      c.strain = 'local';
+    }
     /* queenCells: ensure all four fields are present and not NaN */
     if (!c.queenCells || typeof c.queenCells !== 'object') {
       c.queenCells = { type: 'none', count: 0, age: 0, state: 'none' };
