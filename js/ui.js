@@ -1616,12 +1616,13 @@ function _ui_advanceToEvent() {
 
 function _ui_buildMarketView() {
   var tabs = [
-    { key: 'bees',     label: 'Bees',     ico: '🐝' },
-    { key: 'hives',    label: 'Hives',    ico: '🪵' },
-    { key: 'tools',    label: 'Tools',    ico: '🔧' },
-    { key: 'supplies', label: 'Supplies', ico: '🛍️' },
-    { key: 'sell',     label: 'Sell',     ico: '🍯' },
-    { key: 'apiaries', label: 'Apiaries', ico: '🌳' }
+    { key: 'bees',       label: 'Bees',       ico: '🐝' },
+    { key: 'hives',      label: 'Hives',      ico: '🪵' },
+    { key: 'tools',      label: 'Tools',      ico: '🔧' },
+    { key: 'supplies',   label: 'Supplies',   ico: '🛍️' },
+    { key: 'sell',       label: 'Sell',       ico: '🍯' },
+    { key: 'apiaries',   label: 'Apiaries',   ico: '🌳' },
+    { key: 'neighbours', label: 'Neighbours', ico: '🏘️' }
   ];
   var tabBtns = tabs.map(function(t) {
     return h('button', {
@@ -1641,6 +1642,8 @@ function _ui_buildMarketView() {
     content = _ui_marketSellTab();
   } else if (_ui_marketTab === 'apiaries') {
     content = _ui_marketApiariesTab();
+  } else if (_ui_marketTab === 'neighbours') {
+    content = _ui_marketNeighboursTab();
   } else {
     content = _ui_marketBuyTab('Bees and colonies',
       CATALOG.bees.filter(function(b) { return b.id !== 'matedqueen'; }), 'bees');
@@ -1869,6 +1872,62 @@ function _ui_marketSuppliesTab() {
         text: 'Keep a treatment in stock so you can act the moment the honey crop is off.' }),
       h('div', { class: 'shop-list' }, treatRows)
     ])
+  ]);
+}
+
+/* ====================================================================
+   NEIGHBOURS tab — NPC marketplace ads (Phase 1 single-player; the
+   same plumbing will surface real-player ads when multiplayer ships).
+   ==================================================================== */
+function _ui_marketNeighboursTab() {
+  var ads = (Game.marketplaceAds || []).slice();
+  ads.sort(function (a, b) { return b.postedWeek - a.postedWeek; });
+
+  var rows;
+  if (!ads.length) {
+    rows = [h('div', { class: 'empty-state' }, [
+      h('div', { class: 'big' }, '🏘️'),
+      h('p', { text: 'No ads from neighbours this week. Check back — they post when they have surplus kit or spare nucs.' })
+    ])];
+  } else {
+    rows = ads.map(function (ad) {
+      var weeksLeft = 3 - (Game.week - ad.postedWeek);
+      var badge = ad.isColony
+        ? h('span', { class: 'neigh-strain-pill' }, (HIVE_STRAINS && HIVE_STRAINS[ad.strain] && HIVE_STRAINS[ad.strain].icon || '🐝') + ' ' +
+            (HIVE_STRAINS && HIVE_STRAINS[ad.strain] && HIVE_STRAINS[ad.strain].short || 'Local'))
+        : null;
+      return h('div', { class: 'neigh-ad' }, [
+        h('div', { class: 'neigh-ad-head' }, [
+          h('div', {}, [
+            h('b', { text: ad.name }),
+            badge,
+          ]),
+          h('span', { class: 'neigh-price' }, '£' + ad.price),
+        ]),
+        h('div', { class: 'neigh-seller' }, 'Posted by ' + ad.seller + ' · ' +
+          (weeksLeft <= 0 ? 'closing today' : (weeksLeft + ' week' + (weeksLeft === 1 ? '' : 's') + ' left'))),
+        h('div', { class: 'neigh-desc', text: ad.desc }),
+        h('div', { class: 'neigh-actions' }, [
+          h('button', {
+            class: 'btn btn-sm btn-primary',
+            onclick: function () {
+              var r = buyMarketplaceAd(ad.id);
+              toast(r.msg, r.ok ? 'good' : 'bad');
+              if (r.ok) render();
+            }
+          }, 'Buy from neighbour'),
+        ]),
+      ]);
+    });
+  }
+
+  return h('div', {}, [
+    h('div', { class: 'card', style: { marginBottom: '12px' } }, [
+      h('div', { class: 'card-title' }, '🏘️ Neighbours'),
+      h('div', { style: { fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '10px' } },
+        'Other beekeepers in your area sometimes have surplus kit, spare nucs in spring, or sugar to clear out. Ads run for three weeks.'),
+      h('div', {}, rows),
+    ]),
   ]);
 }
 
@@ -2277,15 +2336,109 @@ function _ui_buildRecordsView(startTab) {
     h('button', { class: 'records-tab' + (activeTab === 'journal'  ? ' active' : ''),
       onclick: function() { setTab('journal'); } }, '📜 Journal'),
     h('button', { class: 'records-tab' + (activeTab === 'finances' ? ' active' : ''),
-      onclick: function() { setTab('finances'); } }, '💰 Finances')
+      onclick: function() { setTab('finances'); } }, '💰 Finances'),
+    h('button', { class: 'records-tab' + (activeTab === 'samples'  ? ' active' : ''),
+      onclick: function() { setTab('samples'); } }, '🧪 Samples')
   ]);
 
-  var content = activeTab === 'finances'
-    ? _ui_buildFinancesContent()
-    : _ui_buildJournalContent();
+  var content;
+  if (activeTab === 'finances')      content = _ui_buildFinancesContent();
+  else if (activeTab === 'samples')  content = _ui_buildSamplesContent();
+  else                                content = _ui_buildJournalContent();
 
   var goalsWidget = _ui_buildGoalsWidget();
   return h('div', { class: 'panel-view narrow' }, [tabBar, content, goalsWidget]);
+}
+
+/* ====================================================================
+   SAMPLES — pollen-analysis lab results
+   ==================================================================== */
+function _ui_buildSamplesContent() {
+  var jars     = (Game.inventory && Game.inventory.jars) || {};
+  var pending  = (Game.pendingSamples || []).slice();
+  var done     = (Game.completedSamples || []).slice();
+
+  /* Send-a-sample card — one row per honey type currently in jars. */
+  var rows = [];
+  Object.keys(jars).forEach(function (t) {
+    var count = jars[t] || 0;
+    if (count < 1) return;
+    var honeyName = (HONEY_TYPES[t] && HONEY_TYPES[t].name) || t;
+    rows.push(h('div', { class: 'sample-send-row' }, [
+      h('div', { class: 'sample-honey-name' }, honeyName + ' — ' + count + ' jar' + (count === 1 ? '' : 's')),
+      h('button', {
+        class: 'btn btn-sm btn-primary',
+        onclick: function () {
+          var r = sendHoneySample(t);
+          toast(r.msg, r.ok ? 'good' : 'bad');
+          if (r.ok) render();
+        }
+      }, 'Send sample (£' + SAMPLE_COST + ')'),
+    ]));
+  });
+  if (!rows.length) {
+    rows.push(h('div', { class: 'empty-state' },
+      'You need bottled honey before you can send a sample. Extract and bottle some first.'));
+  }
+  var sendCard = h('div', { class: 'card', style: { marginBottom: '12px' } }, [
+    h('div', { class: 'card-title' }, 'Send a sample to the lab'),
+    h('div', { style: { fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '10px' } },
+      'A pollen analysis tells you which flowers actually fed the colony when this honey was made. £' + SAMPLE_COST +
+      ' per sample, results back in ' + SAMPLE_TURNAROUND + ' weeks.'),
+    h('div', {}, rows),
+  ]);
+
+  /* Pending samples */
+  var pendingCard = null;
+  if (pending.length) {
+    pendingCard = h('div', { class: 'card', style: { marginBottom: '12px' } }, [
+      h('div', { class: 'card-title' }, 'Awaiting results'),
+      h('div', {}, pending.map(function (s) {
+        var weeksLeft = Math.max(0, s.returnWeek - Game.week);
+        var honeyName = (HONEY_TYPES[s.honeyType] && HONEY_TYPES[s.honeyType].name) || s.honeyType;
+        return h('div', { class: 'sample-pending-row' }, [
+          h('div', {}, [
+            h('b', { text: honeyName }),
+            h('div', { style: { fontSize: '11px', color: 'var(--ink-soft)' },
+              text: 'Sent ' + (typeof dateLabel === 'function' ? dateLabel(s.sentWeek) : ('wk ' + s.sentWeek)) })
+          ]),
+          h('div', { style: { fontSize: '12px', color: 'var(--honey-dk)' } },
+            weeksLeft === 0 ? 'Due this week' :
+            (weeksLeft + ' week' + (weeksLeft === 1 ? '' : 's') + ' to go'))
+        ]);
+      })),
+    ]);
+  }
+
+  /* Completed sample results */
+  var doneCard = null;
+  if (done.length) {
+    doneCard = h('div', { class: 'card' }, [
+      h('div', { class: 'card-title' }, 'Lab reports'),
+      h('div', {}, done.map(function (r) {
+        var honeyName = (HONEY_TYPES[r.honeyType] && HONEY_TYPES[r.honeyType].name) || r.honeyType;
+        var bars = (r.composition || []).map(function (c) {
+          return h('div', { class: 'sample-bar-row' }, [
+            h('div', { class: 'sample-bar-label' }, c.src),
+            h('div', { class: 'sample-bar-track' }, [
+              h('div', { class: 'sample-bar-fill', style: { width: c.pct + '%' } }),
+            ]),
+            h('div', { class: 'sample-bar-pct' }, c.pct + '%'),
+          ]);
+        });
+        return h('div', { class: 'sample-result' }, [
+          h('div', { class: 'sample-result-head' }, [
+            h('b', { text: honeyName }),
+            h('span', { class: 'sample-result-date',
+              text: 'Result ' + (typeof dateLabel === 'function' ? dateLabel(r.returnedWeek) : ('wk ' + r.returnedWeek)) }),
+          ]),
+          h('div', { class: 'sample-bars' }, bars),
+        ]);
+      })),
+    ]);
+  }
+
+  return h('div', {}, [sendCard, pendingCard, doneCard].filter(Boolean));
 }
 
 function _ui_buildJournalContent() {

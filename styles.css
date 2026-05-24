@@ -416,6 +416,93 @@ button { font-family: var(--sans); cursor: pointer; }
 
 /* mentor — an on-screen teaching companion with a speech bubble */
 /* ====================================================================
+   NEIGHBOURS — NPC marketplace ads
+   ==================================================================== */
+.neigh-ad {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.neigh-ad-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.neigh-ad-head b { font-size: 14px; color: var(--ink); }
+.neigh-strain-pill {
+  display: inline-block;
+  background: var(--warn-bg);
+  border: 1px solid var(--honey-dk);
+  border-radius: 12px;
+  padding: 1px 8px;
+  font-size: 10px; font-weight: 600;
+  margin-left: 8px;
+  color: var(--honey-dk);
+  vertical-align: middle;
+}
+.neigh-price {
+  font-family: var(--serif);
+  font-size: 17px; font-weight: 700;
+  color: var(--honey-dk);
+}
+.neigh-seller {
+  font-size: 11px; color: var(--ink-soft);
+  margin-bottom: 6px;
+  font-style: italic;
+}
+.neigh-desc {
+  font-size: 13px; color: var(--ink-soft);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+.neigh-actions {
+  display: flex; justify-content: flex-end;
+}
+
+/* ====================================================================
+   SAMPLES — honey composition lab results
+   ==================================================================== */
+.sample-send-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-bottom: 1px dashed var(--line);
+}
+.sample-send-row:last-child { border-bottom: none; }
+.sample-honey-name { font-size: 13px; color: var(--ink); }
+
+.sample-pending-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-bottom: 1px dashed var(--line);
+}
+.sample-pending-row:last-child { border-bottom: none; }
+
+.sample-result {
+  background: var(--paper-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 11px 13px; margin-bottom: 10px;
+}
+.sample-result-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.sample-result-date { font-size: 11px; color: var(--ink-soft); }
+.sample-bar-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+  font-size: 12px;
+}
+.sample-bar-label { width: 36%; color: var(--ink); }
+.sample-bar-track {
+  flex: 1; height: 10px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: 5px; overflow: hidden;
+}
+.sample-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--honey), var(--honey-deep));
+}
+.sample-bar-pct {
+  width: 36px; text-align: right; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums; font-size: 11px;
+}
+
+/* ====================================================================
    WINTER LETTER — soft "January notebook" inline block.
 
    Appears at the top of the apiary view during deep-winter weeks. The

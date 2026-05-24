@@ -256,6 +256,273 @@ function buyFromCatalog(category, id, qty) {
   return { ok: false, msg: 'Unhandled catalogue category.' };
 }
 
+/* ====================================================================
+   NEIGHBOUR MARKETPLACE (single-player NPC ads)
+   --------------------------------------------------------------------
+   Other beekeepers in your area occasionally have spare kit, surplus
+   nucs in spring, or sugar to clear out. Their ads appear in the
+   Market → Neighbours tab. In single-player they are NPC adverts;
+   when multiplayer ships (per UNIVERSE-VISION) the same plumbing will
+   present ads from real players at the same coordinates.
+
+   Ads rotate weekly. Each ad has a 3-week lifespan and a one-off
+   sale (first-come-first-served, even though there is only one
+   "customer" in single-player).
+   ==================================================================== */
+var NEIGHBOUR_NAMES = [
+  'Sarah at Bramble Cottage',
+  'Tom from Hill Farm',
+  'Dr. Elaine — local association',
+  'Hawthorn Lane apiary',
+  'Mike\'s apiary',
+  'Riverside bees',
+  'Old Orchard apiary',
+  'Linden Tree beekeeper',
+];
+/* Each template names the kind of thing the neighbour is shilling.
+   `weight` is the relative frequency of this template appearing in a
+   given weekly draw. `availWk` predicates restrict when it can appear
+   (e.g. nucs only in spring). */
+var MARKETPLACE_TEMPLATES = [
+  { kind: 'usedSuper',   weight: 18, price: [22, 32],
+    name: 'Used super box — clean, drawn comb',
+    desc: 'Drawn comb saves a year of comb-building. National size.',
+    invKey: 'supers', invDelta: 1 },
+  { kind: 'usedBroodBox',weight: 10, price: [28, 38],
+    name: 'Used brood box with frames',
+    desc: 'Cedar, decent condition. National. Comes with frames.',
+    invKey: 'broodBoxes', invDelta: 1 },
+  { kind: 'usedHive',    weight: 6,  price: [70, 90],
+    name: 'Complete used hive — needs bees',
+    desc: 'Floor, brood box, queen excluder, super, crown board, roof. Tidy condition.',
+    invKey: 'spareHives', invDelta: 1 },
+  { kind: 'usedBait',    weight: 12, price: [10, 18],
+    name: 'Bait hive — used, set up',
+    desc: 'Already seasoned with old comb. Pop it in a tree.',
+    invKey: 'baitHives',  invDelta: 1 },
+  { kind: 'sugarBag',    weight: 14, price: [4, 6],
+    name: 'Sugar — 5kg bag, end of bulk order',
+    desc: 'Cheaper than the supplies tab. They bought too much.',
+    invKey: 'sugar',      invDelta: 5 },
+  { kind: 'jarLot',      weight: 10, price: [7, 11],
+    name: 'Empty jars — lot of 24',
+    desc: 'Used but clean. Lids in mixed colours.',
+    invKey: 'emptyJars',  invDelta: 24 },
+  { kind: 'nucLocal',    weight: 15, price: [110, 135],
+    name: 'Nucleus — local stock', strain: 'local',
+    desc: 'A spare nuc from this year\'s splits. Five frames, laying queen.',
+    isColony: true,
+    availWk: function (wk) { return wk >= 14 && wk <= 28; } },   /* spring/early summer only */
+  { kind: 'nucBuckfast', weight: 5,  price: [155, 180],
+    name: 'Nucleus — Buckfast queen', strain: 'buckfast',
+    desc: 'Brother Adam stock from a local breeder. Spare from their breeding programme.',
+    isColony: true,
+    availWk: function (wk) { return wk >= 14 && wk <= 24; } },
+];
+
+function _econ_pickTemplate(rng) {
+  var wk = ((Game.week - 1) % 52) + 1;
+  var pool = MARKETPLACE_TEMPLATES.filter(function (t) {
+    return !t.availWk || t.availWk(wk);
+  });
+  var total = pool.reduce(function (s, t) { return s + t.weight; }, 0);
+  var r = rng() * total;
+  for (var i = 0; i < pool.length; i++) {
+    r -= pool[i].weight;
+    if (r <= 0) return pool[i];
+  }
+  return pool[pool.length - 1];
+}
+
+/* Weekly hook — adds 0-2 new ads, expires old ones. */
+function _refreshMarketplaceAds() {
+  if (!Game) return;
+  if (!Array.isArray(Game.marketplaceAds)) Game.marketplaceAds = [];
+
+  /* Expire old ads — 3-week lifespan. */
+  Game.marketplaceAds = Game.marketplaceAds.filter(function (a) {
+    return Game.week - a.postedWeek < 3;
+  });
+
+  /* Spawn up to 2 new ads with a 60% chance for the first, 30% for the
+     second — keeps the board lively without overwhelming. */
+  var rng = Math.random;
+  if (!Game.flags.nextAdId) Game.flags.nextAdId = 1;
+  var added = 0;
+  if (rng() < 0.6) added++;
+  if (rng() < 0.3) added++;
+  for (var i = 0; i < added && Game.marketplaceAds.length < 6; i++) {
+    var tpl = _econ_pickTemplate(rng);
+    var price = Math.round(tpl.price[0] + rng() * (tpl.price[1] - tpl.price[0]));
+    Game.marketplaceAds.push({
+      id: Game.flags.nextAdId++,
+      seller: NEIGHBOUR_NAMES[Math.floor(rng() * NEIGHBOUR_NAMES.length)],
+      kind: tpl.kind,
+      name: tpl.name,
+      desc: tpl.desc,
+      price: price,
+      isColony: !!tpl.isColony,
+      strain:   tpl.strain || null,
+      invKey:   tpl.invKey   || null,
+      invDelta: tpl.invDelta || 0,
+      postedWeek: Game.week,
+    });
+  }
+}
+
+/* buyMarketplaceAd(adId) -> { ok, msg }
+   Executes the transaction against the named ad. */
+function buyMarketplaceAd(adId) {
+  if (!Game || !Array.isArray(Game.marketplaceAds)) {
+    return { ok: false, msg: 'No marketplace yet.' };
+  }
+  var idx = -1;
+  for (var i = 0; i < Game.marketplaceAds.length; i++) {
+    if (Game.marketplaceAds[i].id === adId) { idx = i; break; }
+  }
+  if (idx === -1) return { ok: false, msg: 'That ad has been taken or expired.' };
+  var ad = Game.marketplaceAds[idx];
+  if (!spend(ad.price, 'Neighbour — ' + ad.name)) {
+    return { ok: false, msg: 'You cannot afford ' + ad.name + ' (£' + ad.price + ').' };
+  }
+
+  /* Effect: either install a colony or top up inventory. */
+  if (ad.isColony) {
+    /* Need a spare hive to house the new nuc — refund if not. */
+    if (Game.inventory.spareHives < 1) {
+      earn(ad.price, 'Refund — no spare hive');
+      Game.marketplaceAds.splice(idx, 1);
+      return { ok: false, msg: 'You need a spare hive ready before buying a nuc. Refunded £' + ad.price + '.' };
+    }
+    Game.inventory.spareHives--;
+    var newColony = makeColony({
+      source: 'nuc',
+      strain: ad.strain || 'local',
+      apiaryId: Game.ui.selectedApiary || (Game.apiaries[0] && Game.apiaries[0].id),
+      name: _econ_freeName(HIVE_NAMES, _econ_usedHiveNames()),
+      week: Game.week, year: gameYear(),
+      queenQuality: 0.7 + Math.random() * 0.3,
+    });
+    Game.colonies.push(newColony);
+    logEvent('🏘️', 'Bought ' + ad.name + ' from ' + ad.seller + ' for £' + ad.price + '. Installed as ' + newColony.name + '.', 'good');
+    Game.marketplaceAds.splice(idx, 1);
+    return { ok: true, msg: newColony.name + ' is installed from ' + ad.seller + '.' };
+  }
+
+  /* Inventory key with arbitrary delta. */
+  if (ad.invKey) {
+    if (ad.invKey === 'sugar') {
+      Game.inventory.sugar = (Game.inventory.sugar || 0) + ad.invDelta;
+    } else if (ad.invKey === 'emptyJars') {
+      Game.inventory.emptyJars = (Game.inventory.emptyJars || 0) + ad.invDelta;
+    } else {
+      Game.inventory[ad.invKey] = (Game.inventory[ad.invKey] || 0) + ad.invDelta;
+    }
+  }
+  logEvent('🏘️', 'Bought ' + ad.name + ' from ' + ad.seller + ' for £' + ad.price + '.', 'good');
+  Game.marketplaceAds.splice(idx, 1);
+  return { ok: true, msg: ad.name + ' picked up from ' + ad.seller + '.' };
+}
+
+/* ====================================================================
+   HONEY COMPOSITION SAMPLING
+   --------------------------------------------------------------------
+   A real beekeeping service: send a small sample to a lab for pollen
+   analysis. The lab reports what flowers actually fed your colony
+   during the weeks the honey was made — useful for verifying single-
+   source claims (heather, manuka) and for understanding your local
+   forage. In-game it's a slow-but-cheap action that pays off in
+   knowledge rather than cash.
+
+   In single-player the result is deterministic from the honey type
+   (real flow data exists in HONEY_COMPOSITIONS below). Multiplayer
+   Phase 4 will introduce variation by region and by which weeks the
+   bees actually foraged.
+   ==================================================================== */
+var HONEY_COMPOSITIONS = {
+  spring:  [ { src: 'Dandelion',     pct: 35 },
+             { src: 'Fruit blossom',  pct: 30 },
+             { src: 'Hawthorn',       pct: 18 },
+             { src: 'Sycamore',       pct: 10 },
+             { src: 'Other',          pct: 7  } ],
+  oilseed: [ { src: 'Oilseed rape',   pct: 78 },
+             { src: 'Dandelion',      pct: 14 },
+             { src: 'Other',          pct: 8  } ],
+  summer:  [ { src: 'White clover',   pct: 30 },
+             { src: 'Lime',           pct: 18 },
+             { src: 'Bramble',        pct: 16 },
+             { src: 'Wildflower mix', pct: 22 },
+             { src: 'Sweet chestnut', pct: 8  },
+             { src: 'Other',          pct: 6  } ],
+  lime:    [ { src: 'Lime (Tilia)',   pct: 72 },
+             { src: 'Clover',         pct: 15 },
+             { src: 'Other',          pct: 13 } ],
+  heather: [ { src: 'Calluna heather', pct: 92 },
+             { src: 'Bell heather',    pct: 5  },
+             { src: 'Other',           pct: 3  } ],
+  ivy:     [ { src: 'Ivy (Hedera)',   pct: 94 },
+             { src: 'Other',          pct: 6  } ],
+};
+var SAMPLE_COST       = 25;     // £ per sample
+var SAMPLE_TURNAROUND = 4;      // game weeks until result
+
+/* sendHoneySample(honeyType) -> { ok, msg, sampleId? }
+   Queues a lab sample for the given honey type. Costs £25 immediately,
+   resolves SAMPLE_TURNAROUND weeks later via _checkSampleResults(). */
+function sendHoneySample(honeyType) {
+  if (!Game || !honeyType) return { ok: false, msg: 'No honey type chosen.' };
+  if (!HONEY_COMPOSITIONS[honeyType]) {
+    return { ok: false, msg: 'Lab does not recognise that honey type.' };
+  }
+  var jarsHeld = (Game.inventory.jars && Game.inventory.jars[honeyType]) || 0;
+  if (jarsHeld < 1) {
+    return { ok: false, msg: 'You need at least one jar of that honey to send a sample.' };
+  }
+  if (!spend(SAMPLE_COST, 'Lab — honey composition sample')) {
+    return { ok: false, msg: 'You cannot afford the £' + SAMPLE_COST + ' lab fee.' };
+  }
+  if (!Game.pendingSamples) Game.pendingSamples = [];
+  if (!Game.flags.nextSampleId) Game.flags.nextSampleId = 1;
+  var s = {
+    id: Game.flags.nextSampleId++,
+    honeyType: honeyType,
+    sentWeek: Game.week,
+    returnWeek: Game.week + SAMPLE_TURNAROUND,
+  };
+  Game.pendingSamples.push(s);
+  logEvent('🧪', 'Sent a ' + (HONEY_TYPES[honeyType] && HONEY_TYPES[honeyType].name || honeyType) +
+    ' sample to the lab (£' + SAMPLE_COST + '). Results back in ' + SAMPLE_TURNAROUND + ' weeks.', 'plain');
+  return { ok: true, msg: 'Sample sent. Results back in ' + SAMPLE_TURNAROUND + ' weeks.', sampleId: s.id };
+}
+
+/* Run weekly from advanceWeek — resolves any pending samples whose
+   returnWeek has arrived, generates a composition result and moves
+   them into completedSamples for the Records view to display. */
+function _checkSampleResults() {
+  if (!Game || !Game.pendingSamples) return;
+  if (!Game.completedSamples) Game.completedSamples = [];
+  var keep = [];
+  Game.pendingSamples.forEach(function (s) {
+    if (Game.week >= s.returnWeek) {
+      var result = {
+        id: s.id, honeyType: s.honeyType,
+        sentWeek: s.sentWeek, returnedWeek: Game.week,
+        composition: HONEY_COMPOSITIONS[s.honeyType] || [],
+      };
+      Game.completedSamples.unshift(result);
+      var honeyName = (HONEY_TYPES[s.honeyType] && HONEY_TYPES[s.honeyType].name) || s.honeyType;
+      logEvent('🧪', 'Lab report back — ' + honeyName + ': mostly ' +
+        (result.composition[0] ? result.composition[0].src + ' (' + result.composition[0].pct + '%)' : 'mixed sources') +
+        '. See Records → Samples.', 'good');
+    } else {
+      keep.push(s);
+    }
+  });
+  Game.pendingSamples = keep;
+  /* trim to last 30 results */
+  if (Game.completedSamples.length > 30) Game.completedSamples.length = 30;
+}
+
 /* ---- establishApiary(siteType) -------------------------------------- */
 /*
  * siteType: key of SITE_TYPES

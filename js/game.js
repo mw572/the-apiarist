@@ -126,6 +126,9 @@ function startNewGame(name, difficulty){
     stats: { honeyHarvested:0, coloniesLost:0, swarmsLost:0, swarmsCaught:0,
              wintersSurvived:0, splitsMade:0, queensReared:0, jarsSold:0, showWins:0 },
     yearStats: { honeyKg:0, income:0, coloniesStarted:0, coloniesLost:0 },
+    pendingSamples: [],    // honey-composition lab queue
+    completedSamples: [],  // returned lab reports
+    marketplaceAds: [],    // NPC neighbour ads
     ui: { view:'apiary', selectedApiary: 1, selectedColony: null },
   };
 
@@ -169,6 +172,13 @@ function startNewGame(name, difficulty){
 */
 function _migrateSave(g) {
   if (!g || !Array.isArray(g.colonies)) return;
+  /* Lab sample queues — added in honey-composition v1. Default to
+     empty arrays so older saves don't crash on the weekly check. */
+  if (!Array.isArray(g.pendingSamples))    g.pendingSamples    = [];
+  if (!Array.isArray(g.completedSamples))  g.completedSamples  = [];
+  /* Marketplace ads — added in neighbour-marketplace v1. Empty by
+     default; refresh runs weekly from advanceWeek. */
+  if (!Array.isArray(g.marketplaceAds))    g.marketplaceAds    = [];
   g.colonies.forEach(function(c) {
     /* Strain — added in the bee-strains v1 commit. Default any pre-
        strain colony to 'local' so legacy saves keep behaving as
@@ -391,6 +401,8 @@ function advanceWeek(){
   _yearMaintenance();
   _checkWinterSurvival();
   _logOverdueInspections();
+  if (typeof _checkSampleResults === 'function') _checkSampleResults();
+  if (typeof _refreshMarketplaceAds === 'function') _refreshMarketplaceAds();
   _checkGameOver(presentables);
   saveGame();
   render();
