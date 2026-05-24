@@ -1307,7 +1307,7 @@ function _ui_buildApiaryView() {
     yard
   ]);
 
-  // Sidebar — winter letter / year-on-year / mentor / action list / advance bar
+  // Sidebar — winter letter / year-on-year / mentor / notebook / advance
   var sidebar = _ui_buildSidebar();
 
   return h('div', { class: 'apiary-view apiary-view-v2' }, [

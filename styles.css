@@ -2205,28 +2205,28 @@ button { font-family: var(--sans); cursor: pointer; }
   line-height: 1;
 }
 
-/* ── Optional plate at the top of the article ───────────────────────── */
-/* Frame holds its own height regardless of image load state so we
-   never silently lose the painted plate to a half-loaded asset or a
-   browser that doesn't resolve `height: 100%` against an auto-height
-   parent. */
+/* ── Painted plate at the top of every Handbook article ─────────────── */
+/* Image carries its own height directly so the plate renders even
+   when the browser would otherwise collapse `height: 100%` against
+   an auto-height parent (older Safari, certain cache states). */
 .article-plate-frame {
   margin: 0 0 18px;
   border: 1px solid var(--ink);
   background: var(--paper-2);
   overflow: hidden;
   border-radius: 0;
-  aspect-ratio: 16 / 9;
-  max-height: 320px;
   width: 100%;
   display: block;
 }
 .article-plate {
   display: block;
   width: 100%;
-  height: 100%;
+  height: 320px;
   object-fit: cover;
   object-position: center;
+}
+@media (max-width: 720px) {
+  .article-plate { height: 220px; }
 }
 
 /* ── Glossary pane ──────────────────────────────────────────────────── */
