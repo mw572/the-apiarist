@@ -465,6 +465,16 @@ button { font-family: var(--sans); cursor: pointer; }
   line-height: 1.45;
 }
 
+/* A one-line year-on-year reminder rendered just above the mentor
+   bubble in spring of year 2+. Calm typography — the player should
+   feel reminded, not scored. */
+.year-on-year {
+  margin: 8px 14px 0;
+  font-size: 12px; font-style: italic;
+  color: var(--ink-soft); text-align: center;
+  letter-spacing: 0.2px;
+}
+
 .mentor { display: flex; gap: 10px; align-items: flex-start; margin: 12px 14px; }
 .mentor-face {
   flex: none; width: 44px; height: 44px; font-size: 25px;

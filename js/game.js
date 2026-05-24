@@ -383,6 +383,7 @@ function advanceWeek(){
 
   _yearMaintenance();
   _checkWinterSurvival();
+  _logOverdueInspections();
   _checkGameOver(presentables);
   saveGame();
   render();
@@ -421,6 +422,77 @@ function _yearMaintenance(){
   }
   Game.colonies = kept;
   if (Game.ui.selectedColony && !colonyById(Game.ui.selectedColony)) Game.ui.selectedColony = null;
+
+  /* Year-end snapshot: capture the population of every living colony
+     by name. The next year's spring mentor uses this to show "Rose was
+     at 9,000 last spring, Ivy is at 12,618" — a wisdom-accumulates beat
+     that costs almost nothing. Stored as a flat name→population map. */
+  if (!Game.flags.yearSnapshots) Game.flags.yearSnapshots = {};
+  var yearJustEnded = gameYear() - 1;
+  if (yearJustEnded >= 1) {
+    var snap = {};
+    Game.colonies.forEach(function (c) {
+      if (c.alive) snap[c.name] = Math.round(c.population || 0);
+    });
+    Game.flags.yearSnapshots[yearJustEnded] = snap;
+  }
+}
+
+/* ====================================================================
+   getYearOnYearLine() -> string|null
+   In spring of year 2+, compares each living colony's current population
+   against the same colony's population at the end of the previous year.
+   Returns a single sentence the apiary view shows once, calmly, as
+   accumulated wisdom rather than a metric.
+   ==================================================================== */
+function getYearOnYearLine() {
+  if (!Game) return null;
+  var year = gameYear();
+  if (year < 2) return null;
+  var wk = ((Game.week - 1) % 52) + 1;
+  /* Only surface this in early spring (weeks 14-18), when the comparison
+     means something — populations rebuilding after winter. */
+  if (wk < 14 || wk > 18) return null;
+  var snap = Game.flags && Game.flags.yearSnapshots && Game.flags.yearSnapshots[year - 1];
+  if (!snap) return null;
+  var alive = aliveColonies();
+  if (!alive.length) return null;
+  /* Find a colony that was alive at end of last year too, so the comparison is real. */
+  var match = null;
+  for (var i = 0; i < alive.length; i++) {
+    if (snap[alive[i].name] != null) { match = alive[i]; break; }
+  }
+  if (!match) return null;
+  var was = snap[match.name];
+  var now = Math.round(match.population || 0);
+  return 'Last spring, ' + match.name + ' was at ' + was.toLocaleString() +
+         ' bees. Today she is at ' + now.toLocaleString() + '.';
+}
+
+/* ====================================================================
+   _logOverdueInspections()
+   During swarm season (weeks 14-30), if any alive colony has gone
+   ≥10 days without an inspection, write a single quiet "overdue" line
+   into the journal. Fires once per gap — re-inspecting the colony
+   clears the latch and lets the next missed cycle log again.
+
+   The point: a real beekeeper's notebook has the gap recorded in it.
+   The game keeps the same record without preaching about it. Players
+   who develop the habit feel the gap in their own log.
+   ==================================================================== */
+function _logOverdueInspections(){
+  if (!Game) return;
+  var wk = ((Game.week - 1) % 52) + 1;
+  /* Only fire in swarm season — outside that window, a 9-day gap is fine. */
+  if (wk < 14 || wk > 30) return;
+  aliveColonies().forEach(function (c) {
+    if (!c.lastInspected) return;
+    var gap = Game.week - c.lastInspected;
+    if (gap >= 10 && c._lastOverdueAt !== c.lastInspected) {
+      c._lastOverdueAt = c.lastInspected;
+      logEvent('🕘', c.name + ' — inspection overdue, ' + gap + ' days since last open.', 'warn');
+    }
+  });
 }
 
 function _checkWinterSurvival(){

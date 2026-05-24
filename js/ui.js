@@ -1468,6 +1468,15 @@ function _ui_buildSidebar() {
     ])
   ]);
 
+  /* Year-on-year line — a calm one-sentence reminder that wisdom is
+     accumulating. Only renders in spring of year 2+; rest of the time
+     it returns null and we skip the node entirely. */
+  var yoyBlock = null;
+  if (typeof getYearOnYearLine === 'function') {
+    var yoy = getYearOnYearLine();
+    if (yoy) yoyBlock = h('div', { class: 'year-on-year' }, yoy);
+  }
+
   /* === Winter Letter — surfaces in the apiary view during the dormant
      months. The real beekeeping experience of January: nothing to do,
      much to know. Gives the player something specific to anticipate
@@ -1572,6 +1581,7 @@ function _ui_buildSidebar() {
 
   return h('div', { class: 'apiary-side' }, [
     winterLetterBlock,
+    yoyBlock,
     mentorBlock,
     h('div', { class: 'side-section' }, [
       h('div', { class: 'side-head' }, [
