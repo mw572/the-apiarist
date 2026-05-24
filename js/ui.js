@@ -1747,28 +1747,46 @@ function _ui_buildStatusBadge(colony) {
    SIDEBAR (time controls, mentor, advisor)
    ==================================================================== */
 
+/* Stable key for an advisor item — used as the dismiss-state lookup.
+   tone + first 90 chars of text is unique enough that "Rose: swarm
+   cells seen" and "Daisy: swarm cells seen" each get their own key. */
+function _ui_advisorKey(item) {
+  return (item.tone || 'info') + ':' + (item.text || '').slice(0, 90);
+}
+
 function _ui_buildSidebar() {
   var advisor = Game.advisor || [];
 
-  /* Mentor speaks the single most pressing thing */
-  var top = null;
-  for (var i = 0; i < advisor.length; i++) { if (advisor[i].tone === 'bad') { top = advisor[i]; break; } }
-  if (!top) { for (var j = 0; j < advisor.length; j++) { if (advisor[j].tone === 'warn') { top = advisor[j]; break; } } }
+  /* Dismissed-advisor cache — { key: weekDismissed }. Items snooze
+     for one game week then re-surface if the condition still holds. */
+  if (!Game.flags) Game.flags = {};
+  if (!Game.flags.dismissedAdvisor) Game.flags.dismissedAdvisor = {};
+  var dismissed = Game.flags.dismissedAdvisor;
+  var week = Game.week;
 
-  var mentorText, mentorTone;
-  if (top) {
-    mentorText = top.text;
-    mentorTone = top.tone;
-  } else {
-    var ml = (typeof mentorLine === 'function') ? mentorLine() : null;
-    mentorText = ml || 'All looks well at the apiary. Enjoy a calm week — keep half an eye on the season ahead.';
-    mentorTone = 'ok';
-  }
+  /* Visible items = everything not currently snoozed. Auto-resolved
+     items (state changed) won't appear in advisor anymore, so they
+     fall away without explicit dismiss. */
+  var visible = advisor.filter(function (item) {
+    var k = _ui_advisorKey(item);
+    var dw = dismissed[k];
+    if (dw == null) return true;
+    return (week - dw) >= 1;
+  });
 
-  /* Mentor portrait — the painted portrait of the apiary mentor sits
-     inside an ink-bordered paper-dim frame. The painting is the
-     voice of mentorLine(). */
-  var mentorBlock = h('div', { class: 'mentor mentor-card tone-' + mentorTone }, [
+  /* Sort: bad → warn → info → ok, so the most urgent entry sits at
+     the top of the notebook without a separate "mentor bubble" tier. */
+  var toneOrder = { bad: 0, warn: 1, info: 2, ok: 3 };
+  visible = visible.slice().sort(function (a, b) {
+    return (toneOrder[a.tone || 'info'] || 2) - (toneOrder[b.tone || 'info'] || 2);
+  });
+
+  /* Mentor narration — always present, calm voice. Sets the mood
+     for the week. The notebook below carries the specific items. */
+  var ml = (typeof mentorLine === 'function') ? mentorLine() : null;
+  var mentorText = ml || 'All looks well at the apiary. Enjoy a calm week.';
+
+  var mentorBlock = h('div', { class: 'mentor mentor-card' }, [
     h('div', { class: 'mentor-face' },
       h('img', { class: 'mentor-portrait-img', src: 'img/plates/mentor-portrait.png', alt: '' })),
     h('div', { class: 'mentor-bubble' }, [
@@ -1777,20 +1795,15 @@ function _ui_buildSidebar() {
     ])
   ]);
 
-  /* Year-on-year line — a calm one-sentence reminder that wisdom is
-     accumulating. Only renders in spring of year 2+; rest of the time
-     it returns null and we skip the node entirely. */
+  /* Year-on-year line — calm one-sentence reminder that wisdom is
+     accumulating. Only renders in spring of year 2+. */
   var yoyBlock = null;
   if (typeof getYearOnYearLine === 'function') {
     var yoy = getYearOnYearLine();
     if (yoy) yoyBlock = h('div', { class: 'year-on-year' }, yoy);
   }
 
-  /* === Winter Letter — surfaces in the apiary view during the dormant
-     months. The real beekeeping experience of January: nothing to do,
-     much to know. Gives the player something specific to anticipate
-     and pulls them back to spring rather than letting the dormancy
-     period silently end the session. */
+  /* Winter Letter — dormant-months ritual. */
   var winterLetterBlock = null;
   if (typeof buildWinterLetter === 'function') {
     var letter = buildWinterLetter();
@@ -1813,24 +1826,16 @@ function _ui_buildSidebar() {
     }
   }
 
-  /* Guided action items — urgency-ranked, click-to-open-colony where possible */
-  var notes = advisor.filter(function(a) { return a !== top; });
-  var actionItems;
-  if (!notes.length) {
-    /* Don't say "on top of things" when the mentor just raised a crisis.
-       Calibrate the empty message to what the mentor is actually saying. */
-    var _emptyMsg;
-    if (top && top.tone === 'bad') {
-      _emptyMsg = 'Handle the urgent item above first — nothing else flagged.';
-    } else if (top && top.tone === 'warn') {
-      _emptyMsg = 'Watch the note above. Otherwise looking steady.';
-    } else {
-      _emptyMsg = 'No flags — you\'re on top of things.';
-    }
-    actionItems = [h('div', { class: 'advisor-empty' }, _emptyMsg)];
+  /* Notebook — every visible advisor item, one entry per row, each
+     with its own tone label, optional CTA and dismiss button. No
+     two-tier mentor-bubble + action-list split. */
+  var notebookEntries;
+  if (visible.length === 0) {
+    notebookEntries = [h('div', { class: 'notebook-empty' },
+      'Nothing pressing. Advance the week, or skip to the next event.')];
   } else {
-    actionItems = notes.map(function(item) {
-      /* Try to match a colony by name appearing at the start of the text */
+    notebookEntries = visible.map(function (item) {
+      var key = _ui_advisorKey(item);
       var matchCol = null;
       var colonies = Game.colonies || [];
       for (var ci = 0; ci < colonies.length; ci++) {
@@ -1839,34 +1844,50 @@ function _ui_buildSidebar() {
           break;
         }
       }
-
-      var urgencyLabel = { bad: 'Urgent', warn: 'Soon', info: 'Note', ok: 'Good' }[item.tone] || 'Note';
-      var urgencyRow = h('div', { class: 'action-urgency ' + (item.tone || 'info') }, [
-        h('span', { class: 'ico' }, item.icon || ''),
-        h('span', { class: 'urgency-label' }, urgencyLabel)
-      ]);
-
-      var openBtn = matchCol ? _ui_advisorActionButton(item, matchCol) : null;
-
-      return h('div', { class: 'action-item tone-' + (item.tone || 'info') }, [
-        urgencyRow,
-        h('div', { class: 'action-text', text: item.text }),
-        openBtn
+      var toneLabel = { bad: 'Urgent', warn: 'Soon', info: 'Note', ok: 'Note' }[item.tone || 'info'];
+      var cta = matchCol ? _ui_advisorActionButton(item, matchCol) : null;
+      var dismissBtn = h('button', {
+        class: 'notebook-dismiss',
+        title: 'Dismiss for a week',
+        onclick: function () {
+          dismissed[key] = week;
+          if (typeof saveGame === 'function') saveGame();
+          render();
+        }
+      }, '×');
+      return h('div', { class: 'notebook-entry tone-' + (item.tone || 'info') }, [
+        h('div', { class: 'notebook-entry-head' }, [
+          h('span', { class: 'notebook-entry-icon' }, item.icon || ''),
+          h('span', { class: 'notebook-entry-tone' }, toneLabel)
+        ]),
+        h('div', { class: 'notebook-entry-text', text: item.text }),
+        h('div', { class: 'notebook-entry-actions' }, [cta, dismissBtn].filter(Boolean))
       ]);
     });
   }
 
-  /* Engagement update — advance button urgency:
-     pulse + amber when 2+ alive colonies have advisor items needing attention */
+  var notebookBlock = h('div', { class: 'notebook' }, [
+    h('div', { class: 'notebook-head' }, [
+      h('span', { class: 'notebook-title' }, 'The notebook'),
+      visible.length > 0
+        ? h('span', { class: 'notebook-count' }, String(visible.length))
+        : null
+    ]),
+    h('div', { class: 'notebook-body' }, notebookEntries)
+  ]);
+
+  /* Advance bar — urgency styling unchanged, but the bar now anchors
+     to the bottom of the sidebar via .time-controls { margin-top: auto }
+     so it never floats in the middle of the column. */
   var _urgentCount = 0;
   if (Array.isArray(Game.advisor)) {
     var _flagged = {};
-    Game.advisor.forEach(function(a) {
+    Game.advisor.forEach(function (a) {
       if (a.tone === 'bad' || a.tone === 'warn') {
         var cols = Game.colonies || [];
-        for (var ci = 0; ci < cols.length; ci++) {
-          if (cols[ci].alive && a.text && a.text.indexOf(cols[ci].name) === 0) {
-            _flagged[cols[ci].name] = true;
+        for (var ci2 = 0; ci2 < cols.length; ci2++) {
+          if (cols[ci2].alive && a.text && a.text.indexOf(cols[ci2].name) === 0) {
+            _flagged[cols[ci2].name] = true;
             break;
           }
         }
@@ -1877,25 +1898,19 @@ function _ui_buildSidebar() {
   var _advBtnCls = 'btn btn-primary btn-advance' + (_urgentCount >= 2 ? ' urgent' : '');
   var advanceBtn = h('button', {
     class: _advBtnCls,
-    onclick: function() { if (typeof advanceWeek === 'function') advanceWeek(); }
+    onclick: function () { if (typeof advanceWeek === 'function') advanceWeek(); }
   }, '+ Advance one week (7 days)');
 
   var skipBtn = h('button', {
     class: 'btn',
-    onclick: function() { _ui_advanceToEvent(); }
+    onclick: function () { _ui_advanceToEvent(); }
   }, 'Skip to next event');
 
-  return h('div', { class: 'apiary-side' }, [
+  return h('div', { class: 'apiary-side apiary-side-v2' }, [
     winterLetterBlock,
     yoyBlock,
     mentorBlock,
-    h('div', { class: 'side-section' }, [
-      h('div', { class: 'side-head' }, [
-        h('span', { text: 'Action list' }),
-        notes.length > 0 ? h('span', { class: 'action-count tone-' + (top ? top.tone : 'ok') }, String(notes.length)) : null
-      ]),
-      h('div', { class: 'side-body action-list' }, actionItems)
-    ]),
+    notebookBlock,
     h('div', { class: 'time-controls' }, [advanceBtn, skipBtn])
   ]);
 }
@@ -2968,7 +2983,7 @@ function _ui_buildRecordsView(startTab) {
   else                                content = _ui_buildJournalContent();
 
   var goalsWidget = _ui_buildGoalsWidget();
-  return h('div', { class: 'panel-view narrow records-view' }, [tabBar, content, goalsWidget]);
+  return h('div', { class: 'panel-view records-view' }, [tabBar, content, goalsWidget]);
 }
 
 /* ====================================================================

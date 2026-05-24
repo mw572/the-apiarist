@@ -5394,16 +5394,68 @@ button.plate-link {
    scrollbar at every desktop width. The plate now respects the column,
    reads cleanly at every viewport, and the records-view itself blocks
    any horizontal overflow defensively. */
-.records-view { overflow-x: hidden; }
+/* Records view fills the full page width — no more narrow column
+   stranded inside parchment. Hero plate goes full-bleed via
+   negative margins that match the panel padding (22/26 desktop,
+   14/13 mobile). overflow-x: hidden on the panel kills any
+   stray scrollbar from the breakout. */
+.records-view { overflow-x: hidden; padding: 22px 26px; }
 .records-view .journal-content .journal-header-plate {
-  margin: 0;
+  margin-left: -26px;
+  margin-right: -26px;
+  margin-top: -22px;
   border-radius: 0;
+  border-left: 0;
+  border-right: 0;
 }
 @media (min-width: 1024px) {
-  .records-view .journal-content .journal-header-plate { height: 320px; }
-  .records-view .journal-content .journal-header-title { font-size: 48px; }
-  .records-view .journal-content .journal-header-titlebox { left: 36px; bottom: 28px; }
-  .records-view .journal-content .journal-header-rule { width: 72px; margin-bottom: 14px; }
+  .records-view .journal-content .journal-header-plate { height: 360px; }
+  .records-view .journal-content .journal-header-title { font-size: 56px; }
+  .records-view .journal-content .journal-header-titlebox { left: 48px; bottom: 32px; }
+  .records-view .journal-content .journal-header-rule { width: 80px; margin-bottom: 16px; }
+}
+@media (max-width: 720px) {
+  .records-view { padding: 14px 13px; }
+  .records-view .journal-content .journal-header-plate {
+    margin-left: -13px;
+    margin-right: -13px;
+    margin-top: -14px;
+  }
+}
+
+/* Content cards inside the records view should fill the available
+   width — the painterly finance tiles look smarter at desktop width
+   than crammed into a 980px column. */
+.records-view .finances-content,
+.records-view .samples-content,
+.records-view .journal-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+@media (min-width: 1280px) {
+  .records-view .finances-content,
+  .records-view .samples-content,
+  .records-view .journal-content {
+    max-width: 1320px;
+  }
+}
+/* Goals widget sits below the tab content — gets the same width
+   constraint so the page stays a consistent column. */
+.records-view > .goals-widget {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+@media (min-width: 1280px) {
+  .records-view > .goals-widget { max-width: 1320px; }
+}
+.records-view .records-tabs {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+@media (min-width: 1280px) {
+  .records-view .records-tabs { max-width: 1320px; }
 }
 
 /* ============================================================
@@ -5648,16 +5700,190 @@ button.plate-link {
   color: #ebe0bc;
 }
 
-/* Make the apiary-side shrink to fit content on desktop so the advance
-   bar sits right under the action list, not pinned to the viewport
-   bottom — kills the dead parchment column on early-game empty days. */
-@media (min-width: 980px) {
-  .apiary-view-v2 > .apiary-body > .apiary-side {
-    /* allow content to size the column */
-    align-self: flex-start;
-    max-height: 100%;
-  }
+/* Apiary side panel layout — flex column so the advance bar can
+   anchor to the bottom via margin-top: auto on .time-controls. */
+.apiary-view-v2 > .apiary-body > .apiary-side {
+  display: flex;
+  flex-direction: column;
 }
+.apiary-view-v2 .apiary-side .time-controls {
+  margin-top: auto;
+}
+
+/* ============================================================
+   MENTOR + NOTEBOOK — one mentor card (portrait + name + the
+   week's narration), one notebook below (every visible advisor
+   item, each with tone label + CTA + dismiss). No two-tier
+   bubble-then-action-list split.
+   ============================================================ */
+.apiary-side-v2 .mentor.mentor-card {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  margin: 14px 16px 0;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-soft);
+  border-radius: 3px;
+}
+.apiary-side-v2 .mentor-face {
+  flex: none;
+  width: 48px; height: 48px;
+  border-radius: 2px;
+  overflow: hidden;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper-dim);
+}
+.apiary-side-v2 .mentor-portrait-img {
+  display: block; width: 100%; height: 100%;
+  object-fit: cover; object-position: center 30%;
+}
+.apiary-side-v2 .mentor-bubble { flex: 1; min-width: 0; }
+.apiary-side-v2 .mentor-who {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+.apiary-side-v2 .mentor-text {
+  font-family: var(--serif);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  font-style: italic;
+}
+
+.apiary-side-v2 .notebook {
+  margin: 16px 16px 0;
+  background: transparent;
+  border: 0;
+}
+.apiary-side-v2 .notebook-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.apiary-side-v2 .notebook-title {
+  font-family: var(--display);
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  color: var(--ink);
+}
+.apiary-side-v2 .notebook-count {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 2px 7px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 10px;
+}
+.apiary-side-v2 .notebook-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.apiary-side-v2 .notebook-empty {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-faint);
+  padding: 14px 6px;
+  line-height: 1.5;
+}
+
+/* Notebook entry — coloured left rule signals tone (red urgent /
+   ochre soon / paper note), header row shows icon + tone label,
+   body is the mentor's text, actions row sits right-aligned. */
+.apiary-side-v2 .notebook-entry {
+  position: relative;
+  padding: 10px 12px 12px 14px;
+  border-left: 3px solid var(--rule-soft);
+  background: var(--paper-2);
+  border-radius: 0 2px 2px 0;
+}
+.apiary-side-v2 .notebook-entry.tone-bad  { border-left-color: var(--brick,   #8b3a1a); }
+.apiary-side-v2 .notebook-entry.tone-warn { border-left-color: var(--ochre,   #a87830); }
+.apiary-side-v2 .notebook-entry.tone-info { border-left-color: var(--moss,    #5a6a3a); }
+.apiary-side-v2 .notebook-entry.tone-ok   { border-left-color: var(--rule-soft); }
+
+.apiary-side-v2 .notebook-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.apiary-side-v2 .notebook-entry-icon { font-size: 13px; opacity: 0.85; }
+.apiary-side-v2 .notebook-entry-tone {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.apiary-side-v2 .notebook-entry.tone-bad  .notebook-entry-tone { color: var(--brick, #8b3a1a); }
+.apiary-side-v2 .notebook-entry.tone-warn .notebook-entry-tone { color: var(--ochre-deep, #7a5418); }
+
+.apiary-side-v2 .notebook-entry-text {
+  font-family: var(--serif);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.apiary-side-v2 .notebook-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+.apiary-side-v2 .notebook-entry-actions .action-open-btn {
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  padding: 5px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.apiary-side-v2 .notebook-entry-actions .action-open-btn:hover {
+  background: var(--ochre-deep);
+}
+.apiary-side-v2 .notebook-dismiss {
+  width: 24px; height: 24px;
+  padding: 0; line-height: 1;
+  font-size: 16px;
+  background: transparent;
+  border: 1px solid var(--rule-soft);
+  color: var(--ink-soft);
+  border-radius: 2px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.apiary-side-v2 .notebook-dismiss:hover {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+/* Time controls anchored to the bottom of the side column. */
+.apiary-side-v2 .time-controls {
+  padding: 16px;
+  background: var(--paper);
+  border-top: 1px solid var(--rule-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.apiary-side-v2 .time-controls .btn { width: 100%; }
 
 /* ============================================================
    SITE DOSSIER — the full-page deep dive that opens when you
