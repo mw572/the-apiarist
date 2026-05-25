@@ -4950,9 +4950,32 @@ function _ui_actionControls(key, colony) {
     return { options: Object.keys(TREATMENTS).map(function(id) {
       var t = TREATMENTS[id];
       var have = stock[id] || 0;
-      return opt(t.name + (have > 0 ? ' — ' + have + ' in stock' : ' — none in stock'),
-        (have > 0 ? '' : 'You have none; buy this from the Market (Supplies tab) first. ') + t.note,
-        function() { return treatColony(colony, id); });
+      /* If the player has no stock but enough cash, offer a single
+         Buy-and-apply step so they don't have to leave the dialog,
+         find the market, find the right treatment, buy it, and come
+         back. This was the dominant Y1-kill cliff in diagnostic
+         runs — players who didn't know they needed to pre-buy stock
+         hit a silent fail and their colony succumbed to varroa. */
+      if (have > 0) {
+        return opt(t.name + ' — ' + have + ' in stock', t.note,
+          function() { return treatColony(colony, id); });
+      }
+      var canAfford = (Game.cash || 0) >= (t.price || 0);
+      var label = canAfford
+        ? t.name + ' — buy & apply (£' + t.price + ')'
+        : t.name + ' — none in stock (£' + t.price + ' from the Market)';
+      var note = canAfford
+        ? 'Buys one course from the Market and applies it in one step. ' + t.note
+        : 'Not enough cash for a course. ' + t.note;
+      return opt(label, note, function() {
+        if (!canAfford) {
+          return { ok: false,
+            msg: 'You need £' + t.price + ' to buy ' + t.name + ' (you have £' + (Game.cash || 0) + ').' };
+        }
+        var buy = buySupply(id, 1);
+        if (!buy || !buy.ok) return buy || { ok: false, msg: 'Could not buy ' + t.name + '.' };
+        return treatColony(colony, id);
+      });
     }) };
   }
   if (key === 'entrance') {
