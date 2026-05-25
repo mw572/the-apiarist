@@ -1967,8 +1967,9 @@ button { font-family: var(--sans); cursor: pointer; }
   }
   .market-view .market-tab {
     flex: 0 0 auto;
-    padding: 8px 12px;
-    font-size: 12px;
+    padding: 11px 14px;
+    font-size: 13px;
+    min-height: 44px;   /* meet the 44pt iOS tap-target floor */
   }
   .market-view .page-title { font-size: 26px; }
   .plate-grid,
@@ -1980,7 +1981,42 @@ button { font-family: var(--sans); cursor: pointer; }
   .market-section-head { font-size: 15px; }
   .plate-name { font-size: 16px; }
   .market-view .neigh-name { font-size: 15px; }
+
+  /* Honey-card mobile fix — the painted plate was eating 280px of
+     a 390 viewport, pushing the Sell button below the fold. Cap to
+     16:9 + 180px max so the body + CTA stays in view. */
+  .market-view .plate-card.honey-card .plate-frame.plate-1x1 {
+    aspect-ratio: 16 / 9;
+    max-height: 180px;
+  }
 }
+
+/* Jar grade pills — render premium / standard / cloudy on the
+   Sell card so the player can see what they actually have. The
+   sell flow consumes premium first, so the Premium count is what
+   tells you the next jar out is the +12% one. */
+.jar-grade-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+.jar-grade {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.jar-grade-premium  { background: var(--ink);     color: var(--paper);   border: 1px solid var(--ink); }
+.jar-grade-standard { background: var(--paper);   color: var(--ink);     border: 1px solid var(--rule-soft); }
+.jar-grade-cloudy   { background: var(--paper-2); color: var(--ink-soft); border: 1px solid var(--rule-soft); }
 
 /* ====================================================================
    HANDBOOK — the illustrated treatise

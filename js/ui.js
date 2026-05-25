@@ -2626,6 +2626,16 @@ function _ui_marketSellTab() {
     if (vis.note) {
       notes.push(h('div', { class: 'plate-note plate-note-warn', text: vis.note }));
     }
+    /* Grade breakdown — show how many of each are Premium / standard
+       / cloudy so the player can see what they actually have. The
+       sell flow consumes premium → standard → cloudy, so a Premium
+       count is what tells you the next jar out is the +12% one. */
+    var grade = (inv.jarsGrade && inv.jarsGrade[htId]) || { standard: count, cloudy: 0, premium: 0 };
+    var gradeBits = [];
+    if (grade.premium > 0)  gradeBits.push(h('span', { class: 'jar-grade jar-grade-premium' },  'Premium · ' + grade.premium));
+    if (grade.standard > 0) gradeBits.push(h('span', { class: 'jar-grade jar-grade-standard' }, 'Standard · ' + grade.standard));
+    if (grade.cloudy > 0)   gradeBits.push(h('span', { class: 'jar-grade jar-grade-cloudy' },   'Cloudy · '   + grade.cloudy));
+
     jarCards.push(h('div', { class: 'plate-card honey-card' + (plate ? '' : ' no-plate') }, [
       plate,
       h('div', { class: 'plate-body' }, [
@@ -2635,6 +2645,7 @@ function _ui_marketSellTab() {
         ]),
         h('div', { class: 'plate-desc' },
           count + ' jar' + (count !== 1 ? 's' : '') + ' — ' + fmtMoney(price) + ' each via ' + ch.name),
+        gradeBits.length ? h('div', { class: 'jar-grade-row' }, gradeBits) : null,
         notes.length ? h('div', { class: 'plate-notes' }, notes) : null,
         h('div', { class: 'plate-foot' }, h('button', {
           class: 'plate-buy',
