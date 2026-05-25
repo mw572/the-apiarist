@@ -858,12 +858,20 @@ function colonyWeeklyUpdate(colony, ctx){
   const hornetPenalty = 1 - colony.hornet * 0.5;
   const effForage     = ctx.nectar * ctx.weather.fly * hornetPenalty;
 
-  /* Strain trait: honeyYield multiplies nectar collection per forager.
-     Buckfast (1.18) and Italian (1.12) outperform local stock; AMM
-     native (0.92) is slightly more frugal/lower yielding. */
+  /* Strain trait: honeyYield multiplies nectar collection per forager,
+     and STRAIN_SITE_FIT then layers on a site-fit multiplier so the
+     right strain at the right site can shift yield by 50%+ either
+     way. Italian @ moorland is a disaster; native @ moorland is the
+     premium move. Buckfast is the always-fine safe pick. */
   const _yieldStrain = (typeof HIVE_STRAINS !== 'undefined' && colony.strain && HIVE_STRAINS[colony.strain])
     ? HIVE_STRAINS[colony.strain].honeyYield : 1.0;
-  const nectarIncome  = foragers * effForage * SIM.nectarRate * ctx.diff.yieldBonus * _yieldStrain;
+  let _siteFit = 1.0;
+  if (typeof STRAIN_SITE_FIT !== 'undefined' && colony.strain && STRAIN_SITE_FIT[colony.strain]) {
+    const _ap = (Game && Game.apiaries) ? Game.apiaries.find(a => a.id === colony.apiaryId) : null;
+    const _siteType = _ap ? _ap.siteType : 'rural';
+    _siteFit = STRAIN_SITE_FIT[colony.strain][_siteType] || 1.0;
+  }
+  const nectarIncome  = foragers * effForage * SIM.nectarRate * ctx.diff.yieldBonus * _yieldStrain * _siteFit;
   const pollenIncome  = foragers * ctx.pollen * ctx.weather.fly * SIM.pollenRate;
 
   // Consumption

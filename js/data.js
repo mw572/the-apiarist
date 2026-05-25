@@ -169,39 +169,53 @@ const REGIONS = {
    local stock over a generation or two. This is captured below in the
    `pureGen` field which Phase 2 will use for hybrid mechanics.
    ==================================================================== */
+/* Strain × site fit multiplier applied alongside honeyYield. Reflects
+   the lore: native AMM thrives on the moor, italian races the rape
+   flow on farmland, carniolan explodes through orchard blossom. The
+   forage-rich sites (farmland, orchard) reward fast-build strains;
+   lean sites (moorland) reward frugal hardy stock. Picking the right
+   strain for the site can shift yield by 50%+ either way. */
+const STRAIN_SITE_FIT = {
+  local:     { rural: 1.10, farmland: 1.00, urban: 1.00, orchard: 1.00, moorland: 0.95 },
+  italian:   { rural: 1.00, farmland: 1.20, urban: 1.10, orchard: 1.05, moorland: 0.75 },
+  carniolan: { rural: 1.08, farmland: 1.10, urban: 1.05, orchard: 1.20, moorland: 0.85 },
+  buckfast:  { rural: 1.05, farmland: 1.05, urban: 1.08, orchard: 1.05, moorland: 0.95 },
+  native:    { rural: 1.05, farmland: 0.85, urban: 0.85, orchard: 0.95, moorland: 1.40 },
+};
+
 const HIVE_STRAINS = {
   local: {
     label: 'Local mongrel', short: 'Local', priceMul: 1.00, pureGen: 0,
     icon: '🐝',
-    desc: 'A mix of whatever drones flew through the local area. Hardy, well-adapted, but variable in temperament and yield.',
+    desc: 'A mix of whatever drones flew through the local area. Hardy, well-adapted to the home patch, variable elsewhere. Solid at rural; mediocre at moorland.',
     buildup: 1.00, honeyYield: 1.00, swarmTendency: 1.00, winterHardiness: 1.00,
     temperament: 0.45, diseaseResistance: 0.50,
   },
   italian: {
     label: 'Italian (A. m. ligustica)', short: 'Italian', priceMul: 1.19, pureGen: 1,
     icon: '🇮🇹',
-    desc: 'The world\'s most popular bee. Fast spring build-up, high honey crops, very gentle. Pays in extra winter feed — they keep brood late into autumn and burn through stores.',
+    desc: 'Fast spring build-up, high crops in a flow year, very gentle. Magnificent on oilseed rape — races the bloom. Disastrous on the moor: burns through stores faster than the heather can replenish them.',
     buildup: 1.18, honeyYield: 1.12, swarmTendency: 1.00, winterHardiness: 0.85,
     temperament: 0.20, diseaseResistance: 0.45,
   },
   carniolan: {
     label: 'Carniolan (A. m. carnica)', short: 'Carniolan', priceMul: 1.19, pureGen: 1,
     icon: '🌲',
-    desc: 'Slovenian native. Explosive spring expansion when the first flow hits, frugal in winter, exceptionally gentle. Strong swarming tendency — needs attentive swarm control.',
+    desc: 'Explosive spring expansion the moment the first flow opens — the orchard blossom strain. Frugal in winter, exceptionally gentle. Hates sparse moorland forage. Watch the swarming.',
     buildup: 1.25, honeyYield: 1.10, swarmTendency: 1.30, winterHardiness: 1.15,
     temperament: 0.18, diseaseResistance: 0.55,
   },
   buckfast: {
     label: 'Buckfast (Adam hybrid)', short: 'Buckfast', priceMul: 1.35, pureGen: 1,
     icon: '⛪',
-    desc: 'Brother Adam\'s composite hybrid, bred at Buckfast Abbey for resilience and gentle temperament. Steady build-up, low swarming, excellent yields, calm.',
+    desc: 'Brother Adam\'s composite hybrid, bred at Buckfast Abbey for resilience and gentle temperament. Quiet all-rounder — never the best at any one site, never the worst either. The safe pick.',
     buildup: 1.10, honeyYield: 1.18, swarmTendency: 0.65, winterHardiness: 1.05,
     temperament: 0.20, diseaseResistance: 0.65,
   },
   native: {
     label: 'Native (A. m. mellifera)', short: 'AMM', priceMul: 1.27, pureGen: 1,
     icon: '🌿',
-    desc: 'The Dark European native, B-IBKA stock. Slow spring build-up but rock-solid winter cluster. More defensive temperament — bring a good suit. Adapted to wet British weather.',
+    desc: 'The Dark European native, B-IBKA stock. Slow spring build-up but rock-solid winter cluster, frugal on lean forage, hardy in cold rain. The moorland specialist. Lazy at orchard and farmland — they cannot keep up with the bloom. More defensive — bring a good suit.',
     buildup: 0.85, honeyYield: 0.92, swarmTendency: 0.85, winterHardiness: 1.30,
     temperament: 0.70, diseaseResistance: 0.65,
   },
