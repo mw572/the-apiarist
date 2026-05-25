@@ -254,13 +254,30 @@ function _ui_ensureToastStack() {
  */
 function toast(text, tone) {
   var stack = _ui_ensureToastStack();
+  /* Coalesce a same-text toast triggered in quick succession — when
+     the player buys 5 tools in one Market session the old code spawned
+     5 stacked toasts. Now: if the last toast in the stack has the same
+     text, bump its count badge instead of pushing a duplicate. */
+  var lastEl = stack.lastChild;
+  if (lastEl && lastEl.dataset && lastEl.dataset.text === text) {
+    lastEl.dataset.count = String((parseInt(lastEl.dataset.count, 10) || 1) + 1);
+    lastEl.textContent = text + '  ×' + lastEl.dataset.count;
+    /* reset the auto-dismiss timer */
+    if (lastEl._toastTimer) clearTimeout(lastEl._toastTimer);
+    lastEl._toastTimer = setTimeout(function() {
+      if (lastEl.parentNode) lastEl.parentNode.removeChild(lastEl);
+    }, 2500);
+    return;
+  }
   var cls = 'toast' + (tone && tone !== 'plain' ? ' toast-' + tone : ' toast-plain');
   var el = h('div', { class: cls, text: text });
+  el.dataset.text = text;
+  el.dataset.count = '1';
   stack.appendChild(el);
   while (stack.children.length > 4) stack.removeChild(stack.firstChild);
-  setTimeout(function() {
+  el._toastTimer = setTimeout(function() {
     if (el.parentNode) el.parentNode.removeChild(el);
-  }, 4500);
+  }, 2500);
 }
 
 /* ====================================================================
@@ -582,6 +599,18 @@ function render() {
     renderTitleScreen();
     return;
   }
+
+  /* Clear any lingering toasts when the player switches views — old
+     "Refractometer added to your kit" notifications were bleeding
+     across into Handbook / Records / Journal, overlapping body
+     content. Toasts belong to the moment they were triggered. */
+  var _lastView = render._lastView;
+  var _curView  = (Game.ui && Game.ui.view) || 'apiary';
+  if (_lastView && _lastView !== _curView) {
+    var _tstack = document.querySelector('.toast-stack');
+    if (_tstack) while (_tstack.firstChild) _tstack.removeChild(_tstack.firstChild);
+  }
+  render._lastView = _curView;
 
   app.innerHTML = '';
 
