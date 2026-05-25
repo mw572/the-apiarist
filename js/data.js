@@ -467,6 +467,28 @@ function titleFor(hiveCount){
   return t;
 }
 
+/* Index lookup for the current count — used by the sticky-rank
+   tracker so we can compare current vs highest-ever achieved. */
+function titleIdxFor(hiveCount){
+  let idx = 0;
+  for (let i = 0; i < TITLES.length; i++) { if (hiveCount >= TITLES[i].hives) idx = i; }
+  return idx;
+}
+
+/* Sticky rank — the displayed rank is the highest ever achieved.
+   If you lose all your colonies your rank doesn't drop back to
+   Apprentice; the years of progress stay yours. Game.flags.maxRankIdx
+   is bumped each render but never decremented. */
+function stickyTitleFor(hiveCount){
+  if (typeof Game !== 'undefined' && Game && Game.flags) {
+    const cur = titleIdxFor(hiveCount);
+    const max = Math.max(cur, Game.flags.maxRankIdx || 0);
+    Game.flags.maxRankIdx = max;
+    return TITLES[max] ? TITLES[max].name : TITLES[0].name;
+  }
+  return titleFor(hiveCount);
+}
+
 /* skill levels 1..10; XP needed to reach each level */
 const SKILL_XP = [0,40,100,190,320,500,740,1060,1480,2050];
 function skillLevel(xp){ let l=1; for(let i=0;i<SKILL_XP.length;i++){ if(xp>=SKILL_XP[i]) l=i+1; } return l; }

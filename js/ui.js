@@ -687,19 +687,26 @@ function _ui_buildTopbar() {
   var dl = (typeof dateLabel === 'function') ? dateLabel(Game.week) : '';
   var yr = (typeof gameYear === 'function') ? gameYear() : '';
   var hc = (typeof hiveCount === 'function') ? hiveCount() : 0;
-  var titleName = (typeof titleFor === 'function') ? titleFor(hc) : '';
+  /* Sticky rank — once you've earned a tier, you keep it even if
+     a winter loss takes you back below the hive threshold. */
+  var titleName = (typeof stickyTitleFor === 'function')
+    ? stickyTitleFor(hc)
+    : ((typeof titleFor === 'function') ? titleFor(hc) : '');
   var xp = Game.skillXp || 0;
   var sl = (typeof skillLevel === 'function') ? skillLevel(xp) : 1;
 
-  /* Match the rank to a figure portrait — Apprentice / Beekeeper /
-     Improver / Sideliner / Master tier. Done as a 28px painted
-     thumbnail next to the title so the chrome stays restrained but
-     the role is recognisable at a glance. */
+  /* Match the rank PORTRAIT to the sticky rank index — so the
+     figure stays Beekeeper / Improver / etc. even when a winter
+     loss drops your hive count. The portrait represents who you
+     are, not what you have in front of you this week. */
+  var _rankIdx = (Game.flags && typeof Game.flags.maxRankIdx === 'number')
+    ? Game.flags.maxRankIdx
+    : ((typeof titleIdxFor === 'function') ? titleIdxFor(hc) : 0);
   var rankPlate = 'figure-apprentice.png';
-  if      (hc >= 30) rankPlate = 'figure-master.png';
-  else if (hc >= 12) rankPlate = 'figure-sideliner.png';
-  else if (hc >=  6) rankPlate = 'figure-improver.png';
-  else if (hc >=  2) rankPlate = 'figure-beekeeper.png';
+  if      (_rankIdx >= 4) rankPlate = 'figure-master.png';      // Bee Farmer +
+  else if (_rankIdx >= 3) rankPlate = 'figure-sideliner.png';   // Sideliner
+  else if (_rankIdx >= 2) rankPlate = 'figure-improver.png';    // Improver
+  else if (_rankIdx >= 1) rankPlate = 'figure-beekeeper.png';   // Beekeeper
 
   return h('div', { class: 'topbar' }, [
     h('div', { class: 'brand' }, 'The Apiarist'),
@@ -1170,9 +1177,26 @@ function _ui_buildApiaryView() {
     winter: 'img/plates/scene-winter-apiary.png'
   };
   var fallbackScene = fallbackPlateMap[season] || fallbackPlateMap.spring;
-  var scenePath = siteType
-    ? 'img/plates/scene-' + siteType + '-' + season + '.png'
-    : fallbackScene;
+
+  /* Hero painting evolves with the apiary's state. When the player
+     has 0 live colonies at this apiary (just starting, or just lost
+     them all), the hero uses a "starter" scene: a single beekeeper
+     surveying the site, no hives erected yet — the moment before the
+     first hive goes down. As colonies establish, the hero switches
+     to the regular site×season painting (established yard with hives
+     visible). */
+  var _liveColoniesHere = apiary && typeof coloniesIn === 'function'
+    ? coloniesIn(apiary.id).filter(function(c) { return c.alive; }).length
+    : 0;
+  var useStarter = (_liveColoniesHere === 0) && siteType;
+  var scenePath;
+  if (useStarter) {
+    scenePath = 'img/plates/scene-' + siteType + '-starter.png';
+  } else if (siteType) {
+    scenePath = 'img/plates/scene-' + siteType + '-' + season + '.png';
+  } else {
+    scenePath = fallbackScene;
+  }
 
   var hbSeason = (HANDBOOK_LINKS.season && HANDBOOK_LINKS.season[season]) || null;
   var seasonBand = h('button', {
@@ -1185,10 +1209,15 @@ function _ui_buildApiaryView() {
       class: 'asb-plate',
       src: scenePath,
       onerror: function(e) {
-        /* If a site-specific plate is missing on disk, fall back to
-           the season-generic painting so the band never breaks. */
+        /* If a site-specific plate is missing on disk, fall back —
+           starter → site×season, then site×season → season-generic. */
         var img = e && e.target;
-        if (img && img.src.indexOf(fallbackScene.split('/').pop()) === -1) {
+        if (!img) return;
+        if (img.src.indexOf('-starter.png') !== -1) {
+          img.src = 'img/plates/scene-' + siteType + '-' + season + '.png';
+          return;
+        }
+        if (img.src.indexOf(fallbackScene.split('/').pop()) === -1) {
           img.src = fallbackScene;
         }
       },
@@ -1246,17 +1275,22 @@ function _ui_buildApiaryView() {
     return _ui_buildHiveCard(col);
   });
 
-  // Spare hive slots — one card per empty hive box awaiting a colony
+  // Spare hive slots — one card per empty hive box awaiting a colony.
+  // These are YOUR kit standing ready, not a generic "go shop" CTA.
   var spareCount = (Game.inventory && Game.inventory.spareHives) || 0;
   for (var si2 = 0; si2 < spareCount; si2++) {
     hiveNodes.push(h('div', {
       class: 'hive hive-card hive-card-empty spare-hive-slot',
-      onclick: function() { Game.ui.view = 'market'; render(); }
+      title: 'Your hive — bring bees home from the Market',
+      onclick: function() { Game.ui.view = 'market'; _ui_marketTab = 'bees'; render(); }
     }, [
-      h('div', { class: 'hcp-icon hcp-icon-empty' }, h('span', { class: 'hcp-icon-mark' }, '⌂')),
+      h('div', { class: 'hcp-icon hcp-icon-empty' }, [
+        h('img', { class: 'hcp-icon-img', src: 'img/plates/hive-state-strong.png', alt: '' }),
+        h('span', { class: 'hcp-icon-mark' }, '⌂')
+      ]),
       h('div', { class: 'hcp-body' }, [
-        h('div', { class: 'hcp-name-row' }, h('span', { class: 'hcp-name', text: 'Empty hive' })),
-        h('div', { class: 'hcp-state', text: 'Ready for a colony — visit Market' })
+        h('div', { class: 'hcp-name-row' }, h('span', { class: 'hcp-name', text: 'Your hive' })),
+        h('div', { class: 'hcp-state', text: 'Ready for bees — buy a nucleus' })
       ])
     ]));
   }
@@ -1273,21 +1307,27 @@ function _ui_buildApiaryView() {
     ]));
   }
 
-  var addSlot = h('div', {
-    class: 'hive hive-card hive-card-add add-hive-slot',
-    onclick: function() {
-      Game.ui.view = 'market';
-      render();
-    }
-  }, [
-    h('div', { class: 'hcp-icon hcp-icon-add' }, h('span', { class: 'hcp-icon-mark plus' }, '+')),
-    h('div', { class: 'hcp-body' }, [
-      h('div', { class: 'hcp-name-row' }, h('span', { class: 'hcp-name', text: 'Add a colony' })),
-      h('div', { class: 'hcp-state', text: 'Open the market to bring bees home' })
-    ])
-  ]);
-
-  hiveNodes.push(addSlot);
+  /* "Add a colony" CTA — only show when there is NO empty hive
+     already standing. Two side-by-side market-go cards (Your hive +
+     Add a colony) read as redundant clutter; the empty-hive slot is
+     itself the "go buy bees" affordance when you have one. */
+  if (spareCount === 0) {
+    var addSlot = h('div', {
+      class: 'hive hive-card hive-card-add add-hive-slot',
+      onclick: function() {
+        Game.ui.view = 'market';
+        _ui_marketTab = 'hives';
+        render();
+      }
+    }, [
+      h('div', { class: 'hcp-icon hcp-icon-add' }, h('span', { class: 'hcp-icon-mark plus' }, '+')),
+      h('div', { class: 'hcp-body' }, [
+        h('div', { class: 'hcp-name-row' }, h('span', { class: 'hcp-name', text: 'Add a colony' })),
+        h('div', { class: 'hcp-state', text: 'Buy a hive and a nucleus to bring bees home' })
+      ])
+    ]);
+    hiveNodes.push(addSlot);
+  }
 
   var hiveGrid = h('div', { class: 'hive-grid yard-row' }, hiveNodes);
 
@@ -5511,6 +5551,28 @@ function _ui_fillThumb(el, frame) {
     el.appendChild(band);
     y += pct;
   });
+
+  /* Headline tag — a small coloured strip at the top of the frame
+     reading its dominant content (BROOD / HONEY / POLLEN / EMPTY) so
+     the player can scan the box at a glance without reading the
+     legend. The strip uses the same per-category palette as the bands
+     it summarises. */
+  var groups = {
+    brood:  (cells.eggs || 0) + (cells.larva || 0) + (cells.capbrood || 0) + (cells.dronebr || 0),
+    honey:  (cells.honey || 0) + (cells.nectar || 0),
+    pollen: (cells.pollen || 0),
+    empty:  (cells.empty || 0)
+  };
+  var bestKey = 'empty', bestVal = -1;
+  Object.keys(groups).forEach(function(k) {
+    if (groups[k] > bestVal) { bestVal = groups[k]; bestKey = k; }
+  });
+  if (bestVal > 0) {
+    var tag = document.createElement('div');
+    tag.classList.add('box-frame-tag', 'tag-' + bestKey);
+    tag.title = ({brood: 'Mostly brood', honey: 'Mostly honey & nectar', pollen: 'Mostly pollen', empty: 'Empty drawn comb'})[bestKey];
+    el.appendChild(tag);
+  }
 }
 
 /* Build the big hex comb grid — cells laid out the way bees actually build
