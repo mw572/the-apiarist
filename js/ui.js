@@ -379,6 +379,11 @@ function renderTitleScreen() {
         all.forEach(function (c) { c.classList.remove('selected'); c.classList.remove('sel'); });
         card.classList.add('selected');
         card.classList.add('sel');
+        /* Mobile: bring the selected card into view so the player
+           can see the confirmation without scrolling back up. */
+        if (window.matchMedia && window.matchMedia('(max-width: 720px)').matches) {
+          try { card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+        }
       }
     }, [
       h('div', { class: 'title-site-label' }, [

@@ -5136,19 +5136,33 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 .title-screen .title-site.selected,
 .title-screen .title-site.sel {
-  outline: 3px solid var(--ochre-deep);
-  outline-offset: -2px;
+  outline: 4px solid var(--ochre-deep);
+  outline-offset: -3px;
+  box-shadow: 0 8px 22px rgba(122, 84, 24, 0.35);
+  transform: translateY(-2px);
+}
+.title-screen .title-site.selected .title-site-label,
+.title-screen .title-site.sel .title-site-label {
+  /* Stronger scrim under the label on the selected card so the
+     "YES THIS ONE" reading is unmistakable. */
+  padding: 14px 16px 14px;
+  background: linear-gradient(180deg, transparent 0%, rgba(122, 84, 24, 0.45) 100%);
+  border-radius: 0;
+  margin: -14px -16px -10px;
 }
 .title-screen .title-site.selected::before,
 .title-screen .title-site.sel::before {
-  content: '✓';
+  content: '✓ Selected';
   position: absolute; top: 8px; right: 8px; z-index: 2;
-  width: 22px; height: 22px;
+  padding: 4px 10px;
   background: var(--ochre-deep);
   color: var(--paper);
-  font-size: 13px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: "IM Fell English", "Spectral", Georgia, serif;
+  font-size: 11px;
+  font-family: var(--sans);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-radius: 2px;
 }
 @media (max-width: 980px) {
   .title-screen .title-site-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
