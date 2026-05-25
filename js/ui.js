@@ -1876,6 +1876,18 @@ function _ui_buildHiveCard(colony) {
   if (!colony.alive) hiveCls += ' is-dead';
   if (known && known.disease) hiveCls += ' has-disease';
 
+  /* Strain badge — the campaign caught colony cards reading just
+     "Rose / Building" with no indication of strain. The badge
+     surfaces the short label (Italian, AMM, Buckfast, Carniolan, or
+     local) so the choice the player made at purchase stays visible. */
+  var strainBadge = null;
+  if (colony.alive && colony.strain && typeof HIVE_STRAINS !== 'undefined' && HIVE_STRAINS[colony.strain]) {
+    var _strainShort = HIVE_STRAINS[colony.strain].short || colony.strain;
+    if (_strainShort && _strainShort.toLowerCase() !== 'local') {
+      strainBadge = h('span', { class: 'hcp-strain-badge', text: _strainShort });
+    }
+  }
+
   return h('div', {
     class: hiveCls,
     onclick: function() { openHiveDetail(colony); }
@@ -1884,6 +1896,7 @@ function _ui_buildHiveCard(colony) {
     h('div', { class: 'hcp-body' }, [
       h('div', { class: 'hcp-name-row' }, [
         h('span', { class: 'hcp-name', text: colony.name }),
+        strainBadge,
         statusBadge
       ]),
       h('div', { class: 'hcp-state', text: statusLine })
@@ -2409,11 +2422,21 @@ function _ui_marketRecommendedBanner() {
   if (typeof Game === 'undefined' || !Game) return null;
   var wkInYear = ((Game.week - 1) % 52) + 1;
   if (wkInYear < 12 || wkInYear > 22) return null;
-  var hasColony = (Game.colonies || []).some(function(c) { return c.alive; });
-  if (!hasColony) return null;
+  var aliveCols = (Game.colonies || []).filter(function(c) { return c.alive; });
+  if (aliveCols.length === 0) return null;
+  /* If ANY colony has known high varroa, the player has bigger
+     problems than buying a super. The campaign caught the banner
+     pushing a super to a colony heading for a varroa death — that
+     is exactly the kind of state-blind nag we are removing. */
+  var _crisis = aliveCols.some(function(c) {
+    var k = c.known || {};
+    return k.varroaSign === 'high' || k.varroaSign === 'severe' ||
+           k.queenStatus === 'queenless' || k.queenStatus === 'drone-layer';
+  });
+  if (_crisis) return null;
   var noBait = (Game.inventory.baitHives || 0) === 0;
   var noSuper = (Game.inventory.supers || 0) === 0 &&
-    (Game.colonies || []).every(function(c) { return !c.alive || (c.supers || 0) === 0; });
+    aliveCols.every(function(c) { return (c.supers || 0) === 0; });
   if (!noBait && !noSuper) return null;
 
   var rows = [];

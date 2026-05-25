@@ -6589,6 +6589,22 @@ button.plate-link {
   border-radius: 4px;
 }
 
+/* Strain badge on the colony card */
+.hcp-strain-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--paper-2, #efe1ba);
+  border: 1px solid var(--rule-soft, #c8b888);
+  border-radius: 8px;
+  vertical-align: middle;
+}
+
 /* Market recommended-kit banner */
 .market-rec-banner {
   background: var(--paper-2, #efe1ba);

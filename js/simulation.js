@@ -258,26 +258,41 @@ function runWeek() {
     if (apiary.activeContract && apiary.activeContract.weeksLeft > 0) {
       var _wkInContract = (apiary.activeContract.weeks || apiary.activeContract.weeksLeft) - apiary.activeContract.weeksLeft + 1;
       var _ccid = apiary.activeContract.clientId;
+      /* Phase 8f: each contract carries 6+ flavour lines, more
+         than a contract's weeks, so a repeat through the same
+         contract on Y2 still surfaces new texture. Picked by week
+         index, not random, so the order remains coherent. */
       var _flavourLines = {
         'hatfield-orchard': [
-          'Hatfield blossom is fully open — the bees are coming back with bright cream pollen on their legs.',
+          'Hatfield blossom is fully open — bees coming back with bright cream pollen on their legs, the smell of apple flower on the breeze when you walk past the rows.',
           'A steady week at Hatfield. The orchard manager nodded at the hives this morning, which from him is a glowing review.',
           'The Bramley blossom is starting to fade and the Cox is opening behind it. Two weeks of overlap is the whole point of a traditional orchard.',
+          'Old Mr Hatfield brought you a basket of last autumn\'s Bramleys when he came to walk the rows — the kind of thing that makes you remember why you took the contract.',
+          'A cold morning kept the bees in past nine, then the sun broke through and the air around the trees was thick with them inside half an hour.',
+          'The hedgerow oaks are flushing — a sign Hatfield is more sheltered than the open farmland the next field over. The bees are quieter at the entrance than they would be in a wind.',
         ],
         'sweet-acre-pears': [
-          'Pear blossom — paler, faintly scented, and over before you notice it. The bees are working it hard while it lasts.',
+          'Pear blossom — paler than apple, faintly scented, and over before you notice it. The bees are working it hard while it lasts.',
           'A wet morning at Sweet Acre. Pear bloom does not forgive bad weather and there is grumbling at the orchard gate.',
+          'The pear blossom is the colour of paper and the older varieties smell faintly of almond. The bees do not seem to mind the cold mornings.',
+          'Bees on the Conference rows from first light. Sweet Acre keep the older varieties — Williams, Comice, Doyenne — and the petals are scattered across the grass strips like snow.',
         ],
         'manning-berry': [
           'Manning Berry tunnels are at full bloom — your bees are working under polythene, which they tolerate but do not love.',
           'The grower walked the rows with a sprayer this morning. The fungicide is approved for hives on the crop, but the foragers will still feel it.',
           'Last week of strawberry bloom. The crop is set; the contract is nearly done.',
+          'Strawberry flowers smell of nothing, and the tunnels are warm enough at noon to make you sweat in a suit. The bees are still doing the work.',
+          'A worker from Manning came round with a clipboard about pollination set rates. They have a number for everything and the number this year is decent.',
+          'Bumble boxes go in at the Manning rows next week — the grower runs both, to hedge against fluctuating weather. Yours are still doing the lion\'s share.',
         ],
         'bramley-estate': [
           'Bramley Estate — the orchard is forty acres of single-variety dessert apple, and the bees are at it from first light.',
           'The estate keeper checked your hives himself this afternoon. A quiet compliment about how the colonies look.',
           'Apple fall has begun on the south-facing rows. The estate harvest is coming together.',
           'The blossom is over. The contract is a week off completion and the apples have set well.',
+          'Bramley\'s south-facing rows are a week ahead of the north — you can see the petal-fall line halfway across the orchard. The bees worked the south side first.',
+          'A long conversation with the estate keeper this afternoon, mostly about leaf curl and codling moth. He is the kind of orchardman who reads bee journals on principle.',
+          'The IPM approach Bramley use means almost no spray during your contract — which is why they pay above market for keepers they trust.',
         ],
       };
       var _lines = _flavourLines[_ccid];
@@ -427,15 +442,26 @@ function runWeek() {
     /* ---- Pesticide spray ------------------------------------------ */
     // Farmland and orchard sites, spring-summer (weeks 13-30)
     // An active pollination contract lifts the weekly spray chance
-    // for the contract duration — strawberry farms in particular run
-    // a tight fungicide rotation through the bloom.
+    // for the contract duration. Phase 8e: the campaign caught two
+    // full Hatfield contracts going through with ZERO spray events
+    // because the baseline formula gave roughly 0.8%/wk × 3 weeks
+    // = 2.3% over a contract. Real polytunnel berry growers spray
+    // through bloom on a tight rotation; the contract's sprayBoost
+    // now reads as a direct weekly chance, not an annualised rate
+    // divided down to nothing.
     if ((siteType === 'farmland' || siteType === 'orchard') &&
         wkInYear >= 13 && wkInYear <= 30) {
-      var _sprayBase = (site.spray || 0);
+      var _sprayBaseAnnual = (site.spray || 0);
+      var sprayChance = _sprayBaseAnnual / 52 * 4; // baseline weekly chance
       if (apiary.activeContract && apiary.activeContract.weeksLeft > 0) {
-        _sprayBase += (apiary.activeContract.sprayBoost || 0);
+        /* Contract spray boost is the per-WEEK probability while
+           the contract is running, on top of the site baseline.
+           sprayBoost 0.05 (apple orchard) → ~5%/wk during a 3-week
+           contract → ~14% total chance of one event. sprayBoost
+           0.10 (strawberry polytunnel) → ~10%/wk → ~27% total.
+           Bramley's 0.04 stays gentler. */
+        sprayChance += (apiary.activeContract.sprayBoost || 0);
       }
-      var sprayChance = _sprayBase / 52 * 4; // weekly chance
       if (Math.random() < sprayChance) {
         // A spray hit kills a chunk of foragers in each colony
         for (var ci = 0; ci < cols.length; ci++) {
@@ -586,6 +612,40 @@ function runWeek() {
       }
     }
   }
+  /* One strain-flavoured mentor beat per game-year, fired in early
+     spring when the colony's character is starting to show. Names
+     the strain by its real behaviour rather than its multiplier,
+     so the campaign's "strain identity invisible" finding gets a
+     direct answer in the journal. */
+  if (_moodWk === 15) {
+    aliveColonies().forEach(function(_sc, _si) {
+      var _stKey = _sc.strain;
+      if (!_stKey || _stKey === 'local') return;
+      var _strainBeats = {
+        italian:   _sc.name + ' is showing the Italian temperament — she will explode into spring at the first warm flow, and she will burn through winter stores faster than a mongrel. Plan on more autumn syrup than you would for a local colony.',
+        carniolan: _sc.name + ' is Carniolan stock — fast spring build, quiet in the hive, and they will throw a swarm without much warning. Keep the inspection cadence tight from now until June.',
+        buckfast:  _sc.name + ' is a Buckfast — the steady all-rounder. They will not be the first off the blocks, but they swarm less and yield more than most. Pay them an inspection every nine or ten days and let them get on with it.',
+        native:    _sc.name + ' is Native dark stock. The build-up will look slow against an Italian colony at the same site; that is the strain, not the colony. They make it back over winter on stores other strains would have starved on.',
+      };
+      var _line = _strainBeats[_stKey];
+      if (_line) _moodBeat('strain_' + _sc.id, _line);
+    });
+  }
+
+  /* Moorland-specific heather beats: the August flow is the whole
+     point of the site. The campaign reviewer (scenario 06) flagged
+     that heather was never named. Fire across late July, the peak,
+     and after. */
+  var _onMoor = (Game.apiaries || []).some(function(a){ return a.siteType === 'moorland'; });
+  if (_onMoor) {
+    if (_moodWk === 30) _moodBeat('moor_opening',
+      'The first ling heather is opening on the high ground. In two weeks every colony on the moor should be on it. If a hive is light or weak now, this is the year it goes hungry.');
+    if (_moodWk === 32) _moodBeat('moor_peak',
+      'Heather peak. Ling and bell are open across the moor, the bees are away from first light to last warmth, and the supers are filling with the dark, thixotropic honey that is half the reason to keep bees on moor edge.');
+    if (_moodWk === 35) _moodBeat('moor_close',
+      'Heather is nearly over. Anything still uncapped after this week will stay uncapped — the moor goes quiet inside ten days from now. Harvest before the autumn weather closes in, and consider a special press setting for heather, which is too thick to spin out cleanly.');
+  }
+
   if (_moodWk === 16) _moodBeat('blackthorn',
     'Blackthorn out along the hedges — the first proper white-and-thorn flowering of the year. The bees are working it from first light.');
   if (_moodWk === 22) _moodBeat('elder',
@@ -726,38 +786,59 @@ function _sim_resolveEvent(ev, week) {
       /* Cause-attribution weights, asked for by the Systems Optimiser
          persona — replaces an opaque verb ("dwindled") with a
          numeric breakdown so a player can debug the run.
-         Each contributor gets a raw score from the colony's terminal
-         state; the scores are normalised to sum to 100%. */
+         Phase 8b: the weights now BIAS toward the engine-reported
+         reason rather than always over-counting varroa. The
+         reason string ("isolation starvation", "varroa and virus
+         damage", "queenless collapse", etc.) is the source of
+         truth; varroa, nosema, queen, and stores are then layered
+         on as background contributors so a single named reason
+         can still surface a real secondary cause. */
       var _cw = { varroa: 0, nosema: 0, starvation: 0, queen: 0, disease: 0, environment: 0 };
-      var _infest = (typeof varroaInfestation === 'function') ? varroaInfestation(colony) : 0;
-      _cw.varroa = Math.max(_infest * 1200, 0)           // mites/bee × 1200
-                 + Math.max((1 - (colony.winterBeeHealth || 1)) * 60, 0)  // damaged winter bees
-                 + Math.max((colony.dwv || 0) * 50, 0);  // DWV viral load
+      var _reasonLc = (reason || '').toLowerCase();
 
-      _cw.nosema = Math.max(((colony.disease && colony.disease.nosema) || 0) * 80, 0);
+      /* Anchor: the dominant cause is whatever the death-check
+         function actually returned. */
+      if (_reasonLc.indexOf('isolation') !== -1 || _reasonLc.indexOf('starv') !== -1) {
+        _cw.starvation = 60;
+      } else if (_reasonLc.indexOf('varroa') !== -1 || _reasonLc.indexOf('virus') !== -1) {
+        _cw.varroa = 60;
+      } else if (_reasonLc.indexOf('queenless') !== -1 || _reasonLc.indexOf('queen') !== -1) {
+        _cw.queen = 60;
+      } else if (_reasonLc.indexOf('foul brood') !== -1 || _reasonLc.indexOf('foulbrood') !== -1) {
+        _cw.disease = 80;
+      } else if (_reasonLc.indexOf('cluster') !== -1 || _reasonLc.indexOf('too small') !== -1) {
+        _cw.environment = 60;
+      } else if (_reasonLc.indexOf('dwindl') !== -1) {
+        /* dwindling is non-specific — let the secondary contributors
+           below carry the diagnosis. */
+        _cw.environment = 25;
+      }
+
+      /* Secondary contributors: smaller weights so a real high-
+         varroa reading still shows up alongside the named primary
+         cause rather than dominating it. */
+      var _infest = (typeof varroaInfestation === 'function') ? varroaInfestation(colony) : 0;
+      _cw.varroa += Math.max(_infest * 500, 0)                                          // mites/bee × 500
+                  + Math.max((1 - (colony.winterBeeHealth || 1)) * 25, 0)               // damaged winter bees
+                  + Math.max((colony.dwv || 0) * 20, 0);                                // DWV viral load
+
+      _cw.nosema += Math.max(((colony.disease && colony.disease.nosema) || 0) * 40, 0);
 
       var _storesEmpty = ((colony.honey || 0) <= 0.5) && ((colony.superHoney || 0) <= 0.5);
-      if (_storesEmpty) _cw.starvation = 60;
-      else if ((colony.honey || 0) < 4) _cw.starvation = 30;
-      else if ((colony.honey || 0) < 10 && week > 40) _cw.starvation = 15;
+      if (_storesEmpty && _cw.starvation < 60) _cw.starvation += 25;
 
-      if (!colony.queen || !colony.queen.present) _cw.queen = 40;
-      else if (colony.queen.state === 'failed' || colony.queen.state === 'absent') _cw.queen = 40;
-      else if (colony.queen.virgin && (week - (colony.queen.bornWeek || week)) > 6) _cw.queen = 25;
+      if ((!colony.queen || !colony.queen.present) && _cw.queen < 60) _cw.queen += 20;
 
       var _hasFoulbrood = colony.disease && (colony.disease.afb || colony.disease.efb);
-      if (_hasFoulbrood) _cw.disease = 80;
-      else _cw.disease = Math.max(((colony.disease && colony.disease.chalkbrood) || 0) * 20, 0);
+      if (_hasFoulbrood && _cw.disease < 80) _cw.disease += 40;
 
       var _wkInYr = ((week - 1) % 52) + 1;
-      if (_wkInYr >= 44 || _wkInYr <= 8) {
-        if (colony.population > 0 && colony.population < 3000) _cw.environment += 20;
+      if ((_wkInYr >= 44 || _wkInYr <= 8) && colony.population > 0 && colony.population < 3000) {
+        _cw.environment += 12;
       }
 
       var _cwTotal = _cw.varroa + _cw.nosema + _cw.starvation + _cw.queen + _cw.disease + _cw.environment;
       if (_cwTotal < 1) {
-        /* Genuinely unknown — usually a residual edge case. Mark as
-           dwindling/environment so the modal doesn't show all zeros. */
         _cw.environment = 100; _cwTotal = 100;
       }
       var _causePct = {};
@@ -1274,12 +1355,32 @@ function buildAdvisor() {
        both is "the mentor warns / advises". */
     var _suppressVarroaFlag = (Game.difficulty === 'master');
     if (!_suppressVarroaFlag && (k.varroaSign === 'high' || k.varroaSign === 'severe')) {
-      items.push({
-        tone: 'bad',
-        icon: '🔴',
-        text: col.name + ': varroa infestation is ' + k.varroaSign + '. Treat before winter bees are damaged. Consider Apiguard, Apivar or oxalic acid.',
-      });
-      badCount++;
+      /* If the player already has strips on the shelf, name them
+         and tell the player to apply them NOW. This was the second-
+         year killer for the Optimiser and Buckfast personas: stock
+         in stock, mite count climbing, no treatment running. */
+      var _treatStock = Game.inventory.treatStock || {};
+      var _stockNames = Object.keys(_treatStock).filter(function(k){ return _treatStock[k] > 0; })
+        .map(function(k){ return (TREATMENTS[k] && TREATMENTS[k].name) || k; });
+      var _alreadyTreating = col.treatment && col.treatment.weeksLeft > 0;
+      if (_alreadyTreating) {
+        /* Quiet — the treatment is doing its work. */
+      } else if (_stockNames.length > 0) {
+        items.push({
+          tone: 'bad',
+          icon: '🔴',
+          text: col.name + ': varroa infestation is ' + k.varroaSign + ' — and you have ' +
+            _stockNames.join(' / ') + ' in stock. Use the Treat action on ' + col.name + ' on the next dry day above 6°C.',
+        });
+        badCount++;
+      } else {
+        items.push({
+          tone: 'bad',
+          icon: '🔴',
+          text: col.name + ': varroa infestation is ' + k.varroaSign + '. Treat before winter bees are damaged. Visit the Market (Supplies tab) and buy Apiguard, Apivar or oxalic acid, then apply on the next dry day above 6°C.',
+        });
+        badCount++;
+      }
     } else if (!_suppressVarroaFlag && k.varroaSign === 'unchecked' && (wkInYear >= 28 && wkInYear <= 44)) {
       /* After week 36 the winter bee cohort is already being raised — untreated
          varroa now causes silent colony death in January. Escalate to 'bad'. */
@@ -1436,27 +1537,52 @@ function buildAdvisor() {
       items.push({ tone: 'info', icon: '📅', text: tips[ti] });
     }
     if (season === 'autumn') {
+      /* Varroa treatment window: read both stock AND whether a
+         treatment is currently running on any colony. The persona
+         campaign caught this: stock-in-pocket players were being
+         told to "buy treatment" while their Apivar sat unused, and
+         in-treatment players were being told to "buy treatment"
+         while a course was already active. */
       if (wkInYear >= 33 && wkInYear <= 38) {
-        /* Check whether any treatment is already in stock */
         var _hasStock = Game.inventory.treatStock &&
-          (Object.keys(Game.inventory.treatStock).some(function(k){ return (Game.inventory.treatStock[k] || 0) > 0; }));
-        if (_hasStock) {
-          items.push({ tone: 'info', icon: '💊',
-            text: 'Varroa treatment window: get a treatment on as soon as the supers are off — late summer is the critical time.' });
-        } else {
+          Object.keys(Game.inventory.treatStock).some(function(k){ return (Game.inventory.treatStock[k] || 0) > 0; });
+        var _anyTreating = aliveCols.some(function(c) { return c.treatment && c.treatment.weeksLeft > 0; });
+        var _untreatedCols = aliveCols.filter(function(c) { return !(c.treatment && c.treatment.weeksLeft > 0) && (c.supers || 0) === 0; });
+        if (_anyTreating && _untreatedCols.length === 0) {
+          /* Player is on top of it. Stay quiet. */
+        } else if (_hasStock && _untreatedCols.length > 0) {
+          items.push({ tone: 'warn', icon: '💊',
+            text: 'You have treatment in stock — apply it now on ' + (_untreatedCols.length === 1
+              ? _untreatedCols[0].name
+              : _untreatedCols.length + ' colonies') + '. Use the Treat action on the colony; pick the strips you bought.' });
+          warnCount++;
+        } else if (!_hasStock) {
           items.push({ tone: 'warn', icon: '💊',
             text: 'Varroa treatment window is open. You have no treatment in stock — visit the Market (Supplies tab) and buy Apiguard or Apivar, then apply it as soon as the supers are off.' });
         }
       }
+
+      /* Autumn feed: read each colony's actual brood-box honey.
+         Don't nag a colony already heavy with stores. Don't tell a
+         player with sugar in stock to "buy sugar". */
       if (wkInYear >= 36 && wkInYear <= 44) {
+        var _light = aliveCols.filter(function(c) { return (c.honey || 0) < 17; });
         var _hasSugar = (Game.inventory.sugar || 0) >= 5;
-        if (_hasSugar) {
-          items.push({ tone: 'info', icon: '🧂',
-            text: 'Start feeding 2:1 syrup (2 kg sugar to 1 litre water) to top up winter stores, until each hive feels heavy when hefted from behind.' });
-        } else {
-          items.push({ tone: 'warn', icon: '🧂',
-            text: 'Time to feed for winter. You need sugar in stock — buy sugar bags from the Market (Supplies tab), then feed 2:1 syrup until the hive feels heavy when hefted.' });
+        if (_light.length > 0) {
+          if (_hasSugar) {
+            items.push({ tone: 'warn', icon: '🧂',
+              text: (_light.length === 1 ? _light[0].name : _light.length + ' colonies') +
+                ' need feeding for winter (under 17 kg in the brood box). You have ' +
+                (Game.inventory.sugar || 0) + ' kg of sugar — use the Feed action with 2:1 autumn syrup.' });
+            warnCount++;
+          } else {
+            items.push({ tone: 'warn', icon: '🧂',
+              text: 'Time to feed for winter — ' + (_light.length === 1 ? _light[0].name + ' is' : _light.length + ' colonies are') +
+                ' light. You have no sugar in stock; buy bags from the Market (Supplies tab) and feed 2:1 syrup until the hive feels heavy when hefted.' });
+            warnCount++;
+          }
         }
+        /* If everything is heavy already, stay quiet. */
       }
       if (wkInYear >= 40) items.push({ tone: 'info', icon: '🐭',
         text: 'Fit mouse guards now — use the Entrance action on each hive and set it to "Mouse guard". Mice move into hives in autumn and wreck the comb.' });
