@@ -2393,8 +2393,55 @@ function _ui_buildMarketView() {
     h('div', { class: 'page-title' }, 'Market'),
     h('div', { class: 'page-sub' }, 'Buy bees and equipment, sell your produce, and set up apiaries.'),
     _ui_marketHelp(),
+    _ui_marketRecommendedBanner(),
     h('div', { class: 'market-tabs' }, tabBtns),
     content
+  ]);
+}
+
+/* Spring-recommended-kit banner.
+   The persona-review trial revealed three of four players never
+   fitted a super and three of four never set out a bait hive. Both
+   items live a tab away. Surface them on the Market home in the
+   pre-swarm window so a player walking in to "buy something" sees
+   what the keeper they will become would have bought. */
+function _ui_marketRecommendedBanner() {
+  if (typeof Game === 'undefined' || !Game) return null;
+  var wkInYear = ((Game.week - 1) % 52) + 1;
+  if (wkInYear < 12 || wkInYear > 22) return null;
+  var hasColony = (Game.colonies || []).some(function(c) { return c.alive; });
+  if (!hasColony) return null;
+  var noBait = (Game.inventory.baitHives || 0) === 0;
+  var noSuper = (Game.inventory.supers || 0) === 0 &&
+    (Game.colonies || []).every(function(c) { return !c.alive || (c.supers || 0) === 0; });
+  if (!noBait && !noSuper) return null;
+
+  var rows = [];
+  if (noBait) {
+    rows.push(h('button', {
+      class: 'market-rec-row',
+      onclick: function() { _ui_marketTab = 'hives'; render(); }
+    }, [
+      h('span', { class: 'market-rec-name' }, 'Bait hive — £24'),
+      h('span', { class: 'market-rec-why' }, 'Catches a swarm if a colony leaves. Without one, a lost swarm is gone for good.')
+    ]));
+  }
+  if (noSuper) {
+    rows.push(h('button', {
+      class: 'market-rec-row',
+      onclick: function() { _ui_marketTab = 'supplies'; render(); }
+    }, [
+      h('span', { class: 'market-rec-name' }, 'Super box — £' + (typeof COSTS !== 'undefined' ? COSTS.superAdd : 24)),
+      h('span', { class: 'market-rec-why' }, 'Where the honey crop goes. Without one, nectar fills the brood box and you harvest nothing.')
+    ]));
+  }
+  return h('div', { class: 'market-rec-banner' }, [
+    h('div', { class: 'market-rec-head' }, [
+      h('span', { class: 'market-rec-kicker' }, 'Recommended kit before swarm season'),
+      h('span', { class: 'market-rec-week' }, 'Week ' + wkInYear + ' of ' + Math.floor((Game.week - 1) / 52) + 1 +
+        ' · spring')
+    ]),
+    h('div', { class: 'market-rec-rows' }, rows),
   ]);
 }
 

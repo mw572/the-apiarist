@@ -252,8 +252,39 @@ function runWeek() {
 
     /* Tick down an active pollination contract by one week. When
        the contract ends, fold up the spray overlay and log the
-       completion so the player sees the work close out. */
+       completion so the player sees the work close out.
+       Each contract has its own weekly flavour line so the player
+       feels the contract running, not just a tickbox at the start. */
     if (apiary.activeContract && apiary.activeContract.weeksLeft > 0) {
+      var _wkInContract = (apiary.activeContract.weeks || apiary.activeContract.weeksLeft) - apiary.activeContract.weeksLeft + 1;
+      var _ccid = apiary.activeContract.clientId;
+      var _flavourLines = {
+        'hatfield-orchard': [
+          'Hatfield blossom is fully open — the bees are coming back with bright cream pollen on their legs.',
+          'A steady week at Hatfield. The orchard manager nodded at the hives this morning, which from him is a glowing review.',
+          'The Bramley blossom is starting to fade and the Cox is opening behind it. Two weeks of overlap is the whole point of a traditional orchard.',
+        ],
+        'sweet-acre-pears': [
+          'Pear blossom — paler, faintly scented, and over before you notice it. The bees are working it hard while it lasts.',
+          'A wet morning at Sweet Acre. Pear bloom does not forgive bad weather and there is grumbling at the orchard gate.',
+        ],
+        'manning-berry': [
+          'Manning Berry tunnels are at full bloom — your bees are working under polythene, which they tolerate but do not love.',
+          'The grower walked the rows with a sprayer this morning. The fungicide is approved for hives on the crop, but the foragers will still feel it.',
+          'Last week of strawberry bloom. The crop is set; the contract is nearly done.',
+        ],
+        'bramley-estate': [
+          'Bramley Estate — the orchard is forty acres of single-variety dessert apple, and the bees are at it from first light.',
+          'The estate keeper checked your hives himself this afternoon. A quiet compliment about how the colonies look.',
+          'Apple fall has begun on the south-facing rows. The estate harvest is coming together.',
+          'The blossom is over. The contract is a week off completion and the apples have set well.',
+        ],
+      };
+      var _lines = _flavourLines[_ccid];
+      if (_lines && _lines.length) {
+        var _flavourLine = _lines[(_wkInContract - 1) % _lines.length];
+        logEvent('🍎', _flavourLine, 'plain');
+      }
       apiary.activeContract.weeksLeft -= 1;
       if (apiary.activeContract.weeksLeft <= 0) {
         logEvent('✓', apiary.activeContract.name + ' contract complete at ' + apiary.name + '. The blossom is finished.', 'good');
@@ -536,6 +567,42 @@ function runWeek() {
     }
   }
 
+  /* 6c. Seasonal mood beats ----------------------------------------
+     The persona-review trial noted the year going quiet between
+     June and the autumn warning. A handful of small, weather-and-
+     forage flavour lines through the year keep the world breathing
+     between the structural events (swarm, harvest, winter prep).
+     Each fires once per game-year using a flag, so a multi-year
+     keeper hears each beat freshly each spring. */
+  var _moodWk = ((Game.week - 1) % 52) + 1;
+  var _moodYr = Math.floor((Game.week - 1) / 52) + 1;
+  var _moodFlag = '_moodBeat_' + _moodYr + '_';
+  if (!Game.flags) Game.flags = {};
+  function _moodBeat(id, text) {
+    if (!Game.flags[_moodFlag + id]) {
+      Game.flags[_moodFlag + id] = true;
+      if (aliveColonies().length > 0) {
+        logEvent('📖', text, 'plain');
+      }
+    }
+  }
+  if (_moodWk === 16) _moodBeat('blackthorn',
+    'Blackthorn out along the hedges — the first proper white-and-thorn flowering of the year. The bees are working it from first light.');
+  if (_moodWk === 22) _moodBeat('elder',
+    'Hawthorn fading, elder coming through. The colony has reached the size where the entrance buzzes audibly on a warm afternoon.');
+  if (_moodWk === 26) _moodBeat('lime',
+    'The lime trees are open. On a still warm evening the air around them is almost sticky with scent and the bees are home late.');
+  if (_moodWk === 29) _moodBeat('thunder',
+    'A short summer thunderstorm in the night. By morning the hive entrance is back to normal, but the wax has the slight clean smell that follows hard rain.');
+  if (_moodWk === 33) _moodBeat('blackberry',
+    'Bramble in flower in the hedgerow. A late, quiet flow that turns up in the supers if you have one on.');
+  if (_moodWk === 39) _moodBeat('ivy',
+    'The first ivy flowers — small, pale green-yellow clusters, easy to walk past. The bees know they are there. This is the last real nectar the colony will see this year.');
+  if (_moodWk === 43) _moodBeat('frost',
+    'First frost on the grass this morning. The colony is quiet at the entrance now; the colder mornings have stopped the foragers leaving until late.');
+  if (_moodWk === 48) _moodBeat('shortest',
+    'The shortest weeks. A clear cold day might bring a cleansing flight, but for the most part the colony is a cluster and you are a beekeeper who waits.');
+
   /* 7. Advisor -------------------------------------------------------- */
   buildAdvisor();
 
@@ -656,6 +723,49 @@ function _sim_resolveEvent(ev, week) {
       }
       colony._deathRetrospective = _retro;
 
+      /* Cause-attribution weights, asked for by the Systems Optimiser
+         persona — replaces an opaque verb ("dwindled") with a
+         numeric breakdown so a player can debug the run.
+         Each contributor gets a raw score from the colony's terminal
+         state; the scores are normalised to sum to 100%. */
+      var _cw = { varroa: 0, nosema: 0, starvation: 0, queen: 0, disease: 0, environment: 0 };
+      var _infest = (typeof varroaInfestation === 'function') ? varroaInfestation(colony) : 0;
+      _cw.varroa = Math.max(_infest * 1200, 0)           // mites/bee × 1200
+                 + Math.max((1 - (colony.winterBeeHealth || 1)) * 60, 0)  // damaged winter bees
+                 + Math.max((colony.dwv || 0) * 50, 0);  // DWV viral load
+
+      _cw.nosema = Math.max(((colony.disease && colony.disease.nosema) || 0) * 80, 0);
+
+      var _storesEmpty = ((colony.honey || 0) <= 0.5) && ((colony.superHoney || 0) <= 0.5);
+      if (_storesEmpty) _cw.starvation = 60;
+      else if ((colony.honey || 0) < 4) _cw.starvation = 30;
+      else if ((colony.honey || 0) < 10 && week > 40) _cw.starvation = 15;
+
+      if (!colony.queen || !colony.queen.present) _cw.queen = 40;
+      else if (colony.queen.state === 'failed' || colony.queen.state === 'absent') _cw.queen = 40;
+      else if (colony.queen.virgin && (week - (colony.queen.bornWeek || week)) > 6) _cw.queen = 25;
+
+      var _hasFoulbrood = colony.disease && (colony.disease.afb || colony.disease.efb);
+      if (_hasFoulbrood) _cw.disease = 80;
+      else _cw.disease = Math.max(((colony.disease && colony.disease.chalkbrood) || 0) * 20, 0);
+
+      var _wkInYr = ((week - 1) % 52) + 1;
+      if (_wkInYr >= 44 || _wkInYr <= 8) {
+        if (colony.population > 0 && colony.population < 3000) _cw.environment += 20;
+      }
+
+      var _cwTotal = _cw.varroa + _cw.nosema + _cw.starvation + _cw.queen + _cw.disease + _cw.environment;
+      if (_cwTotal < 1) {
+        /* Genuinely unknown — usually a residual edge case. Mark as
+           dwindling/environment so the modal doesn't show all zeros. */
+        _cw.environment = 100; _cwTotal = 100;
+      }
+      var _causePct = {};
+      Object.keys(_cw).forEach(function(k) {
+        _causePct[k] = Math.round((_cw[k] / _cwTotal) * 100);
+      });
+      colony._causeWeights = _causePct;
+
       logEvent('💀', colony.name + ' has died (' + reason + ').', 'bad');
       /* Push a persistent advisor item so the nav pip fires and the player notices */
       Game.advisor = Game.advisor || [];
@@ -683,12 +793,32 @@ function _sim_resolveEvent(ev, week) {
             colony._deathRetrospective.map(function(r) { return '<li>' + r + '</li>'; }).join('') +
             '</ul>';
         }
+        /* Cause-weighting breakdown — surfaces the simulation's own
+           attribution rather than the single-word "reason" label. */
+        var _cwHtml = '';
+        if (colony._causeWeights) {
+          var _labels = { varroa: 'Varroa and viruses', nosema: 'Nosema',
+            starvation: 'Starvation', queen: 'Queen failure',
+            disease: 'Brood disease', environment: 'Cold / dwindling' };
+          var _rows = Object.keys(colony._causeWeights)
+            .filter(function(k) { return colony._causeWeights[k] > 0; })
+            .sort(function(a, b) { return colony._causeWeights[b] - colony._causeWeights[a]; })
+            .map(function(k) {
+              var pct = colony._causeWeights[k];
+              return '<li><span class="death-cause-pct">' + pct + '%</span> ' + _labels[k] + '</li>';
+            });
+          if (_rows.length > 0) {
+            _cwHtml = '<p><strong>Contribution to the loss:</strong></p>' +
+              '<ul class="death-causes">' + _rows.join('') + '</ul>';
+          }
+        }
         out.push({
           kind : 'modal',
           title: colony.name + ' has died',
           text : colony.name + ' has died — ' + reason + '.',
           body : '<p><strong>' + colony.name + '</strong> has been lost.</p>' +
-                 '<p><strong>Cause:</strong> ' + reason + '.</p>' +
+                 '<p><strong>Final reading:</strong> ' + reason + '.</p>' +
+                 _cwHtml +
                  _retroHtml +
                  '<p>Inspect the hive in the next week or two before clearing it out — ' +
                  'understanding the cause helps you prevent it next time.</p>',
@@ -1018,21 +1148,41 @@ function buildAdvisor() {
       continue;
     }
 
-    /* Too long without inspection during swarm season */
+    /* Too long without inspection during swarm season.
+       The Atmospheric persona flagged "37 days since last open" as
+       breaking the world — counting in numerals reads like an HR
+       audit. Rewrite in the same register as the rest of the
+       writing: gesture at the season and what's happening outside
+       the hive rather than counting weeks. */
     var weeksSince = week - k.week;
     var swarmSeason = wkInYear >= 14 && wkInYear <= 30;
+    var _lastWkInYear = ((k.week - 1) % 52) + 1;
+    function _seasonalAnchor(w) {
+      if (w <= 5)  return 'midwinter';
+      if (w <= 9)  return 'late winter';
+      if (w <= 13) return 'the first warmth of spring';
+      if (w <= 17) return 'the spring blossom';
+      if (w <= 20) return 'the oilseed and apple bloom';
+      if (w <= 24) return 'the June gap';
+      if (w <= 28) return 'high summer';
+      if (w <= 33) return 'the tail of the summer flow';
+      if (w <= 37) return 'late summer';
+      if (w <= 42) return 'the ivy coming in';
+      if (w <= 47) return 'the first cold mornings';
+      return 'before the year turned';
+    }
     if (swarmSeason && weeksSince >= 10) {
       items.push({
         tone: 'bad',
         icon: '📅',
-        text: col.name + ' has not been inspected for ' + weeksSince + ' weeks. During swarm season, inspect every seven to nine days or you risk losing a swarm.',
+        text: col.name + ' has not been opened since ' + _seasonalAnchor(_lastWkInYear) + '. In swarm season the colony can throw cells in days — open it on the next calm afternoon or you will likely lose a swarm.',
       });
       badCount++;
     } else if (swarmSeason && weeksSince >= 7) {
       items.push({
         tone: 'warn',
         icon: '📅',
-        text: col.name + ' is due for inspection (last seen ' + weeksSince + ' weeks ago). Swarm cells can develop quickly at this time of year.',
+        text: col.name + ' has been closed since ' + _seasonalAnchor(_lastWkInYear) + '. The girls will be expecting a look — swarm cells can develop in the time it takes the kettle to boil at this time of year.',
       });
       warnCount++;
     }

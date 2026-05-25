@@ -333,6 +333,26 @@ function inspectColony(colony) {
     if (!report.lesson) {
       report.lesson = d.desc;
     }
+
+    /* Nosema-specific one-time explainer: the persona reviews showed
+       this disease was silent-killing colonies because the player
+       didn't know there was no licensed UK treatment. Fire once on
+       first detection with the real response path. */
+    if (diseaseVisible === 'nosema' && !Game.flags.seenExplainers['first_nosema']) {
+      showExplainer('first_nosema',
+        'Nosema in the Colony',
+        '<p>A microscopic gut parasite (Nosema ceranae) has set in. It thins the colony quietly — affected workers age faster, die younger, and the population slips down through winter and early spring while everything looks normal from the outside.</p>' +
+        '<h4>What you can do</h4>' +
+        '<p>There is no UK-licensed treatment any more. Fumagillin (Fumidil B) was withdrawn years ago. The response is structural, not pharmaceutical:</p>' +
+        '<ul>' +
+        '<li><strong>Good nutrition.</strong> A strong autumn feed and pollen substitute in late winter help the colony outpace the parasite.</li>' +
+        '<li><strong>Replace old comb.</strong> Nosema spores survive in old brood comb for years. Rotating out the darkest frames every spring is the main long-term control.</li>' +
+        '<li><strong>Dry, ventilated hives.</strong> Damp wintering conditions amplify nosema. A hive on a slight tilt with a clear floor drains better.</li>' +
+        '<li><strong>Strong queens.</strong> The genetic component is real — re-queen from stock with no nosema history if you can.</li>' +
+        '</ul>' +
+        '<p>This is the disease that teaches keepers patience. You cannot beat it with a syringe. You manage it with the calendar.</p>'
+      );
+    }
   }
 
   /* Chalkbrood mummies on floor — common low-skill find */

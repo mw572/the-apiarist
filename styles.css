@@ -6558,3 +6558,95 @@ button.plate-link {
   color: var(--ink-soft);
   padding: 8px 4px;
 }
+
+/* Death-modal cause breakdown */
+.death-causes {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.death-causes li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--ink);
+}
+.death-cause-pct {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  color: var(--ink);
+  min-width: 40px;
+  text-align: right;
+  padding: 2px 6px;
+  background: var(--paper-2, #efe1ba);
+  border-radius: 4px;
+}
+
+/* Market recommended-kit banner */
+.market-rec-banner {
+  background: var(--paper-2, #efe1ba);
+  border: 1px solid var(--rule-soft, #c8b888);
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin: 0 0 16px;
+}
+.market-rec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.market-rec-kicker {
+  font-family: var(--display);
+  font-size: 16px;
+  color: var(--ink);
+  letter-spacing: 0.3px;
+}
+.market-rec-week {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.market-rec-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.market-rec-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: var(--paper, #f3ead0);
+  border: 1px solid var(--rule-soft, #c8b888);
+  border-radius: 4px;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-family: var(--serif);
+}
+.market-rec-row:hover {
+  border-color: var(--ink-soft, #8a7244);
+  background: #f8efd2;
+}
+.market-rec-name {
+  font-family: var(--display);
+  font-size: 14.5px;
+  color: var(--ink);
+}
+.market-rec-why {
+  font-family: var(--serif);
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
