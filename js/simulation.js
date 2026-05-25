@@ -1198,6 +1198,56 @@ function buildAdvisor() {
     if (k.status === 'ok') okCount++;
   }
 
+  /* ---- Pre-swarm bait hive nudge ----------------------------------
+     The persona-review trial revealed that every persona archetype
+     lost a swarm because they had no bait hive in inventory when
+     spring opened. The post-swarm modal teaches the lesson AFTER
+     the loss, which is too late. This nudge fires once in early
+     spring (weeks 12-15, late March to mid April, before queen
+     cells start appearing in week 16+) IF the player already has
+     a colony, no bait hive in stock, and has either survived a
+     swarm before OR has at least one strong colony heading into
+     swarm season. */
+  if (wkInYear >= 12 && wkInYear <= 15 &&
+      aliveCols.length > 0 &&
+      (Game.inventory.baitHives || 0) === 0) {
+    var _swarmedBefore = (Game.stats && Game.stats.swarmsLost > 0);
+    var _strongHive    = aliveCols.some(function(c) { return c.population > 8000; });
+    if (_swarmedBefore || _strongHive) {
+      items.push({
+        tone: 'warn', icon: '🎣',
+        text: _swarmedBefore
+          ? 'No bait hive in stock — and you lost a swarm last year. Set one out before week 18 or you will lose another. They are £24 at the Market (Hives tab).'
+          : 'Swarm season opens in a few weeks. A bait hive at £24 catches the swarm if a colony goes — your only realistic chance of free bees. Without one, a lost swarm is gone for good.',
+      });
+    }
+  }
+
+  /* ---- Pre-flow super reminder ------------------------------------
+     The other persona-review blocker: three of four personas finished
+     year one with zero honey because the colony hoarded everything
+     in the brood box and they never fitted a super. Fire this when
+     a colony has built strong (12,000+ bees), the nectar flow is
+     about to start (weeks 14-17, peak forage), no super is fitted,
+     and they have one in inventory. If they have no super in stock,
+     point them at the Market. */
+  for (var _sci = 0; _sci < aliveCols.length; _sci++) {
+    var _sc = aliveCols[_sci];
+    var _scWkInYear = wkInYear;
+    if (_scWkInYear >= 14 && _scWkInYear <= 22 &&
+        _sc.population >= 12000 &&
+        (_sc.supers || 0) === 0) {
+      var _hasSuperKit = (Game.inventory.supers || 0) > 0;
+      items.push({
+        tone: 'warn', icon: '📦',
+        text: _hasSuperKit
+          ? _sc.name + ' is strong (' + Math.round(_sc.population / 1000) + 'k bees) and the flow is starting. Fit a super on this colony — without one, every drop of nectar coming in just gets stored in the brood box and you harvest nothing this year.'
+          : _sc.name + ' is strong (' + Math.round(_sc.population / 1000) + 'k bees) and the flow is starting, but you have no super in stock. Buy one from the Market (£' + (typeof COSTS !== 'undefined' ? COSTS.superAdd : 24) + ', Supplies tab) and fit it this week or you will harvest nothing.',
+      });
+      break; /* one warning is enough — they will see it on each colony in turn. */
+    }
+  }
+
   /* ---- Available pollination contracts ---------------------------- */
   /* A spring-only nudge. If the player has orchard or farmland
      apiaries with eligible clients open right now (window + rep +
