@@ -105,6 +105,20 @@ function inspectColony(colony) {
     report.findings.push({ icon: '⚠️', text: 'No hive tool — you cannot prise frames apart properly. Queen cells on the bottom bars may be missed.' });
   }
 
+  /* ---- Gloves: bare-hands sting penalty ----------------------------- */
+  /* Without gloves there is a real risk of a sting cutting the
+     inspection short — the player abandons the box before reading the
+     brood pattern properly. 25% chance per bare-hands inspection.
+     Mirrors the deep-winter hard-block pattern: ok=false, no
+     colony.known update, no learning. */
+  const hasGloves = Game.inventory.tools && Game.inventory.tools.gloves;
+  if (!hasGloves && Math.random() < 0.25) {
+    report.ok = false;
+    report.stungShort = true;
+    report.blockReason = 'Stung on the wrist while turning a frame — you closed the hive up early. No usable read this week. Gloves would have prevented it.';
+    return report;
+  }
+
   /* ---- Skill level -------------------------------------------------- */
   const skill = skillLevel(Game.skillXp); // 1..10
 

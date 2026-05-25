@@ -106,7 +106,7 @@ function startNewGame(name, difficulty, region, startingSite){
       spareHives: 1,            // one hive ready and waiting for your first bees
       nucBoxes: 0,
       baitHives: 0,
-      tools: { suit:true, smoker:true, hiveTool:true, gloves:false, clearerBoard:false,
+      tools: { suit:true, smoker:true, hiveTool:true, gloves:true, clearerBoard:false,
                extractor:false, settlingTank:false, refractometer:false, uncappingKit:false },
       honey: {}, jars: {}, cutComb: 0, wax: 0, rearedQueens: 0,
       sugar: 10,
@@ -253,6 +253,20 @@ function _migrateSave(g) {
     if (typeof g.inventory.newspaper !== 'number')      g.inventory.newspaper = 0;
     if (!g.inventory.honey || typeof g.inventory.honey !== 'object') g.inventory.honey = {};
     if (!g.inventory.jars  || typeof g.inventory.jars  !== 'object') g.inventory.jars  = {};
+    /* jarsGrade — per-honey-type grade buckets. Older saves get all
+       existing jars defaulted to 'standard'. */
+    if (!g.inventory.jarsGrade || typeof g.inventory.jarsGrade !== 'object') {
+      g.inventory.jarsGrade = {};
+      Object.keys(g.inventory.jars || {}).forEach(function(k) {
+        g.inventory.jarsGrade[k] = { standard: g.inventory.jars[k] || 0, cloudy: 0, premium: 0 };
+      });
+    }
+    /* Gloves default-on (added 2026-05-25). Older saves keep whatever
+       they had — but if undefined, treat as not owned (apprentice
+       could have started before this default). */
+    if (g.inventory.tools && typeof g.inventory.tools.gloves !== 'boolean') {
+      g.inventory.tools.gloves = false;
+    }
     if (typeof g.inventory.emptyJars !== 'number') g.inventory.emptyJars = 0;
     if (typeof g.inventory.wax !== 'number') g.inventory.wax = 0;
     if (typeof g.inventory.candles !== 'number') g.inventory.candles = 0;

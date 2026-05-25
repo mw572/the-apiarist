@@ -936,14 +936,32 @@ function extractAndBottle(honeyType, jarCount) {
   if (isHeather) {
     kgToDeduct       = _econ_roundPrice(kgNeeded / 0.70); // bulk needed before 30% press loss
     heatherPressLoss = _econ_roundPrice(kgToDeduct - kgNeeded);
-    // Re-check bulk stock after recalculating the true deduction.
-    if (Game.inventory.honey[honeyType] < kgToDeduct) {
-      var availJars = Math.floor(Game.inventory.honey[honeyType] * 0.70 / KG_PER_JAR);
-      return {
-        ok: false,
-        msg: 'After pressing losses (~30% for heather honey) you only have enough for about ' + availJars + ' jar' + (availJars === 1 ? '' : 's') + '.'
-      };
-    }
+  }
+
+  // Uncapping kit (yield) — without one, ~10% of the honey stays in
+  // the comb when you uncap by hand. You need MORE bulk to fill the
+  // same jar count, so the deduction grows.
+  var uncapLoss = 0;
+  if (!Game.inventory.tools.uncappingKit) {
+    var withUncap = kgToDeduct;
+    kgToDeduct = _econ_roundPrice(kgToDeduct / 0.90);
+    uncapLoss  = _econ_roundPrice(kgToDeduct - withUncap);
+  }
+
+  // Re-check bulk stock after all loss multipliers.
+  if (Game.inventory.honey[honeyType] < kgToDeduct) {
+    var availJarsAdj = Math.floor(Game.inventory.honey[honeyType] * (isHeather ? 0.70 : 1) * (Game.inventory.tools.uncappingKit ? 1 : 0.90) / KG_PER_JAR);
+    var reasonBits = [];
+    if (isHeather) reasonBits.push('~30% pressing loss for heather');
+    if (uncapLoss > 0) reasonBits.push('~10% loss without an uncapping kit');
+    var reasonNote = reasonBits.length ? ' (' + reasonBits.join(', ') + ')' : '';
+    return {
+      ok: false,
+      msg: 'After losses' + reasonNote + ' you only have enough for about ' + availJarsAdj + ' jar' + (availJarsAdj === 1 ? '' : 's') + '.'
+    };
+  }
+  if (uncapLoss > 0) {
+    msgs.push('Without an uncapping kit, ~10% of the honey stays trapped in the comb (' + uncapLoss.toFixed(2) + ' kg lost).');
   }
 
   if (!Game.inventory.tools.extractor) {
@@ -966,17 +984,48 @@ function extractAndBottle(honeyType, jarCount) {
     };
   }
 
-  // Moisture nudge.
+  // REFRACTOMETER (write-off risk) — without one, 25% chance the batch
+  // is over 20% moisture and ferments in the jar before sale. Honey
+  // and empty jars are still consumed (you bottled them), but no jars
+  // enter saleable inventory. Painful but signposted.
+  if (!Game.inventory.tools.refractometer && Math.random() < 0.25) {
+    Game.inventory.honey[honeyType] = _econ_roundPrice(Game.inventory.honey[honeyType] - kgToDeduct);
+    Game.inventory.emptyJars = (Game.inventory.emptyJars || 0) - jarCount;
+    if (extraCost > 0 && !spend(extraCost, 'Extractor hire — ' + jarCount + ' jars (lot lost)')) {
+      // already in trouble — proceed regardless
+    }
+    var honeyName0 = (HONEY_TYPES[honeyType] && HONEY_TYPES[honeyType].name) ? HONEY_TYPES[honeyType].name : honeyType;
+    logEvent('🧪', 'The ' + honeyName0 + ' batch (' + jarCount + ' jars) tested over 20% moisture and fermented in the cupboard. Lost. A refractometer would have caught it before bottling.', 'bad');
+    return {
+      ok: false,
+      msg: 'Lot fermented and was written off — over 20% moisture. ' + jarCount + ' jars and ' + kgToDeduct.toFixed(2) + ' kg honey lost. Buy a refractometer.'
+    };
+  }
   if (Game.inventory.tools.refractometer) {
-    msgs.push('Check the refractometer — anything above 20% moisture can ferment in the jar.');
-  } else {
-    msgs.push('A refractometer would let you check moisture before bottling; without one you are trusting the bees.');
+    msgs.push('Refractometer reading came back under 20%. Safe to bottle.');
   }
 
-  // Settling tank nudge.
-  if (Game.inventory.tools.settlingTank) {
-    msgs.push('Your settling tank will clear any air bubbles and surface wax before you lid up.');
+  // SETTLING TANK (visual quality) — without one, jars carry a 'cloudy'
+  // grade that customers discount by ~15% at sale time. Tracked via
+  // Game.inventory.jarsGrade[honeyType] = { standard, cloudy, premium }.
+  if (!Game.inventory.tools.settlingTank) {
+    msgs.push('Without a settling tank, the jars look cloudy — air bubbles and wax flecks. Expect ~15% off the retail price.');
   }
+
+  // PREMIUM grade — bottling with all three quality tools AND owned
+  // extractor (no hire-handling stress) yields a Premium batch that
+  // sells at a +12% retail premium.
+  var allQualityTools =
+    Game.inventory.tools.refractometer &&
+    Game.inventory.tools.settlingTank &&
+    Game.inventory.tools.uncappingKit &&
+    Game.inventory.tools.extractor;
+  var batchGrade = allQualityTools ? 'premium'
+    : (Game.inventory.tools.settlingTank ? 'standard' : 'cloudy');
+
+  // Ensure the grade-bucket inventory exists.
+  if (!Game.inventory.jarsGrade) Game.inventory.jarsGrade = {};
+  if (!Game.inventory.jarsGrade[honeyType]) Game.inventory.jarsGrade[honeyType] = { standard: 0, cloudy: 0, premium: 0 };
 
   // Deduct honey and empty jars; add filled jars to inventory.
   // For heather, kgToDeduct > kgNeeded — the extra goes as pressing waste.
@@ -984,6 +1033,7 @@ function extractAndBottle(honeyType, jarCount) {
   Game.inventory.emptyJars = (Game.inventory.emptyJars || 0) - jarCount;
   _econ_ensureKey(Game.inventory.jars, honeyType, 0);
   Game.inventory.jars[honeyType] += jarCount;
+  Game.inventory.jarsGrade[honeyType][batchGrade] += jarCount;
 
   var honeyName = (HONEY_TYPES[honeyType] && HONEY_TYPES[honeyType].name) ? HONEY_TYPES[honeyType].name : honeyType;
   var costNote = extraCost > 0 ? ' Extractor hire: ' + fmtMoney(extraCost) + '.' : '';
@@ -1057,8 +1107,33 @@ function sellHoney(channelId, honeyType, jarCount) {
     };
   }
 
-  var pricePerJar = marketPrice(honeyType, channelId);
-  var gross = _econ_roundPrice(pricePerJar * jarCount);
+  var basePricePerJar = marketPrice(honeyType, channelId);
+
+  /* GRADE-WEIGHTED SALE — sell premium first (best price), then
+     standard, then cloudy. Each grade has a different price
+     multiplier: premium 1.12, standard 1.00, cloudy 0.85. */
+  var GRADE_MULT = { premium: 1.12, standard: 1.00, cloudy: 0.85 };
+  if (!Game.inventory.jarsGrade) Game.inventory.jarsGrade = {};
+  if (!Game.inventory.jarsGrade[honeyType]) {
+    /* Older saves: treat any pre-existing jars as standard. */
+    var totalNow = Game.inventory.jars[honeyType] || 0;
+    Game.inventory.jarsGrade[honeyType] = { standard: totalNow, cloudy: 0, premium: 0 };
+  }
+  var pile = Game.inventory.jarsGrade[honeyType];
+  var sold = { premium: 0, standard: 0, cloudy: 0 };
+  var gross = 0;
+  var remaining = jarCount;
+  ['premium','standard','cloudy'].forEach(function(g) {
+    if (remaining <= 0) return;
+    var take = Math.min(remaining, pile[g] || 0);
+    if (take > 0) {
+      sold[g] = take;
+      gross += basePricePerJar * GRADE_MULT[g] * take;
+      pile[g] -= take;
+      remaining -= take;
+    }
+  });
+  gross = _econ_roundPrice(gross);
 
   // Channel costs.
   var costs = channel.perVisitCost || 0;
@@ -1068,7 +1143,14 @@ function sellHoney(channelId, honeyType, jarCount) {
 
   var income = _econ_roundPrice(gross - costs);
 
-  earn(income, 'Honey sales — ' + jarCount + ' jar' + (jarCount === 1 ? '' : 's') + ' via ' + channel.name);
+  /* Build a per-grade sale note. */
+  var gradeBits = [];
+  if (sold.premium  > 0) gradeBits.push(sold.premium  + ' Premium');
+  if (sold.standard > 0) gradeBits.push(sold.standard + ' standard');
+  if (sold.cloudy   > 0) gradeBits.push(sold.cloudy   + ' cloudy');
+  var gradeNote = gradeBits.length > 1 ? ' (' + gradeBits.join(' + ') + ')' : '';
+
+  earn(income, 'Honey sales — ' + jarCount + ' jar' + (jarCount === 1 ? '' : 's') + gradeNote + ' via ' + channel.name);
 
   // Deduct jars.
   Game.inventory.jars[honeyType] -= jarCount;
