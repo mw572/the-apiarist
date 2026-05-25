@@ -638,6 +638,24 @@ function runWeek() {
     });
   }
 
+  /* Phase 9d: autumn strain beat — fires in week 35 when the
+     autumn-prep decisions are about to bite. Each strain gets a
+     pointed reminder about how it overwinters differently. */
+  if (_moodWk === 35) {
+    aliveColonies().forEach(function(_sc) {
+      var _stKey = _sc.strain;
+      if (!_stKey || _stKey === 'local') return;
+      var _autumnBeats = {
+        italian:   _sc.name + ' is Italian — they will eat through winter stores faster than a mongrel. Heft her every couple of weeks until New Year. If she feels light, get more syrup on before the cold sets in. A 20 kg autumn target is sensible; 25 kg if the site is exposed.',
+        carniolan: _sc.name + ' is Carniolan — they wind down for winter quickly and cluster tight, so they need less feed than an Italian. But the small cluster cannot bridge to distant frames in deep cold. Top fondant over the cluster in January is worth the trip.',
+        buckfast:  _sc.name + ' is Buckfast — about as predictable on winter feed as any strain you can keep. Standard 18-20 kg autumn target, mouse guard on by week 42, and they will be at the entrance in February on the first warm afternoon.',
+        native:    _sc.name + ' is AMM — the strain that earns its place in October. Less syrup needed than the imported strains; the colony will winter on stores that would starve an Italian. Do not overfeed; a damp brood box with too much liquid syrup is worse for native bees than slightly light stores.',
+      };
+      var _aline = _autumnBeats[_stKey];
+      if (_aline) _moodBeat('strain_autumn_' + _sc.id, _aline);
+    });
+  }
+
   /* Moorland-specific heather beats: the August flow is the whole
      point of the site. The campaign reviewer (scenario 06) flagged
      that heather was never named. Fire across late July, the peak,
@@ -1359,6 +1377,30 @@ function buildAdvisor() {
        data, or were you waiting for the game to tell you? Apprentice
        and Beekeeper keep the flags because the difficulty contract on
        both is "the mentor warns / advises". */
+    /* Phase 9c: raw mite-count escalation. The campaign caught the
+       state-driven advisor relying on k.varroaSign (the last
+       inspection's reading), which lags real state by however many
+       weeks since the last wash. Now also escalate when the actual
+       infestation rate exceeds the danger threshold, regardless of
+       what the last inspection saw. Still respects Master mode's
+       no-handholding contract — the data is on the colony detail. */
+    var _rawInfest = (typeof varroaInfestation === 'function') ? varroaInfestation(col) : 0;
+    var _rawHigh = _rawInfest > 0.04;
+    var _rawSevere = _rawInfest > 0.08;
+    if (!_suppressVarroaFlag && d.mentorWarnings && (_rawSevere || _rawHigh) &&
+        k && k.varroaSign !== 'high' && k.varroaSign !== 'severe' &&
+        !(col.treatment && col.treatment.weeksLeft > 0)) {
+      /* The inspection has missed it (lag), but the engine knows
+         the colony is dangerously infested. Flag a soft nudge so
+         the player thinks about running a fresh wash. */
+      items.push({
+        tone: 'warn',
+        icon: '🔬',
+        text: col.name + ' has not had a fresh varroa wash in a while — and the bees you saw at the entrance this morning looked a bit listless. Worth running an alcohol or sugar-roll wash this week to update the count.',
+      });
+      warnCount++;
+    }
+
     var _suppressVarroaFlag = (Game.difficulty === 'master');
     if (!_suppressVarroaFlag && (k.varroaSign === 'high' || k.varroaSign === 'severe')) {
       /* If the player already has strips on the shelf, name them
@@ -1371,7 +1413,7 @@ function buildAdvisor() {
       var _alreadyTreating = col.treatment && col.treatment.weeksLeft > 0;
       if (_alreadyTreating) {
         /* Quiet — the treatment is doing its work. */
-      } else if (_stockNames.length > 0) {
+      } else if (_stockNames.length > 0 && d.mentorWarnings) {
         items.push({
           tone: 'bad',
           icon: '🔴',
@@ -1379,6 +1421,9 @@ function buildAdvisor() {
             _stockNames.join(' / ') + ' in stock. Use the Treat action on ' + col.name + ' on the next dry day above 6°C.',
         });
         badCount++;
+      } else if (_stockNames.length > 0) {
+        /* Master mode: the data is on the colony detail, the player
+           reads it themselves. No advisor handholding. */
       } else {
         items.push({
           tone: 'bad',
@@ -1548,8 +1593,10 @@ function buildAdvisor() {
          campaign caught this: stock-in-pocket players were being
          told to "buy treatment" while their Apivar sat unused, and
          in-treatment players were being told to "buy treatment"
-         while a course was already active. */
-      if (wkInYear >= 33 && wkInYear <= 38) {
+         while a course was already active.
+         Master mode (mentorWarnings:false) opts out of these
+         specific nudges — Master is "no hand-holding" by contract. */
+      if (wkInYear >= 33 && wkInYear <= 38 && d.mentorWarnings) {
         var _hasStock = Game.inventory.treatStock &&
           Object.keys(Game.inventory.treatStock).some(function(k){ return (Game.inventory.treatStock[k] || 0) > 0; });
         var _anyTreating = aliveCols.some(function(c) { return c.treatment && c.treatment.weeksLeft > 0; });
@@ -1570,8 +1617,9 @@ function buildAdvisor() {
 
       /* Autumn feed: read each colony's actual brood-box honey.
          Don't nag a colony already heavy with stores. Don't tell a
-         player with sugar in stock to "buy sugar". */
-      if (wkInYear >= 36 && wkInYear <= 44) {
+         player with sugar in stock to "buy sugar". Suppressed on
+         Master per the no-handholding contract. */
+      if (wkInYear >= 36 && wkInYear <= 44 && d.mentorWarnings) {
         var _light = aliveCols.filter(function(c) { return (c.honey || 0) < 17; });
         var _hasSugar = (Game.inventory.sugar || 0) >= 5;
         if (_light.length > 0) {

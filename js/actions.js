@@ -771,6 +771,28 @@ function addSuper(colony) {
     logEvent('📦', msg, _superSeasonWarn ? 'warn' : 'plain');
   }
 
+  /* OSR explainer (Phase 9b fix): the colony.js osrWarning gate
+     was unreachable on most plays because honey type flips to
+     "spring" too quickly. Fire the explainer here when a super
+     goes on a farmland-site colony during the OSR flow window
+     (weeks 14-19). This is the moment the player actually needs
+     the lesson — before they realise the honey is setting. */
+  if (!Game.flags.seenExplainers['osr_super_fitted']) {
+    var _apiary = (Game.apiaries || []).find(function(a) { return a.id === colony.apiaryId; });
+    if (_apiary && _apiary.siteType === 'farmland' &&
+        _superWkInYr >= 14 && _superWkInYr <= 19) {
+      showExplainer('osr_super_fitted',
+        'A Super on the OSR Flow',
+        '<p>You have a super on a farmland colony during the oilseed rape bloom. This is the highest yield window in the UK calendar, and it is also the most punishing one.</p>' +
+        '<h4>The clock starts when the flow ends</h4>' +
+        '<p>OSR honey crystallises in the comb within 7-10 days of the flow finishing — usually around week 20. You have a narrow window: harvest while the supers are still mostly capped (three-quarters or above) but before the honey sets rock-solid in the frames.</p>' +
+        '<h4>If you miss the window</h4>' +
+        '<p>Set OSR cannot be spun out in the extractor — the wax breaks before the honey moves. Your options are to press the frames (recovers about half the normal yield) or warm them gently (50-60°C in a hot cupboard, slow but cleaner). Either way the salvage is a fraction of a clean harvest.</p>' +
+        '<p>The lesson most farmland keepers learn the hard way: a super on OSR is not the same job as a super on the summer flow. The harvest action is the calendar, not a choice.</p>'
+      );
+    }
+  }
+
   render();
   return { ok: true, msg };
 }
