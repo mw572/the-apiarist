@@ -1262,22 +1262,36 @@ function _ui_buildApiaryView() {
 
   var hiveGrid = h('div', { class: 'hive-grid yard-row' }, hiveNodes);
 
-  /* When there are no live colonies (just the Add slot), fill the
-     dead parchment with a painted yard scene so the page has weight
-     instead of an ocean of empty cream. */
+  /* When there are no live colonies yet (whether or not the player
+     has a spare hive or a bait hive in stock), fill the dead
+     parchment below the empty-slot cards with a painted yard scene
+     that doubles as a handbook deep-link. Keeps the lower half of
+     the apiary page from reading as broken. */
   var emptyPoster = null;
-  if (colonies.length === 0 && spareCount === 0 && baitCount === 0) {
+  if (colonies.length === 0) {
+    /* Pick the painting that matches the player's site + the
+       current season — same lookup the season-band uses, so the
+       poster is the same world. */
+    var posterPath = siteType
+      ? 'img/plates/scene-' + siteType + '-' + season + '.png'
+      : (fallbackPlateMap[season] || fallbackPlateMap.spring);
+    var posterSub = (spareCount > 0 || baitCount > 0)
+      ? 'You have a hive standing empty. A nucleus from the Market is the gentlest way to begin — or set out a bait hive and let a swarm find you.'
+      : 'Buy a nucleus from the Market or set out a bait hive — your apiary starts with one decision.';
     emptyPoster = h('button', {
       type: 'button',
       class: 'yard-empty-poster plate-link',
       title: 'Read about choosing your first bees',
       onclick: function() { openHandbookArticle('first-bees'); }
     }, [
-      h('img', { src: 'img/plates/scene-spring-buildup.png', alt: '' }),
+      h('img', {
+        src: posterPath, alt: '',
+        onerror: function(e) { if (e && e.target) e.target.src = fallbackScene; }
+      }),
       h('div', { class: 'yep-scrim' }),
       h('div', { class: 'yep-caption' }, [
-        h('div', { class: 'yep-title', text: 'A first hive in spring' }),
-        h('div', { class: 'yep-sub', text: 'Buy a nucleus from the market or set out a bait hive — your apiary starts with one decision.' })
+        h('div', { class: 'yep-title', text: 'A first hive at ' + (siteLabel || 'the apiary') }),
+        h('div', { class: 'yep-sub', text: posterSub })
       ]),
       h('span', { class: 'plate-link-mark', text: '✣' })
     ]);

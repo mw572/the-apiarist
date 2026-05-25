@@ -5706,14 +5706,21 @@ button.plate-link {
    the space below with a painted yard scene so a beginner's first
    game has weight to look at, not an ocean of parchment. */
 .apiary-view-v2 .yard-empty-poster {
-  margin-top: 18px;
+  margin-top: 22px;
   position: relative;
   border-radius: 4px;
   overflow: hidden;
   border: 1px solid var(--rule-soft);
   background: var(--paper-2);
+  width: 100%;
   aspect-ratio: 21 / 9;
-  max-height: 260px;
+  max-height: 420px;
+}
+@media (min-width: 1280px) {
+  .apiary-view-v2 .yard-empty-poster { max-height: 520px; }
+}
+.apiary-view-v2 .yard-empty-poster:hover {
+  filter: brightness(1.03);
 }
 .apiary-view-v2 .yard-empty-poster img {
   display: block;
