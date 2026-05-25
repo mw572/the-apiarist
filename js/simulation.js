@@ -199,6 +199,21 @@ function runWeek() {
               '<p><em>What to watch:</em> ' + _toWatch + '</p>'
       });
 
+      /* First century — 45kg (one hundredweight, near enough one hundred
+         pounds in old money) is the classic British target for a good
+         year from a single hive. Fires once, the first year the keeper
+         clears that line. */
+      if (_honeyKg >= 45 && !Game.flags.seenExplainers['first_century']) {
+        Game.flags.seenExplainers['first_century'] = true;
+        presentables.push({
+          kind: 'modal',
+          title: 'A Hundredweight Year',
+          body: '<p>' + _honeyKg.toFixed(1) + ' kg of honey from the year — your first hundredweight crop. In the old measure that is roughly a hundred pounds, the line beekeepers used to draw between an idle year and a real one.</p>' +
+                '<p>The number is not a ceiling. Patient sites with two flows can give two hundredweight from a strong hive in a good year. But the first time you cross it is the year you stop wondering if the work is worth it.</p>' +
+                '<p>Label these jars by source: spring rape and summer bramble taste nothing alike, and customers who buy supermarket honey have never tasted either of them properly. The story sells the jar.</p>'
+        });
+      }
+
       /* Reset year stats */
       Game.yearStats = { honeyKg: 0, income: 0, coloniesStarted: _aliveNow, coloniesLost: 0 };
       /* Reset yearly honey income tracker so a new annual figure starts fresh */

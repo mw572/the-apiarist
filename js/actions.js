@@ -1446,6 +1446,16 @@ function artificialSwarm(colony) {
   const msg = `Artificial swarm completed. ${colony.name} retains the brood and queen cells; the old queen and flying bees are in the new colony ${newColony.name}. The original will raise a new queen.`;
   logEvent('🐝', msg, 'good');
   toast('Artificial swarm done — the model swarm-control method.', 'good');
+
+  if (!Game.flags.seenExplainers['first_split']) {
+    showExplainer('first_split',
+      'Your First Split',
+      '<p>You now have two colonies where you had one. The split is the moment a beekeeper stops being a keeper of one hive and starts being someone who runs an apiary. The arithmetic is unforgiving: every colony you make from a strong one buys you insurance against the winter losses every keeper eventually takes.</p>' +
+      '<p>Watch the new colony closely over the next three weeks. The virgin queen needs to emerge, fly, mate on a calm afternoon, and start laying. Until you see eggs on a frame, the split is not yet a colony — it is a hope. Open it gently and only when you must: virgin queens do not tolerate disruption.</p>' +
+      '<p>If a queen fails to mate (about one in five attempts in poor weather), you have options: unite the split back into the parent, give it a frame of eggs from elsewhere so it can try again, or buy a mated queen. None of these is a failure — they are the second moves the craft is built on.</p>'
+    );
+  }
+
   render();
   return { ok: true, msg };
 }
@@ -1515,6 +1525,16 @@ function splitColony(colony) {
     : 'the original laying queen';
   const msg = `Split made — ${newColony.name} has bees and brood, and will raise an emergency queen. ${colony.name} retains ${_parentQueenDesc}.`;
   logEvent('🔀', msg, 'good');
+
+  if (!Game.flags.seenExplainers['first_split']) {
+    showExplainer('first_split',
+      'Your First Split',
+      '<p>You now have two colonies where you had one. The split is the moment a beekeeper stops being a keeper of one hive and starts being someone who runs an apiary. The arithmetic is unforgiving: every colony you make from a strong one buys you insurance against the winter losses every keeper eventually takes.</p>' +
+      '<p>Watch the new colony closely over the next three weeks. The virgin queen needs to emerge, fly, mate on a calm afternoon, and start laying. Until you see eggs on a frame, the split is not yet a colony — it is a hope. Open it gently and only when you must: virgin queens do not tolerate disruption.</p>' +
+      '<p>If a queen fails to mate (about one in five attempts in poor weather), you have options: unite the split back into the parent, give it a frame of eggs from elsewhere so it can try again, or buy a mated queen. None of these is a failure — they are the second moves the craft is built on.</p>'
+    );
+  }
+
   render();
   return { ok: true, msg };
 }
