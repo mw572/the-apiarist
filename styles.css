@@ -5661,12 +5661,20 @@ button.plate-link {
          .apiary-main              (apiary identity + hive grid)
          .apiary-side              (mentor + actions + advance bar)
    ============================================================ */
+/* Phase 0 — apiary view scrolls naturally (whole document scrolls,
+   not the inner columns). Old design locked to viewport-height with
+   independent column scroll; once the notebook moved to its own band
+   below the body and the advance bar became sticky-bottom, the
+   constrained-viewport layout collapsed the body to 0 height because
+   the children consumed all the available space. Drop the height
+   lock; let the view be as tall as its contents. */
 .apiary-view-v2 {
   display: flex;
   flex-direction: column;
   height: 100%;
   background: var(--paper);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .apiary-view-v2 > .apiary-season-band {
   flex: none;
@@ -5678,8 +5686,7 @@ button.plate-link {
 .apiary-view-v2 > .apiary-body {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
   overflow: visible;
 }
 .apiary-view-v2 > .apiary-body > .apiary-main {
@@ -5696,19 +5703,19 @@ button.plate-link {
   border-left: 0;
 }
 
-/* Desktop split — main on the left, side panel on the right */
+/* Desktop split — main on the left, mentor rail on the right.
+   No inner-column scroll: the whole page scrolls. */
 @media (min-width: 980px) {
-  .apiary-view-v2 { overflow: hidden; }
   .apiary-view-v2 > .apiary-season-band { height: 320px; }
   .apiary-view-v2 > .apiary-body {
     flex-direction: row;
-    flex: 1 1 auto;
-    overflow: hidden;
+    flex: 0 0 auto;
+    overflow: visible;
   }
   .apiary-view-v2 > .apiary-body > .apiary-main {
     flex: 1 1 auto;
     min-width: 0;
-    overflow-y: auto;
+    overflow: visible;
     padding: 22px 28px 28px;
   }
   .apiary-view-v2 > .apiary-body > .apiary-side {
@@ -5716,7 +5723,7 @@ button.plate-link {
     width: 360px;
     border-top: 0;
     border-left: 1px solid var(--rule-soft);
-    overflow-y: auto;
+    overflow: visible;
   }
 }
 
@@ -6074,7 +6081,9 @@ button.plate-link {
   border-color: var(--ink-soft);
 }
 
-/* Time controls anchored to the bottom of the side column. */
+/* Legacy time-controls (kept for any caller still using the old
+   class outside the apiary-side-v2 wrapper). The new sticky bar
+   below is the one the apiary view actually renders. */
 .apiary-side-v2 .time-controls {
   padding: 16px;
   background: var(--paper);
@@ -6084,6 +6093,123 @@ button.plate-link {
   gap: 8px;
 }
 .apiary-side-v2 .time-controls .btn { width: 100%; }
+
+/* ============================================================
+   PHASE 0 APIARY LAYOUT — three rail jobs split into their own
+   zones so the notebook gets proper card width and the advance
+   buttons are always reachable.
+     .apiary-mentor-rail  — right column inside apiary-body,
+                            single ambient mentor card
+     .apiary-notebook-band — below the apiary-body split, spans
+                             full content width, 2-3 col grid
+     .apiary-advance-bar  — sticky bottom-fixed strip, full width
+   ============================================================ */
+
+/* Mentor rail — narrower than the old combined sidebar since it
+   only carries the mentor card now (no notebook, no advance bar). */
+@media (min-width: 980px) {
+  .apiary-view-v2 > .apiary-body > .apiary-side.apiary-mentor-rail {
+    flex: 0 0 320px;
+    width: 320px;
+    overflow-y: visible;
+  }
+}
+.apiary-mentor-rail .mentor.mentor-card {
+  margin: 18px 18px 18px;
+}
+
+/* Notebook band — full-width row below the apiary-body split.
+   Inside, the notebook entries lay out as a 2-3 column grid so
+   each card has 280px+ width instead of being squeezed into a
+   320px rail with vertical stacking. */
+.apiary-notebook-band {
+  padding: 4px 22px 22px;
+  background: var(--paper);
+}
+.apiary-notebook-band > .notebook {
+  margin: 0 auto;
+  max-width: 1320px;
+}
+.apiary-notebook-band .notebook-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 900px) {
+  .apiary-notebook-band .notebook-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1280px) {
+  .apiary-notebook-band .notebook-body {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.apiary-notebook-band .notebook-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule-soft);
+  margin-bottom: 14px;
+}
+.apiary-notebook-band .notebook-title {
+  font-family: var(--display);
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  color: var(--ink);
+}
+.apiary-notebook-band .notebook-count {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 2px 8px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 10px;
+}
+.apiary-notebook-band .notebook-entry {
+  /* Cards reset margin since they're grid cells now. */
+  margin: 0;
+}
+
+/* Bottom advance bar — full width strip at the end of the apiary
+   view. Static positioning (not sticky) so it doesn't overlay
+   notebook content above it on shorter viewports; the player
+   scrolls down to reach it the same way they scroll for Records or
+   Market content. */
+.apiary-advance-bar {
+  background: var(--paper);
+  border-top: 1px solid var(--rule-soft);
+  padding: 14px 22px 18px;
+  margin-top: 8px;
+}
+.apiary-advance-bar-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.apiary-advance-bar .btn {
+  flex: 0 1 auto;
+  min-width: 200px;
+}
+.apiary-advance-bar .btn-advance {
+  flex: 1 1 auto;
+  max-width: 360px;
+}
+@media (max-width: 720px) {
+  .apiary-advance-bar { padding: 10px 13px 14px; }
+  .apiary-advance-bar-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .apiary-advance-bar .btn { min-width: 0; width: 100%; }
+}
 
 /* ============================================================
    SPARSE-TAB TEACHING CARD — fills the empty parchment on tabs

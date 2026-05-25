@@ -1397,12 +1397,17 @@ function _ui_buildApiaryView() {
     yard
   ]);
 
-  // Sidebar — winter letter / year-on-year / mentor / notebook / advance
-  var sidebar = _ui_buildSidebar();
+  // Phase 0 layout — three rail jobs split into their own zones:
+  //   mentor card     → right rail (single ambient card)
+  //   notebook        → below the split, full content width
+  //   advance buttons → sticky bottom-fixed bar across the page
+  var rail = _ui_buildSidebar();
 
   return h('div', { class: 'apiary-view apiary-view-v2' }, [
     seasonBand,
-    h('div', { class: 'apiary-body' }, [main, sidebar])
+    h('div', { class: 'apiary-body' }, [main, rail.mentor]),
+    rail.notebook ? h('div', { class: 'apiary-notebook-band' }, rail.notebook) : null,
+    rail.timeControls
   ]);
 }
 
@@ -1996,13 +2001,24 @@ function _ui_buildSidebar() {
     onclick: function () { _ui_advanceToEvent(); }
   }, 'Skip to next event');
 
-  return h('div', { class: 'apiary-side apiary-side-v2' }, [
-    winterLetterBlock,
-    yoyBlock,
-    mentorBlock,
-    notebookBlock,
-    h('div', { class: 'time-controls' }, [advanceBtn, skipBtn])
-  ]);
+  /* Phase 0 layout — return the three rail jobs separately so the
+     apiary view can place them in their own zones:
+       mentor  → right rail (single-card, ambient)
+       notebook → below the split, full content width
+       time-controls → sticky bottom-fixed bar across the page
+     Old all-in-one .apiary-side container kept around as a fallback
+     in case anything else queries it (it's now an empty wrapper). */
+  return {
+    mentor: h('div', { class: 'apiary-side apiary-side-v2 apiary-mentor-rail' }, [
+      winterLetterBlock,
+      yoyBlock,
+      mentorBlock
+    ].filter(Boolean)),
+    notebook: notebookBlock,
+    timeControls: h('div', { class: 'apiary-advance-bar' },
+      h('div', { class: 'apiary-advance-bar-inner' }, [advanceBtn, skipBtn])
+    )
+  };
 }
 
 function _ui_advanceToEvent() {
