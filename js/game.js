@@ -341,6 +341,13 @@ function loadGame(){
     if (!raw) return false;
     var g = JSON.parse(raw);
     if (!g || g.version !== 2) return false;
+    /* Same shape gate as loadSaveObject — without it a save with
+       colonies:null silently loads and then render() crashes on
+       .filter (MEGA-D fuzz: 10 of 50 corrupted saves landed
+       incoherent state instead of cleanly failing). */
+    if (!Array.isArray(g.colonies) || !Array.isArray(g.apiaries) || !g.apiaries.length) {
+      return false;
+    }
     _migrateSave(g);
     Game = g;
     if (!Game.ui) Game.ui = { view:'apiary', selectedApiary: Game.apiaries[0].id, selectedColony:null };

@@ -39,6 +39,13 @@ function _act_noise(){ return (Math.random() + Math.random() + Math.random() - 1
  *     nectar,honey,pollen,qcell,disease,mite}, hasQueen:bool, note:string }
  */
 function inspectColony(colony) {
+  /* Null/undefined guard — earlier the function dereferenced
+     colony.queen without checking and crashed when test harnesses
+     or stale callers passed nothing. Return a safe ok:false report. */
+  if (!colony) {
+    return { ok: false, hardBlock: true, blockReason: 'No colony to inspect.',
+             frames: [], findings: [], summary: [], lesson: null, xp: 0 };
+  }
   const report = {
     ok: true,
     weatherOk: true,

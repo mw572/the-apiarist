@@ -890,7 +890,15 @@ function _colony_removeSuperAt(colony, idx) {
  * Returns {ok, msg}
  */
 function extractAndBottle(honeyType, jarCount) {
-  jarCount = Math.max(1, Math.floor(jarCount || 1));
+  /* Reject invalid jar counts up-front. The previous coercion
+     (Math.max(1, Math.floor(qty||1))) silently bottled 1 jar on
+     a 0 or negative input, spending real money on extractor hire
+     and exposing the player to the 25% ferment write-off for an
+     action they never asked for. */
+  if (typeof jarCount !== 'number' || !isFinite(jarCount) || jarCount < 1) {
+    return { ok: false, msg: 'You must bottle at least one jar.' };
+  }
+  jarCount = Math.floor(jarCount);
 
   var KG_PER_JAR = 0.34; // a 227g / half-pound jar holds ~0.34 kg of honey
   var kgNeeded = _econ_roundPrice(jarCount * KG_PER_JAR);

@@ -4188,7 +4188,7 @@ function _ui_openBoxDetail(colony, boxType, boxIdx) {
   function _backToHive() { closeModal(); if (colony.alive) openHiveDetail(colony, 'actions'); }
   var buttons = [{ label: '← Back', act: _backToHive }];
   if (boxType === 'super' && colony.alive) {
-    buttons.unshift({ label: '🍯 Harvest honey', cls: 'btn-leaf', act: function() {
+    buttons.unshift({ label: 'Harvest honey', cls: 'btn-leaf', act: function() {
       closeModal();
       _ui_openHarvestDialog(colony);
     } });
@@ -4660,7 +4660,15 @@ function _ui_openHarvestDialog(colony) {
     ? h('div', { class: 'harv-note' }, '✓ You have a clearer board — bees cleared cleanly, no honey loss.')
     : h('div', { class: 'harv-note warn' }, '⚠ No clearer board — you\'ll brush bees off and lose ~8% of the honey.');
 
+  /* Painted plate header to match the other action dialogs — the
+     harvest dialog used to drop straight into the supers list with
+     no visual anchor. scene-honey-extraction.png sets the mood. */
+  var harvestPlate = h('div', { class: 'ag-art ag-art-plate' },
+    h('img', { class: 'ag-art-img', src: 'img/plates/scene-honey-extraction.png', alt: '' })
+  );
+
   var body = h('div', { class: 'harv-body' }, [
+    harvestPlate,
     h('div', { class: 'harv-intro' }, 'Select which supers to harvest. The box stays on the hive — only the honey is taken:'),
     h('div', { class: 'harv-rows' }, rows),
     boxStaysNote,
@@ -4687,10 +4695,10 @@ function _ui_openHarvestDialog(colony) {
   function backToHive() { closeModal(); if (colony.alive) openHiveDetail(colony, 'actions'); }
 
   openModal({
-    title: '🍯 Harvest honey — ' + colony.name,
+    title: 'Harvest honey — ' + colony.name,
     body: body,
     buttons: [
-      { label: '🍯 Harvest selected', cls: 'btn-leaf', act: doHarvest },
+      { label: 'Harvest selected', cls: 'btn-leaf', act: doHarvest },
       { label: 'Cancel', act: backToHive }
     ]
   });
