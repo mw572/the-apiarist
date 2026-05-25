@@ -250,6 +250,17 @@ function runWeek() {
     var d         = diff();
     var wkInYear  = ((week - 1) % 52) + 1;  // 1..52
 
+    /* Tick down an active pollination contract by one week. When
+       the contract ends, fold up the spray overlay and log the
+       completion so the player sees the work close out. */
+    if (apiary.activeContract && apiary.activeContract.weeksLeft > 0) {
+      apiary.activeContract.weeksLeft -= 1;
+      if (apiary.activeContract.weeksLeft <= 0) {
+        logEvent('✓', apiary.activeContract.name + ' contract complete at ' + apiary.name + '. The blossom is finished.', 'good');
+        apiary.activeContract = null;
+      }
+    }
+
     // Forage for this apiary
     var nectarBase  = forageNectar(week);
     var pollenBase  = foragePollen(week);
@@ -384,9 +395,16 @@ function runWeek() {
 
     /* ---- Pesticide spray ------------------------------------------ */
     // Farmland and orchard sites, spring-summer (weeks 13-30)
+    // An active pollination contract lifts the weekly spray chance
+    // for the contract duration — strawberry farms in particular run
+    // a tight fungicide rotation through the bloom.
     if ((siteType === 'farmland' || siteType === 'orchard') &&
         wkInYear >= 13 && wkInYear <= 30) {
-      var sprayChance = (site.spray || 0) / 52 * 4; // weekly chance
+      var _sprayBase = (site.spray || 0);
+      if (apiary.activeContract && apiary.activeContract.weeksLeft > 0) {
+        _sprayBase += (apiary.activeContract.sprayBoost || 0);
+      }
+      var sprayChance = _sprayBase / 52 * 4; // weekly chance
       if (Math.random() < sprayChance) {
         // A spray hit kills a chunk of foragers in each colony
         for (var ci = 0; ci < cols.length; ci++) {
@@ -1178,6 +1196,35 @@ function buildAdvisor() {
     }
 
     if (k.status === 'ok') okCount++;
+  }
+
+  /* ---- Available pollination contracts ---------------------------- */
+  /* A spring-only nudge. If the player has orchard or farmland
+     apiaries with eligible clients open right now (window + rep +
+     not-yet-taken), surface the count so they don't miss the
+     window. This is high-value income that vanishes if the player
+     advances past the blossom unaware. */
+  if (typeof listPollinationContracts === 'function') {
+    var _polTotal = 0;
+    var _polApiaries = [];
+    for (var _pi = 0; _pi < (Game.apiaries || []).length; _pi++) {
+      var _pa = Game.apiaries[_pi];
+      if (!SITE_TYPES[_pa.siteType]) continue;
+      if (_pa.siteType !== 'orchard' && _pa.siteType !== 'farmland') continue;
+      var _polHere = listPollinationContracts(_pa.id);
+      if (_polHere.length > 0) {
+        _polTotal += _polHere.length;
+        _polApiaries.push(_pa.name);
+      }
+    }
+    if (_polTotal > 0) {
+      items.push({
+        tone: 'info', icon: '🍎',
+        text: _polTotal + ' pollination contract' + (_polTotal === 1 ? '' : 's') +
+          ' open now at ' + _polApiaries.join(' / ') +
+          '. Open the apiary and use the pollination action to take one — the windows close within weeks.',
+      });
+    }
   }
 
   /* ---- Routine seasonal guidance ----------------------------------- */

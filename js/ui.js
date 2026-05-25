@@ -1253,6 +1253,36 @@ function _ui_buildApiaryView() {
     });
   }
 
+  /* Active or available pollination contracts on this apiary — a
+     small status line under the apiary name so the player can see
+     income opportunities (or active spray exposure) at a glance. */
+  var polNode = null;
+  if (apiary && (apiary.siteType === 'orchard' || apiary.siteType === 'farmland')) {
+    var active = apiary.activeContract;
+    var openContracts = (typeof listPollinationContracts === 'function')
+      ? listPollinationContracts(apiary.id) : [];
+    if (active && active.weeksLeft > 0) {
+      polNode = h('button', {
+        class: 'apiary-pollination-chip apiary-pollination-active',
+        onclick: function() { _ui_openPollinationContracts(apiary.id); }
+      }, [
+        h('span', { class: 'apiary-pollination-icon', text: '🍎' }),
+        h('span', { class: 'apiary-pollination-text',
+          text: active.name + ' — ' + active.weeksLeft + ' wk left' })
+      ]);
+    } else if (openContracts.length > 0) {
+      polNode = h('button', {
+        class: 'apiary-pollination-chip apiary-pollination-open',
+        onclick: function() { _ui_openPollinationContracts(apiary.id); }
+      }, [
+        h('span', { class: 'apiary-pollination-icon', text: '🍎' }),
+        h('span', { class: 'apiary-pollination-text',
+          text: openContracts.length + ' pollination contract' +
+            (openContracts.length === 1 ? '' : 's') + ' open' })
+      ]);
+    }
+  }
+
   /* Apiary identity block, editorial layout:
        kicker  →  site type (small caps)
        headline →  apiary name (IM Fell large)
@@ -1262,7 +1292,8 @@ function _ui_buildApiaryView() {
       siteType
         ? h('div', { class: 'apiary-kicker', text: siteLabel })
         : null,
-      h('h2', { class: 'apiary-name', text: apiary ? apiary.name : 'No Apiary' })
+      h('h2', { class: 'apiary-name', text: apiary ? apiary.name : 'No Apiary' }),
+      polNode
     ]),
     switcherBtns.length
       ? h('div', { class: 'apiary-switch' }, switcherBtns)
@@ -1639,6 +1670,96 @@ var HONEY_VISUAL_MAP = {
    an IM Fell letter form on paper-dim until they land. When a plate
    exists, push an <img class="hcp-icon-img"> into the iconBlock and the
    CSS positioning is ready. */
+
+/* Pollination contracts modal — opens from the chip on the apiary
+   identity block. Shows the active contract first (if any), then
+   each available client as a card with crop, rate, weeks, spray
+   boost, and an Accept button. Reputation-locked contracts surface
+   greyed with the gate noted. */
+function _ui_openPollinationContracts(apiaryId) {
+  var apiary = (Game.apiaries || []).find(function(a) { return a.id === apiaryId; });
+  if (!apiary) return;
+  var rep = Game.reputation || 0;
+  var wkInYear = ((Game.week - 1) % 52) + 1;
+
+  var hivesHere = (Game.colonies || []).filter(function(c) {
+    return c.alive && c.apiaryId === apiaryId;
+  }).length;
+
+  var rows = [];
+
+  if (apiary.activeContract && apiary.activeContract.weeksLeft > 0) {
+    var ac = apiary.activeContract;
+    rows.push(h('div', { class: 'pollination-card pollination-active' }, [
+      h('div', { class: 'pollination-head' }, [
+        h('div', { class: 'pollination-name' }, ac.name),
+        h('div', { class: 'pollination-status' }, 'Running — ' + ac.weeksLeft + ' week' + (ac.weeksLeft === 1 ? '' : 's') + ' left')
+      ]),
+      h('div', { class: 'pollination-meta', text: ac.crop + ' · spray boost +' + Math.round(ac.sprayBoost * 100) + '%' })
+    ]));
+  }
+
+  var allClients = (typeof POLLINATION_CLIENTS !== 'undefined') ? POLLINATION_CLIENTS : [];
+  allClients.forEach(function(c) {
+    if (c.siteType !== apiary.siteType) return;
+
+    var inWindow = wkInYear >= c.window[0] && wkInYear <= c.window[1];
+    var meetsRep = rep >= (c.reqRep || 0);
+    var yr = Math.floor((Game.week - 1) / 52) + 1;
+    var taken = (Game.flags && Game.flags.pollinationTaken && Game.flags.pollinationTaken[c.id + '_' + yr]);
+    var isActive = apiary.activeContract && apiary.activeContract.clientId === c.id;
+    if (isActive) return;
+
+    var status;
+    if (taken) status = 'Already taken this year.';
+    else if (!meetsRep) status = 'Locked — needs reputation ' + c.reqRep + ' (you are at ' + rep + ').';
+    else if (!inWindow) status = 'Window closed (weeks ' + c.window[0] + '–' + c.window[1] + ').';
+    else if (hivesHere < 1) status = 'No hives at this apiary yet.';
+    else status = null;
+
+    var income = hivesHere * c.rate;
+    var actionRow;
+    if (status) {
+      actionRow = h('div', { class: 'pollination-locked', text: status });
+    } else {
+      actionRow = h('button', {
+        class: 'btn btn-primary pollination-accept',
+        onclick: function() {
+          var r = acceptPollinationContract(apiaryId, c.id);
+          toast(r.msg, r.ok ? 'good' : 'bad');
+          if (r.ok) { closeModal(); render(); }
+        }
+      }, [
+        h('span', { class: 'pollination-accept-label' }, 'Accept'),
+        h('span', { class: 'pollination-accept-price' }, fmtMoney(income))
+      ]);
+    }
+
+    rows.push(h('div', { class: 'pollination-card' + (status ? ' pollination-card-locked' : '') }, [
+      h('div', { class: 'pollination-head' }, [
+        h('div', { class: 'pollination-name' }, c.name),
+        h('div', { class: 'pollination-rate' }, '£' + c.rate + '/hive · ' + c.weeks + ' wk')
+      ]),
+      h('div', { class: 'pollination-meta' }, c.crop + ' · spray +' +
+        Math.round((c.sprayBoost || 0) * 100) + '%' +
+        (c.reqRep > 0 ? ' · rep ' + c.reqRep + '+' : '')),
+      h('div', { class: 'pollination-blurb', text: c.blurb }),
+      actionRow
+    ]));
+  });
+
+  if (rows.length === 0) {
+    rows.push(h('div', { class: 'pollination-empty' },
+      'No pollination clients match this site type. Orchard apiaries get apple and pear contracts; farmland gets berry farms.'));
+  }
+
+  openModal({
+    title: 'Pollination — ' + apiary.name,
+    body: h('div', { class: 'pollination-list' }, rows),
+    buttons: [{ label: 'Close', cls: 'btn', act: closeModal }]
+  });
+}
+
 function _ui_buildHiveCard(colony) {
   var known = colony.known;
   var curWeek = (typeof Game !== 'undefined' && Game) ? Game.week : 1;

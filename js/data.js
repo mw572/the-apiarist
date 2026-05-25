@@ -263,6 +263,50 @@ const CATALOG = {
   ],
 };
 
+/* --- Pollination clients --------------------------------------------
+   Named contracts the player can take in spring when their apiary
+   sits at an orchard or farmland site. Each carries its own crop,
+   per-hive rate, the wkOfYear window the blossom opens, the spray
+   risk during the contract, and a reputation gate that opens the
+   better-paying ones as the player builds a track record.
+
+   The economics: a single hive on the most generous contract
+   (Bramley Estate, £60/hive) pays roughly the cost of one nuc. Six
+   hives on Manning Berry Farm covers a year's hive insurance, a
+   bait hive and a refractometer. The contracts are how a serious
+   beekeeper builds toward a commercial side income without leaning
+   on honey alone.
+
+   Spray boosts ride on top of the apiary's base site spray rate
+   for the duration of the contract — orchards spray for codling
+   moth and fungal scab; berry farms spray for grey mould. Taking
+   the money means accepting that risk. */
+const POLLINATION_CLIENTS = [
+  { id: 'hatfield-orchard', name: 'Hatfield Old Orchard',
+    siteType: 'orchard', crop: 'apple blossom',
+    rate: 45, weeks: 3, sprayBoost: 0.05, reqRep: 0,
+    window: [14, 18],
+    blurb: 'A six-acre traditional Bramley and Cox orchard run by the third generation of the same family. Steady, reliable, light spray regime.' },
+
+  { id: 'sweet-acre-pears', name: 'Sweet Acre Pears',
+    siteType: 'orchard', crop: 'pear blossom',
+    rate: 40, weeks: 2, sprayBoost: 0.03, reqRep: 5,
+    window: [13, 16],
+    blurb: 'Pears blossom a week earlier than apples — the contract starts in early April. Lower rate, but the bees finish before the apple work begins and you can stack the two.' },
+
+  { id: 'manning-berry', name: 'Manning Berry Farm',
+    siteType: 'farmland', crop: 'strawberry',
+    rate: 55, weeks: 3, sprayBoost: 0.10, reqRep: 10,
+    window: [17, 22],
+    blurb: 'Polytunnel strawberries in late May. Premium rate, heavier spray exposure — they treat for grey mould on a tight rotation. The farmer is fair but demanding.' },
+
+  { id: 'bramley-estate', name: 'Bramley Estate',
+    siteType: 'orchard', crop: 'specialist apple',
+    rate: 60, weeks: 4, sprayBoost: 0.04, reqRep: 40,
+    window: [14, 19],
+    blurb: 'The premium contract: a forty-acre dessert-variety orchard, single buyer for the crop, integrated pest management means spray is rare. Estates of this calibre only sign with keepers they trust — earned through earlier, smaller jobs.' },
+];
+
 /* --- Apiary site types ---------------------------------------------- */
 
 const SITE_TYPES = {

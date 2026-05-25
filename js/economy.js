@@ -1323,56 +1323,127 @@ function makeCutComb(colony) {
  * Once per spring per apiary (tracked via a per-apiary flag).
  * Returns {ok, msg}
  */
-function pollinationContract(apiaryId) {
-  // Find the apiary.
+/* listPollinationContracts(apiaryId) -> [client]
+   Returns the contracts an apiary is currently eligible for.
+   Filters by:
+     - apiary's site type matches the contract's siteType
+     - current week is in the contract's window
+     - player reputation meets the requirement
+     - not already taken this year for this apiary
+   Returns the full client object including {id,name,rate,etc.}. */
+function listPollinationContracts(apiaryId) {
   var apiary = null;
   for (var i = 0; i < Game.apiaries.length; i++) {
     if (Game.apiaries[i].id === apiaryId) { apiary = Game.apiaries[i]; break; }
   }
-  if (!apiary) {
-    return { ok: false, msg: 'Apiary not found.' };
+  if (!apiary) return [];
+
+  var wkInYear = ((Game.week - 1) % 52) + 1;
+  var yr = Math.floor((Game.week - 1) / 52) + 1;
+  var rep = Game.reputation || 0;
+  var taken = (Game.flags && Game.flags.pollinationTaken) || {};
+
+  return (POLLINATION_CLIENTS || []).filter(function(c) {
+    if (c.siteType !== apiary.siteType) return false;
+    if (wkInYear < c.window[0] || wkInYear > c.window[1]) return false;
+    if (rep < (c.reqRep || 0)) return false;
+    if (taken[c.id + '_' + yr]) return false;
+    return true;
+  });
+}
+
+/* acceptPollinationContract(apiaryId, clientId) -> {ok, msg}
+   Player takes a named pollination contract. Pays immediately based
+   on hives at the apiary; flags the contract as taken for the year;
+   raises spray risk on the apiary for the contract duration. */
+function acceptPollinationContract(apiaryId, clientId) {
+  var apiary = null;
+  for (var i = 0; i < Game.apiaries.length; i++) {
+    if (Game.apiaries[i].id === apiaryId) { apiary = Game.apiaries[i]; break; }
+  }
+  if (!apiary) return { ok: false, msg: 'Apiary not found.' };
+
+  var client = (POLLINATION_CLIENTS || []).find(function(c) { return c.id === clientId; });
+  if (!client) return { ok: false, msg: 'That contract is not on the books.' };
+
+  if (apiary.siteType !== client.siteType) {
+    return { ok: false, msg: client.name + ' wants hives at a ' + client.siteType + ' site. ' + apiary.name + ' is a ' + apiary.siteType + ' site.' };
   }
 
-  var siteData = SITE_TYPES[apiary.siteType];
-  if (!siteData || !siteData.pollination) {
-    return {
-      ok: false,
-      msg: apiary.name + ' is a ' + (siteData ? siteData.label.toLowerCase() : 'unknown') + ' site. Pollination contracts are only available at orchard and farmland sites.'
-    };
+  var wkInYear = ((Game.week - 1) % 52) + 1;
+  if (wkInYear < client.window[0] || wkInYear > client.window[1]) {
+    return { ok: false, msg: client.name + ' blossom is not open now. Their window is weeks ' + client.window[0] + '–' + client.window[1] + '.' };
   }
 
-  // Must be spring.
-  var season = seasonOfWeek(Game.week);
-  if (season !== 'spring') {
-    return { ok: false, msg: 'Pollination contracts run in spring, when the blossom is out. Come back in April or May.' };
+  var rep = Game.reputation || 0;
+  if (rep < (client.reqRep || 0)) {
+    return { ok: false, msg: client.name + ' only signs with keepers who have built a reputation of ' + client.reqRep + ' or above. You are at ' + rep + '.' };
   }
 
-  // Once per spring per apiary.
-  if (!Game.flags.pollinationPaid) Game.flags.pollinationPaid = {};
-  var key = apiaryId + '_' + Math.floor(Game.week / 52);
-  if (Game.flags.pollinationPaid[key]) {
-    return { ok: false, msg: 'You have already collected the pollination payment for ' + apiary.name + ' this spring.' };
+  var yr = Math.floor((Game.week - 1) / 52) + 1;
+  if (!Game.flags.pollinationTaken) Game.flags.pollinationTaken = {};
+  var key = client.id + '_' + yr;
+  if (Game.flags.pollinationTaken[key]) {
+    return { ok: false, msg: 'You already took the ' + client.name + ' contract this year.' };
   }
 
-  // Count alive colonies at this apiary.
   var hivesHere = 0;
   for (var c = 0; c < Game.colonies.length; c++) {
     if (Game.colonies[c].alive && Game.colonies[c].apiaryId === apiaryId) hivesHere++;
   }
   if (hivesHere < 1) {
-    return { ok: false, msg: 'There are no hives at ' + apiary.name + ' to offer for pollination.' };
+    return { ok: false, msg: 'There are no hives at ' + apiary.name + ' to offer ' + client.name + '.' };
   }
 
-  var RATE_PER_HIVE = 45; // ~£45/hive — standard UK orchard pollination rate.
-  var income = _econ_roundPrice(hivesHere * RATE_PER_HIVE);
+  var income = _econ_roundPrice(hivesHere * client.rate);
+  earn(income, 'Pollination — ' + client.name);
+  Game.flags.pollinationTaken[key] = true;
 
-  earn(income, 'Pollination contract — ' + apiary.name);
-  Game.flags.pollinationPaid[key] = true;
+  /* Activate the spray-risk overlay on the apiary for the contract
+     duration. The weekly simulation reads activeContract and adds
+     the spray boost on top of the site's base spray rate. */
+  apiary.activeContract = {
+    clientId: client.id,
+    name: client.name,
+    crop: client.crop,
+    weeksLeft: client.weeks,
+    sprayBoost: client.sprayBoost || 0,
+  };
 
-  var msg = 'Pollination contract paid for ' + hivesHere + ' hive' + (hivesHere === 1 ? '' : 's') + ' at ' + apiary.name + ': ' + fmtMoney(income) + '.';
+  /* Reputation nudge — completing contracts grows the network. */
+  Game.reputation = (Game.reputation || 0) + 2;
+
+  var msg = 'Took the ' + client.name + ' contract (' + client.crop + '). ' +
+            hivesHere + ' hive' + (hivesHere === 1 ? '' : 's') + ' × £' + client.rate +
+            ' = ' + fmtMoney(income) + '. Running for ' + client.weeks + ' weeks.';
   logEvent('🍎', msg, 'good');
-  toast(fmtMoney(income) + ' pollination fee collected.', 'good');
+  toast(fmtMoney(income) + ' from ' + client.name + '.', 'good');
+
+  if (Game.flags && Game.flags.seenExplainers && !Game.flags.seenExplainers.first_pollination) {
+    Game.flags.seenExplainers.first_pollination = true;
+    if (typeof openModal === 'function') {
+      setTimeout(function() {
+        openModal({
+          title: 'First Pollination Contract',
+          body: '<p>Your first pollination job. The crop pays the keeper, the keeper pays the hive — and the orchard keeper, the berry grower, the pear estate all know that without bees their year is gone. That negotiating position is half the reason this side of the work exists.</p>' +
+                '<p>Spray risk runs alongside the income. ' + client.name + ' will treat the crop on their own schedule while your bees are foraging; even a careful operator can lose a colony to a sloppy contractor on the next farm over. Check your colonies through the contract window and take the warning if you see chilled brood or piles of dead bees at the entrance.</p>' +
+                '<p>Better-paying contracts open up as your reputation grows: the named estate jobs are reserved for keepers with a track record. Take the smaller jobs first; the bigger names will come.</p>'
+        });
+      }, 400);
+    }
+  }
   return { ok: true, msg: msg };
+}
+
+/* Legacy stub: keep pollinationContract callable so existing saves
+   or in-flight code paths don't break. The new flow goes through
+   acceptPollinationContract with a named client. */
+function pollinationContract(apiaryId) {
+  var avail = listPollinationContracts(apiaryId);
+  if (avail.length === 0) {
+    return { ok: false, msg: 'No pollination contracts available now. Try in spring at an orchard or farmland site.' };
+  }
+  return acceptPollinationContract(apiaryId, avail[0].id);
 }
 
 /* ====================================================================
