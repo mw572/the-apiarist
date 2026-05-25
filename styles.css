@@ -2208,8 +2208,9 @@ button { font-family: var(--sans); cursor: pointer; }
 
 /* ── Painted plate at the top of every Handbook article ─────────────── */
 /* Plates render at their painted intrinsic aspect ratio — landscape
-   stays 16:9, specimens stay square — no enforced crop. Generous
-   max-height keeps it grounded but lets the painting breathe. */
+   stays 16:9, specimens stay square — no enforced crop. The max-height
+   is tuned so that on a 900px-tall desktop viewport the article title
+   and the first paragraph are visible above the fold without scrolling. */
 .article-plate-frame {
   margin: 0 0 22px;
   border: 1px solid var(--ink);
@@ -2223,12 +2224,15 @@ button { font-family: var(--sans); cursor: pointer; }
   display: block;
   width: 100%;
   height: auto;
-  max-height: 720px;
+  max-height: 44vh;
   object-fit: contain;
   object-position: center top;
 }
+@media (min-width: 1440px) {
+  .article-plate { max-height: 520px; }
+}
 @media (max-width: 720px) {
-  .article-plate { max-height: 420px; }
+  .article-plate { max-height: 320px; }
 }
 
 /* ── Glossary pane ──────────────────────────────────────────────────── */
@@ -2622,7 +2626,7 @@ button { font-family: var(--sans); cursor: pointer; }
   .book-article .article-title { font-size: 22px; }
   .article-body { font-size: 14.5px; line-height: 1.65; }
   .article-body p.article-lede::first-letter { font-size: 46px; padding-right: 6px; }
-  .article-plate { max-height: 420px; }
+  .article-plate { max-height: 320px; }
   .glossary-row { grid-template-columns: 1fr; gap: 4px; }
   .glossary-term { font-size: 13px; }
 
@@ -3925,13 +3929,15 @@ button { font-family: var(--sans); cursor: pointer; }
   font-size: 17px;
   font-weight: 400;
   color: var(--ink);
-  line-height: 1.1;
+  line-height: 1.15;
   letter-spacing: 0.2px;
   flex: 1 1 auto;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Wrap rather than ellipsis — short names stay one line, longer
+     ones like "Add a colony" go to two rather than truncate to
+     "Add a col…" on narrow mobile cards. */
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 .hive-grid .hcp-state {
   font-family: var(--serif);
@@ -5885,6 +5891,67 @@ button.plate-link {
   gap: 8px;
 }
 .apiary-side-v2 .time-controls .btn { width: 100%; }
+
+/* ============================================================
+   SPARSE-TAB TEACHING CARD — fills the empty parchment on tabs
+   like Samples (no jars yet), Sell (no jars yet), Neighbours
+   (no ads). Painted plate on the left, a kicker + title +
+   sentence on the right. The page stops feeling abandoned.
+   ============================================================ */
+.sparse-teach {
+  display: flex;
+  gap: 20px;
+  padding: 22px;
+  margin: 22px 0 0;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-soft);
+  border-radius: 3px;
+  align-items: stretch;
+}
+.sparse-teach-img {
+  flex: none;
+  width: 180px;
+  height: 180px;
+  object-fit: cover;
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  background: var(--paper-dim);
+}
+.sparse-teach-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.sparse-teach-kicker {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+.sparse-teach-title {
+  font-family: var(--display);
+  font-size: 22px;
+  line-height: 1.15;
+  color: var(--ink);
+  margin: 0 0 10px;
+}
+.sparse-teach-text {
+  font-family: var(--serif);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 560px;
+}
+@media (max-width: 720px) {
+  .sparse-teach { flex-direction: column; padding: 16px; gap: 14px; }
+  .sparse-teach-img { width: 100%; height: 200px; }
+  .sparse-teach-title { font-size: 19px; }
+}
 
 /* ============================================================
    SITE DOSSIER — the full-page deep dive that opens when you

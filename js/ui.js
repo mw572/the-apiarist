@@ -2584,8 +2584,18 @@ function _ui_marketSellTab() {
     ]));
   });
   if (!jarCards.length) {
-    jarCards.push(h('p', { class: 'market-section-blurb',
-      text: 'No jars ready yet. Inspect a hive, use its Harvest action, then bottle the honey.' }));
+    /* Painterly empty state — a jars plate + a sentence on how to
+       get to "having honey to sell" — rather than a single line of
+       grey text floating in cream void. */
+    jarCards.push(h('div', { class: 'sparse-teach sparse-teach-inline' }, [
+      h('img', { class: 'sparse-teach-img', src: 'img/plates/supplies-jars.png', alt: '' }),
+      h('div', { class: 'sparse-teach-body' }, [
+        h('div', { class: 'sparse-teach-kicker' }, 'Nothing to sell yet' ),
+        h('div', { class: 'sparse-teach-title' }, 'When you have honey, this is where it ships' ),
+        h('p', { class: 'sparse-teach-text' },
+          'Inspect a hive, run a Harvest, then bottle the honey. Once you have jars in stock they appear here for sale through whichever channel pays best — gate sale, farmers’ market, wholesale, supermarket.')
+      ])
+    ]));
   }
   cards.push(h('div', { class: 'market-section' }, [
     h('div', { class: 'market-section-head' }, 'Sell honey'),
@@ -2982,7 +2992,10 @@ function _ui_buildRecordsView(startTab) {
   else if (activeTab === 'samples')  content = _ui_buildSamplesContent();
   else                                content = _ui_buildJournalContent();
 
-  var goalsWidget = _ui_buildGoalsWidget();
+  /* Goals belong with the Journal — that's where the player's
+     long-arc progress lives. Showing them on Finances and Samples
+     too was duplication and made those tabs feel padded out. */
+  var goalsWidget = (activeTab === 'journal') ? _ui_buildGoalsWidget() : null;
   return h('div', { class: 'panel-view records-view' }, [tabBar, content, goalsWidget]);
 }
 
@@ -3074,7 +3087,25 @@ function _ui_buildSamplesContent() {
     ]);
   }
 
-  return h('div', { class: 'samples-content' }, [sendCard, pendingCard, doneCard].filter(Boolean));
+  /* When the player has no jars, no pending samples, and no past
+     reports, the page is just the "send a sample" empty-state card —
+     and below it a vast empty parchment that reads as broken. Add a
+     small painterly teaching card to anchor the page until the
+     records start to fill in. */
+  var teachingCard = null;
+  if (!rows.some(function(n){ return n && n.className !== 'empty-state'; }) && !pending.length && !done.length) {
+    teachingCard = h('div', { class: 'sparse-teach' }, [
+      h('img', { class: 'sparse-teach-img', src: 'img/plates/supplies-jars.png', alt: '' }),
+      h('div', { class: 'sparse-teach-body' }, [
+        h('div', { class: 'sparse-teach-kicker' }, 'Pollen analysis'),
+        h('div', { class: 'sparse-teach-title' }, 'Send a jar to the lab once you have one'),
+        h('p', { class: 'sparse-teach-text' },
+          'A composition report tells you which flowers actually fed the colony when the honey was made — useful for naming a varietal (lime, heather, bramble) and for pricing. Results come back in 4 weeks; £25 per sample.')
+      ])
+    ]);
+  }
+
+  return h('div', { class: 'samples-content' }, [sendCard, pendingCard, doneCard, teachingCard].filter(Boolean));
 }
 
 function _journal_dingbatFor(entry) {
