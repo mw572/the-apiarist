@@ -334,6 +334,40 @@ function _econ_pickTemplate(rng) {
   return pool[pool.length - 1];
 }
 
+/* Weekly standing costs — apiary site fees, BBKA + BDI association
+   fees, insurance. £1/wk per apiary + £0.50/wk per live colony. A
+   1-apiary 1-hive player pays £1.50/wk; a 3-apiary 12-hive sideliner
+   pays ~£9/wk. Spread across the year these add up to a couple
+   hundred quid for a small operation, more for a serious one.
+
+   Why: MEGA-G found that doing nothing earned MORE EV over 2 years
+   than legitimate-but-flawed playstyles. Real beekeeping has
+   non-trivial ongoing overheads (BBKA membership, BDI insurance,
+   apiary rent, the £30 BeeBase registration kept current) — these
+   close that loophole and make neglect actively bleed money.
+
+   Only debits when there's at least one apiary; pre-game state with
+   no apiaries doesn't pay anything. Ledger entry posts once per
+   week with the breakdown. */
+function _applyStandingCosts() {
+  if (!Game || !Array.isArray(Game.apiaries) || Game.apiaries.length === 0) return;
+  var apiaryCount = Game.apiaries.length;
+  var liveColonyCount = (Game.colonies || []).filter(function(c) { return c && c.alive; }).length;
+  var cost = apiaryCount + Math.round(liveColonyCount * 0.5);
+  if (cost <= 0) return;
+  /* Debit even if cash goes negative — these are unavoidable; the
+     game's final-state checks will catch a bankruptcy if it happens. */
+  Game.cash -= cost;
+  Game.ledger.unshift({
+    week: Game.week,
+    desc: 'Weekly standing costs — site fees, BBKA & BDI, insurance (' +
+          apiaryCount + ' apiary' + (apiaryCount === 1 ? '' : ' apiaries') +
+          ', ' + liveColonyCount + ' col' + (liveColonyCount === 1 ? 'ony' : 'onies') + ')',
+    amount: -cost
+  });
+  if (Game.ledger.length > 400) Game.ledger.length = 400;
+}
+
 /* Weekly hook — adds 0-2 new ads, expires old ones. */
 function _refreshMarketplaceAds() {
   if (!Game) return;
@@ -390,11 +424,18 @@ function buyMarketplaceAd(adId) {
 
   /* Effect: either install a colony or top up inventory. */
   if (ad.isColony) {
-    /* Need a spare hive to house the new nuc — refund if not. */
+    /* Need a spare hive to house the new nuc — refund with a 10%
+       handling-fee haircut. Previously the full refund made "buy a
+       nuc with no hive" a costless mistake; MEGA-G found this was
+       net-positive vs control because there was zero friction to
+       discover-by-doing. The seller keeps a small fee for their
+       trouble — a real beekeeper would charge for the wasted trip. */
     if (Game.inventory.spareHives < 1) {
-      earn(ad.price, 'Refund — no spare hive');
+      var haircut = Math.max(2, Math.round(ad.price * 0.10));
+      var refund = ad.price - haircut;
+      earn(refund, 'Refund — no spare hive (£' + haircut + ' handling fee kept)');
       Game.marketplaceAds.splice(idx, 1);
-      return { ok: false, msg: 'You need a spare hive ready before buying a nuc. Refunded £' + ad.price + '.' };
+      return { ok: false, msg: 'You need a spare hive ready before buying a nuc. £' + refund + ' refunded; £' + haircut + ' kept as handling fee.' };
     }
     Game.inventory.spareHives--;
     var newColony = makeColony({

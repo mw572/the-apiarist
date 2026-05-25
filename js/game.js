@@ -432,6 +432,13 @@ function advanceWeek(){
   presentables = presentables.concat(_presentQueue);
   _presentQueue = [];
 
+  /* Weekly standing costs — apiary site fees, BBKA + BDI association
+     fees, insurance. Scales with what you're running. A 1-apiary
+     1-hive player pays £1.50/week; a 3-apiary 12-hive sideliner
+     pays ~£9/week. Closes the "do nothing" loophole MEGA-G found
+     where neglect outperformed legitimate mistakes. */
+  if (typeof _applyStandingCosts === 'function') _applyStandingCosts();
+
   _yearMaintenance();
   _checkWinterSurvival();
   _logOverdueInspections();
