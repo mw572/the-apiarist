@@ -2776,10 +2776,8 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 .ag-plate img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
-/* The old emoji-on-hexagon glyph. Kept for back-compat (still rendered
-   by the action-dialog builder) but visually retired — flat ink mark
-   on paper, no honey gradient, no hexagon clip. The new plate replaces
-   it where art exists. */
+/* Legacy emoji header retired. Action dialogs now always render a
+   painted plate via .ag-art.ag-art-plate. */
 .ag-art {
   width: 32px; height: 32px; margin: 0 auto 14px;
   display: flex; align-items: center; justify-content: center;
@@ -2787,6 +2785,26 @@ button { font-family: var(--sans); cursor: pointer; }
   background: transparent;
   clip-path: none;
   filter: none;
+}
+.ag-art.ag-art-plate {
+  width: 100%; height: auto; max-height: 240px;
+  margin: 0 0 22px;
+  display: block;
+  border: 1px solid var(--ink);
+  background: var(--paper-2);
+  overflow: hidden;
+}
+.ag-art-img {
+  display: block;
+  width: 100%;
+  height: 240px;
+  max-height: 240px;
+  object-fit: cover;
+  object-position: center;
+}
+@media (max-width: 720px) {
+  .ag-art.ag-art-plate { max-height: 180px; }
+  .ag-art-img { height: 180px; max-height: 180px; }
 }
 
 .ag-sec {

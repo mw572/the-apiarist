@@ -1277,6 +1277,11 @@ function _ui_buildApiaryView() {
 
   // Spare hive slots — one card per empty hive box awaiting a colony.
   // These are YOUR kit standing ready, not a generic "go shop" CTA.
+  // No painted img — the .hcp-icon-img selector on .apiary-view-v2
+  // stretches that to full card width, which made the empty-hive
+  // tile dominate the whole column. The ⌂ glyph reads cleanly at
+  // small sizes; the painted ambience is carried by the yard-empty
+  // poster below.
   var spareCount = (Game.inventory && Game.inventory.spareHives) || 0;
   for (var si2 = 0; si2 < spareCount; si2++) {
     hiveNodes.push(h('div', {
@@ -1284,10 +1289,7 @@ function _ui_buildApiaryView() {
       title: 'Your hive — bring bees home from the Market',
       onclick: function() { Game.ui.view = 'market'; _ui_marketTab = 'bees'; render(); }
     }, [
-      h('div', { class: 'hcp-icon hcp-icon-empty' }, [
-        h('img', { class: 'hcp-icon-img', src: 'img/plates/hive-state-strong.png', alt: '' }),
-        h('span', { class: 'hcp-icon-mark' }, '⌂')
-      ]),
+      h('div', { class: 'hcp-icon hcp-icon-empty' }, h('span', { class: 'hcp-icon-mark' }, '⌂')),
       h('div', { class: 'hcp-body' }, [
         h('div', { class: 'hcp-name-row' }, h('span', { class: 'hcp-name', text: 'Your hive' })),
         h('div', { class: 'hcp-state', text: 'Ready for bees — buy a nucleus' })
@@ -4694,13 +4696,48 @@ function _ui_openHarvestDialog(colony) {
   });
 }
 
+/* Each action gets a painted plate at the top of its dialog instead
+   of an emoji. Mapped to existing plates wherever a tight match
+   exists. Anything not mapped falls back to the mentor portrait so
+   we never render a sweet/random emoji as a header. */
+var ACTION_PLATES = {
+  inspect:         'frame-healthy-capped.png',
+  feed:            'supplies-sugar.png',
+  treat:           'supplies-varroa-treatment.png',
+  addSuper:        'frame-super.png',
+  removeSuper:     'frame-super.png',
+  addBroodBox:     'supplies-brood-box.png',
+  entrance:        'tool-bait-hive.png',
+  artificialSwarm: 'frame-queen-cells-swarm.png',
+  demareeMethod:   'frame-queen-cells-swarm.png',
+  demareeCheck:    'frame-healthy-capped.png',
+  removeQueenCells: 'frame-queen-cells-emergency.png',
+  nucleusMethod:   'tool-nucleus-box.png',
+  split:           'tool-nucleus-box.png',
+  clipQueen:       'bee-italian-queen.png',
+  requeen:         'bee-italian-queen.png',
+  markQueen:       'bee-italian-queen.png',
+  unite:           'supplies-newspaper.png',
+  monitorVarroa:   'frame-mite-damage.png',
+  harvest:         'scene-honey-extraction.png',
+  sellColony:      'scene-neighbours.png',
+  catchSwarm:      'tool-bait-hive.png',
+  rearQueens:      'scene-queen-rearing.png',
+  heftColony:      'hive-state-strong.png',
+  fitClearerBoard: 'tool-clearer-board.png',
+  moveHive:        'hive-state-strong.png'
+};
+
 function _ui_actionDialog(key, colony) {
   if (key === 'harvest') { _ui_openHarvestDialog(colony); return; }
   var g = (window.ACTION_GUIDE || {})[key];
   if (!g) { var rc = _ui_actionControls(key, colony); if (rc.run) { var rr = rc.run(); if (rr && rr.msg) toast(rr.msg, rr.ok ? 'good' : 'bad'); render(); } return; }
 
   var body = h('div', { class: 'action-guide' });
-  body.appendChild(h('div', { class: 'ag-art' }, g.icon || '•'));
+  var platePath = ACTION_PLATES[key] || 'mentor-portrait.png';
+  body.appendChild(h('div', { class: 'ag-art ag-art-plate' },
+    h('img', { class: 'ag-art-img', src: 'img/plates/' + platePath, alt: '' })
+  ));
 
   function sec(label, txt) {
     if (!txt) return;
