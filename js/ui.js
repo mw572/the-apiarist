@@ -5354,22 +5354,37 @@ function _openInspectionModal(colony, report) {
 
       var advice = _ui_inspectionAdvice(colony, report);
       if (advice.length) {
-        var recRows = advice.map(function(a2) {
-          var kids = [
-            h('span', { class: 'ico' }, a2.action ? '➡️' : '✓'),
-            h('span', { class: 'rec-text', text: a2.text })
-          ];
-          if (a2.action) {
-            kids.push(h('button', {
-              class: 'btn btn-sm btn-primary', text: 'Do this',
-              onclick: function() { closeModal(); render(); _ui_actionDialog(a2.action, colony); }
-            }));
-          }
-          return h('div', { class: 'inspect-rec' }, kids);
+        /* Painterly recommendation cards. Each one carries the painted
+           plate of the action it suggests (so feed → sugar sack,
+           treat → varroa strips, requeen → italian queen), a tone-
+           coloured left rule (urgent / soon / note), a one-paragraph
+           why-it-matters body, and a verb-labelled CTA that opens
+           the matching action dialog. No more "➡ Do this" rows. */
+        var recCards = advice.map(function(a2) {
+          var plate = (a2.action && ACTION_PLATES && ACTION_PLATES[a2.action])
+            ? ACTION_PLATES[a2.action]
+            : 'mentor-portrait.png';
+          var verb = _ui_actionVerb(a2.action) || 'Open';
+          var tone = a2.tone || (a2.action ? 'warn' : 'info');
+          var card = h('div', { class: 'inspect-rec inspect-rec-card tone-' + tone }, [
+            h('div', { class: 'rec-plate' },
+              h('img', { class: 'rec-plate-img', src: 'img/plates/' + plate, alt: '' })),
+            h('div', { class: 'rec-body' }, [
+              h('div', { class: 'rec-tone' }, ({ bad: 'Urgent', warn: 'Soon', info: 'Note' }[tone] || 'Note')),
+              h('div', { class: 'rec-text', text: a2.text }),
+              a2.action
+                ? h('div', { class: 'rec-actions' }, h('button', {
+                    class: 'rec-cta',
+                    onclick: function() { closeModal(); render(); _ui_actionDialog(a2.action, colony); }
+                  }, verb + ' →'))
+                : null
+            ])
+          ]);
+          return card;
         });
         modalBody.appendChild(h('div', { class: 'inspect-next' }, [
           h('h4', {}, 'What to do next'),
-          h('div', {}, recRows)
+          h('div', { class: 'inspect-recs' }, recCards)
         ]));
       }
     }
@@ -5469,101 +5484,93 @@ function _ui_frameQuestion(frame, colony) {
 
 /* Render the question for the lifted frame, grade the answer, and teach. */
 function _ui_buildFrameQA(frame, idx, colony, answers, rebuild, teaching) {
+  /* The 4-choice quiz mechanic is gone. Inspection is observation,
+     not testing. Lift the frame, see what's on it, move on. */
   var qa = _ui_frameQuestion(frame, colony);
-
-  /* once the player has completed a full inspection, drop the quiz and
-     just show the reading of the frame directly */
-  if (!teaching) {
-    var ans = null;
-    for (var ci = 0; ci < qa.options.length; ci++) {
-      if (qa.options[ci].correct) { ans = qa.options[ci]; break; }
-    }
-    return h('div', { class: 'frame-reading' }, [
-      h('b', {}, 'What you are looking at: '),
-      h('span', { text: ans ? ans.feedback : '' })
-    ]);
+  var ans = null;
+  for (var ci = 0; ci < qa.options.length; ci++) {
+    if (qa.options[ci].correct) { ans = qa.options[ci]; break; }
   }
-
-  var answered = answers[idx];
-  var wrap = h('div', { class: 'qa-block' });
-  wrap.appendChild(h('div', { class: 'qa-q' }, qa.question));
-
-  var opts = h('div', { class: 'qa-options' });
-  qa.options.forEach(function(opt, oi) {
-    var cls = 'qa-option';
-    if (answered) {
-      if (oi === answered.chosen) cls += answered.correct ? ' chosen-correct' : ' chosen-wrong';
-      else if (opt.correct) cls += ' is-answer';
-      else cls += ' dim';
-    } else {
-      cls += ' live';
-    }
-    var btn = h('div', { class: cls }, opt.label);
-    if (!answered) {
-      btn.onclick = function() {
-        answers[idx] = { chosen: oi, correct: !!opt.correct };
-        rebuild();
-      };
-    }
-    opts.appendChild(btn);
-  });
-  wrap.appendChild(opts);
-
-  if (answered) {
-    var chosen = qa.options[answered.chosen];
-    wrap.appendChild(h('div', { class: 'qa-feedback ' + (answered.correct ? 'right' : 'wrong') }, [
-      h('b', {}, answered.correct ? 'Correct. ' : 'Not quite. '),
-      h('span', { text: chosen.feedback })
-    ]));
-  }
-  return wrap;
+  return h('div', { class: 'frame-reading' }, [
+    h('b', {}, 'What you are looking at: '),
+    h('span', { text: ans ? ans.feedback : '' })
+  ]);
 }
 
-/* Recommended next actions drawn from what the inspection found */
+/* Verb label for the CTA button on a next-action recommendation.
+   Maps action key → the actual word a beekeeper would say. */
+function _ui_actionVerb(key) {
+  var verbs = {
+    inspect: 'Inspect', feed: 'Feed', treat: 'Treat',
+    addSuper: 'Add a super', removeSuper: 'Take supers off',
+    addBroodBox: 'Add a brood box', entrance: 'Reduce entrance',
+    artificialSwarm: 'Run artificial swarm', demareeMethod: 'Demaree it',
+    demareeCheck: 'Check the Demaree', removeQueenCells: 'Remove queen cells',
+    nucleusMethod: 'Make a split nuc', split: 'Split it',
+    clipQueen: 'Clip the queen', requeen: 'Requeen', markQueen: 'Mark the queen',
+    unite: 'Unite with newspaper', monitorVarroa: 'Take a varroa wash',
+    harvest: 'Harvest', sellColony: 'Sell colony',
+    catchSwarm: 'Set out bait', rearQueens: 'Graft queen cells',
+    heftColony: 'Heft', fitClearerBoard: 'Fit clearer board',
+    moveHive: 'Move the hive'
+  };
+  return verbs[key] || null;
+}
+
+/* Recommended next actions drawn from what the inspection found.
+   Each carries a `tone` (bad / warn / info) that drives the
+   coloured rule on the rendered card. */
 function _ui_inspectionAdvice(colony, report) {
   var k = colony.known || {};
   var out = [];
   if (k.queenCells === 'swarm') {
-    out.push({ action: 'artificialSwarm',
-      text: 'Swarm cells are present — carry out swarm control now, before the colony leaves with half its bees.' });
+    out.push({ action: 'artificialSwarm', tone: 'bad',
+      text: 'Swarm cells are present. Carry out swarm control today, before the colony leaves with half its bees.' });
   }
   var virgInSitu = colony.queenCells &&
     (colony.queenCells.type === 'postSwarm' || colony.queenCells.type === 'emergency') &&
     colony.queenCells.state !== 'emerged';
   if (!virgInSitu && (!colony.queen || !colony.queen.present ||
       (colony.queen && colony.queen.state === 'dronelayer') || colony.layingWorkers)) {
-    out.push({ action: 'requeen',
-      text: 'The colony has a serious queen problem — requeen it, or unite it with a strong colony.' });
+    out.push({ action: 'requeen', tone: 'bad',
+      text: 'The colony has a serious queen problem — requeen it, or unite it with a strong neighbour before laying workers set in.' });
   }
   if (virgInSitu && (!colony.queen || !colony.queen.present)) {
-    out.push({ action: null,
-      text: 'No mated queen yet, but virgin cells are present — give her time to emerge and mate before intervening.' });
+    out.push({ action: null, tone: 'info',
+      text: 'No mated queen yet, but virgin cells are present. Give her time to emerge and mate — three weeks of patience is the right move here.' });
   }
-  if (k.stores === 'critical' || k.stores === 'low') {
-    out.push({ action: 'feed',
-      text: 'Stores are ' + k.stores + ' — feed the colony so it does not starve.' });
+  if (k.stores === 'critical') {
+    out.push({ action: 'feed', tone: 'bad',
+      text: 'Stores are critically low. Feed today — a colony can starve in three or four days from this state.' });
+  } else if (k.stores === 'low') {
+    out.push({ action: 'feed', tone: 'warn',
+      text: 'Stores are running low. Feed this week to head off any starvation risk.' });
   }
   if (k.disease) {
     var dn = (typeof DISEASES !== 'undefined' && DISEASES[k.disease]) ? DISEASES[k.disease].name : k.disease;
-    out.push({ action: null,
-      text: 'Signs of ' + dn + ' were seen — read the Handbook and act on it; some diseases are serious.' });
+    var notifiable = (typeof DISEASES !== 'undefined' && DISEASES[k.disease] && DISEASES[k.disease].notifiable);
+    out.push({ action: null, tone: notifiable ? 'bad' : 'warn',
+      text: 'Signs of ' + dn + ' were seen. ' + (notifiable
+        ? 'This is notifiable — contact your bee inspector before doing anything else.'
+        : 'Read the Handbook entry, then plan a comb change or a requeen.') });
   }
   if (k.varroaSign === 'high' || k.varroaSign === 'severe') {
-    out.push({ action: (colony.supers > 0 ? 'harvest' : 'treat'),
-      text: 'Varroa is ' + k.varroaSign + ' — ' + (colony.supers > 0
-        ? 'take the honey supers off, then treat.' : 'treat the colony before the winter bees are reared.') });
+    out.push({ action: (colony.supers > 0 ? 'harvest' : 'treat'), tone: 'bad',
+      text: 'Varroa is ' + k.varroaSign + '. ' + (colony.supers > 0
+        ? 'Take the honey supers off first, then treat — never put treatment in over a crop.'
+        : 'Treat now, before the winter bees are reared mite-damaged.') });
   } else if (k.varroaSign === 'unchecked') {
-    out.push({ action: 'monitorVarroa',
-      text: 'Varroa has not been measured here — take a sample so you know where you stand.' });
+    out.push({ action: 'monitorVarroa', tone: 'warn',
+      text: 'Varroa has not been measured here. Take a wash or a drop count so you know where you stand before the autumn window closes.' });
   }
   var cong = (typeof colonyCongestion === 'function') ? colonyCongestion(colony) : 0;
   if (cong > 0.7 && colony.alive) {
-    out.push({ action: 'addSuper',
-      text: 'The hive is crowded — add a super so the bees have room and are less likely to swarm.' });
+    out.push({ action: 'addSuper', tone: 'warn',
+      text: 'The brood box is crowded. Add a super so the bees have room to store and are less likely to make swarm cells in the next ten days.' });
   }
   if (!out.length) {
-    out.push({ action: null,
-      text: 'Nothing needs doing today. Close the hive up gently and let them get on with it.' });
+    out.push({ action: null, tone: 'info',
+      text: 'Nothing needs doing today. Close the hive up gently and let them get on with it — this is the rarest entry in the notebook and the one to enjoy.' });
   }
   return out;
 }

@@ -2999,19 +2999,86 @@ button { font-family: var(--sans); cursor: pointer; }
   background: var(--paper-2); border: 1px solid var(--line); border-radius: 9px;
   padding: 11px 14px; margin-bottom: 12px;
 }
-.inspect-findings h4, .inspect-next h4 { color: var(--honey-dk); margin-bottom: 7px; font-size: 15px; }
+.inspect-findings h4, .inspect-next h4 {
+  font-family: var(--display); color: var(--ink); font-weight: 400;
+  margin: 0 0 14px; font-size: 22px; letter-spacing: 0.3px;
+}
 .inspect-next {
-  background: var(--warn-bg); border: 1px solid var(--honey);
-  border-radius: 9px; padding: 11px 14px; margin-top: 12px;
+  background: transparent;
+  border: 0; border-top: 1px solid var(--rule-soft);
+  border-radius: 0;
+  padding: 22px 0 4px;
+  margin-top: 22px;
 }
-.inspect-rec {
-  display: flex; align-items: center; gap: 9px; font-size: 13px;
-  padding: 7px 0; border-top: 1px dashed var(--line-dk);
+.inspect-recs {
+  display: flex; flex-direction: column;
+  gap: 12px;
 }
-.inspect-rec:first-child { border-top: none; }
-.inspect-rec .ico { flex: none; font-size: 14px; }
-.inspect-rec .rec-text { flex: 1; }
-.inspect-rec button { flex: none; }
+/* Painterly recommendation card — painted plate on the left, tone-
+   coloured left rule signalling urgency, IM Fell tone label, prose
+   body, verb-labelled CTA bottom-right. Replaces the old "➡ + row
+   + Do this button" pattern that read as generic. */
+.inspect-rec-card {
+  display: flex; gap: 16px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-soft);
+  border-left: 4px solid var(--rule-soft);
+  border-radius: 3px;
+  padding: 14px 16px;
+  align-items: stretch;
+}
+.inspect-rec-card.tone-bad  { border-left-color: var(--brick, #8b3a1a); }
+.inspect-rec-card.tone-warn { border-left-color: var(--ochre, #a87830); }
+.inspect-rec-card.tone-info { border-left-color: var(--moss, #5a6a3a); }
+.inspect-rec-card .rec-plate {
+  flex: none;
+  width: 96px; height: 96px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--paper-dim);
+}
+.inspect-rec-card .rec-plate-img {
+  display: block; width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+}
+.inspect-rec-card .rec-body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  gap: 6px;
+}
+.inspect-rec-card .rec-tone {
+  font-family: var(--sans);
+  font-size: 10px; letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.inspect-rec-card.tone-bad  .rec-tone { color: var(--brick, #8b3a1a); }
+.inspect-rec-card.tone-warn .rec-tone { color: var(--ochre-deep, #7a5418); }
+.inspect-rec-card .rec-text {
+  font-family: var(--serif);
+  font-size: 14.5px; line-height: 1.55;
+  color: var(--ink);
+}
+.inspect-rec-card .rec-actions {
+  display: flex; justify-content: flex-end;
+  margin-top: 6px;
+}
+.inspect-rec-card .rec-cta {
+  display: inline-flex; align-items: center;
+  padding: 7px 16px;
+  background: var(--ink); color: var(--paper);
+  border: 0; border-radius: 2px;
+  font-family: var(--display); font-size: 14px; letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background-color 180ms ease;
+}
+.inspect-rec-card .rec-cta:hover { background: var(--ochre-deep); }
+@media (max-width: 720px) {
+  .inspect-rec-card { gap: 12px; padding: 12px 13px; }
+  .inspect-rec-card .rec-plate { width: 72px; height: 72px; }
+  .inspect-rec-card .rec-text { font-size: 13.5px; }
+}
 .inspect-summary li.sum-urgent { color: var(--bad); font-weight: 700; }
 
 /* ====================================================================
