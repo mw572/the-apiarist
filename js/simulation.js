@@ -297,8 +297,14 @@ function runWeek() {
       };
       var _lines = _flavourLines[_ccid];
       if (_lines && _lines.length) {
-        var _flavourLine = _lines[(_wkInContract - 1) % _lines.length];
-        logEvent('🍎', _flavourLine, 'plain');
+        /* Offset the rotation by the in-game year so a returning
+           contract in Y2/Y3 surfaces a different set of lines from
+           the first run. The campaign caught the same three lines
+           repeating across two Hatfield contracts because the
+           rotation always started at index 0. */
+        var _yrSeed = Math.floor((Game.week - 1) / 52);
+        var _idx = (_wkInContract - 1 + _yrSeed * 2) % _lines.length;
+        logEvent('🍎', _lines[_idx], 'plain');
       }
       apiary.activeContract.weeksLeft -= 1;
       if (apiary.activeContract.weeksLeft <= 0) {
