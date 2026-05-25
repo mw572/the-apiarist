@@ -2408,11 +2408,24 @@ function _ui_marketSuppliesTab() {
    the Market, even when the ads list is empty. Real-player ads will
    slot into the same plumbing when multiplayer ships.
    ==================================================================== */
+/* Ad kind → painted plate. Falls back to the village scene for any
+   kind we haven't mapped, so the card never renders empty. */
+var NEIGH_PLATES = {
+  usedSuper:    'img/plates/frame-super.png',
+  usedBroodBox: 'img/plates/supplies-brood-box.png',
+  usedHive:     'img/plates/hive-state-strong.png',
+  usedBait:     'img/plates/tool-bait-hive.png',
+  sugarBag:     'img/plates/supplies-sugar.png',
+  jarLot:       'img/plates/supplies-jars.png',
+  nucLocal:     'img/plates/bee-local-mongrel.png',
+  nucBuckfast:  'img/plates/bee-buckfast-queen.png'
+};
+
 function _ui_marketNeighboursTab() {
   var ads = (Game.marketplaceAds || []).slice();
   ads.sort(function (a, b) { return b.postedWeek - a.postedWeek; });
 
-  var heroPlate = (MARKET_PLATES.neighbours && MARKET_PLATES.neighbours.scene) || null;
+  var heroPlate = (MARKET_PLATES.neighbours && MARKET_PLATES.neighbours.scene) || 'img/plates/scene-neighbours.png';
   var hero = h('div', {
     class: 'neigh-hero',
     style: heroPlate ? { backgroundImage: 'url("' + heroPlate + '")' } : null
@@ -2427,37 +2440,46 @@ function _ui_marketNeighboursTab() {
 
   var body;
   if (!ads.length) {
-    body = h('div', { class: 'neigh-empty' }, [
-      h('p', { class: 'neigh-empty-line',
-        text: 'No ads from neighbours this week.' }),
-      h('p', { class: 'neigh-empty-sub',
-        text: 'They post when they have surplus kit or spare nucs — call back in a week or two.' })
+    body = h('div', { class: 'sparse-teach sparse-teach-inline' }, [
+      h('img', { class: 'sparse-teach-img', src: 'img/plates/scene-neighbours.png', alt: '' }),
+      h('div', { class: 'sparse-teach-body' }, [
+        h('div', { class: 'sparse-teach-kicker' }, 'Quiet week on the board'),
+        h('div', { class: 'sparse-teach-title' }, 'No ads up this week'),
+        h('p', { class: 'sparse-teach-text' },
+          'Neighbours post when they have surplus kit, end-of-bulk sugar, or spare nucs from a swarm catch. Spring sees the most listings — call back in a week or two. Each ad runs for three weeks before it closes.')
+      ])
     ]);
   } else {
     var rows = ads.map(function (ad) {
       var weeksLeft = 3 - (Game.week - ad.postedWeek);
+      var closing = weeksLeft <= 0;
       var badge = ad.isColony
         ? h('span', { class: 'neigh-strain-pill' },
             (HIVE_STRAINS && HIVE_STRAINS[ad.strain] && HIVE_STRAINS[ad.strain].short || 'Local'))
         : null;
-      return h('div', { class: 'neigh-ad' }, [
-        h('div', { class: 'neigh-seller', text: ad.seller }),
-        h('div', { class: 'neigh-ad-head' }, [
-          h('div', { class: 'neigh-name' }, [ ad.name, badge ]),
-          h('span', { class: 'neigh-price' }, '£' + ad.price)
-        ]),
-        h('div', { class: 'neigh-meta' },
-          (weeksLeft <= 0 ? 'Closing today' : (weeksLeft + ' week' + (weeksLeft === 1 ? '' : 's') + ' left'))),
-        h('div', { class: 'neigh-desc', text: ad.desc }),
-        h('div', { class: 'neigh-actions' }, [
-          h('button', {
-            class: 'plate-buy plate-buy-compact',
-            onclick: function () {
-              var r = buyMarketplaceAd(ad.id);
-              toast(r.msg, r.ok ? 'good' : 'bad');
-              if (r.ok) render();
-            }
-          }, 'Buy from neighbour')
+      var platePath = NEIGH_PLATES[ad.kind] || 'img/plates/scene-neighbours.png';
+      return h('div', { class: 'neigh-ad' + (closing ? ' neigh-ad-closing' : '') }, [
+        h('div', { class: 'neigh-ad-plate' },
+          h('img', { class: 'neigh-ad-plate-img', src: platePath, alt: '' })),
+        h('div', { class: 'neigh-ad-body' }, [
+          h('div', { class: 'neigh-seller', text: ad.seller }),
+          h('div', { class: 'neigh-ad-head' }, [
+            h('div', { class: 'neigh-name' }, [ ad.name, badge ]),
+            h('span', { class: 'neigh-price' }, '£' + ad.price)
+          ]),
+          h('div', { class: 'neigh-meta' + (closing ? ' neigh-meta-closing' : '') },
+            (closing ? 'Closing today' : (weeksLeft + ' week' + (weeksLeft === 1 ? '' : 's') + ' left'))),
+          h('div', { class: 'neigh-desc', text: ad.desc }),
+          h('div', { class: 'neigh-actions' }, [
+            h('button', {
+              class: 'plate-buy plate-buy-compact',
+              onclick: function () {
+                var r = buyMarketplaceAd(ad.id);
+                toast(r.msg, r.ok ? 'good' : 'bad');
+                if (r.ok) render();
+              }
+            }, 'Buy from neighbour')
+          ])
         ])
       ]);
     });

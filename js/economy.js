@@ -344,13 +344,15 @@ function _refreshMarketplaceAds() {
     return Game.week - a.postedWeek < 3;
   });
 
-  /* Spawn up to 2 new ads with a 60% chance for the first, 30% for the
-     second — keeps the board lively without overwhelming. */
+  /* Spawn up to 3 new ads — keeps the board reliably populated so
+     a returning player almost always sees fresh listings. Cadence:
+     70% / 40% / 20% expected ~1.3 ads per week, board caps at 6. */
   var rng = Math.random;
   if (!Game.flags.nextAdId) Game.flags.nextAdId = 1;
   var added = 0;
-  if (rng() < 0.6) added++;
-  if (rng() < 0.3) added++;
+  if (rng() < 0.7) added++;
+  if (rng() < 0.4) added++;
+  if (rng() < 0.2) added++;
   for (var i = 0; i < added && Game.marketplaceAds.length < 6; i++) {
     var tpl = _econ_pickTemplate(rng);
     var price = Math.round(tpl.price[0] + rng() * (tpl.price[1] - tpl.price[0]));
