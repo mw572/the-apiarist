@@ -1445,7 +1445,11 @@ function _ui_buildApiaryView() {
   });
   var dock = _ui_buildApiaryDock();
 
-  return h('div', { class: 'apiary-view apiary-view-v3' }, [
+  /* apiary-view-v2 retained as a class alongside v3 so every CSS
+     rule scoped to v2 (yard-empty-poster aspect-ratio, hive-card
+     styling, hive-grid breakpoints) continues to apply. v3 only
+     adds the new chrome (hero / scroll / dock). */
+  return h('div', { class: 'apiary-view apiary-view-v2 apiary-view-v3' }, [
     hero,
     h('div', { class: 'apiary-scroll' }, [main]),
     dock
