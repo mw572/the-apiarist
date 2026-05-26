@@ -746,9 +746,11 @@ function _ui_buildNavbar() {
   /* Painterly-treatise navbar — no emoji icons, just labels in IM Fell.
      The painted plates carry visual weight inside each view; the nav
      is restrained book-tab marks at the foot of the page. */
+  /* Phase 12 sweep: single location for now, so the Map tab goes
+     away. Four tabs across the chrome — top on desktop, bottom on
+     mobile (CSS handles the placement responsively). */
   var navItems = [
     { key: 'apiary',   label: 'Apiary',   pip: badCount > 0 ? badCount : 0 },
-    { key: 'map',      label: 'Map'    },
     { key: 'market',   label: 'Market' },
     { key: 'handbook', label: 'Handbook' },
     { key: 'records',  label: 'Records' }
@@ -1287,18 +1289,19 @@ function _ui_buildApiaryView() {
        kicker  →  site type (small caps)
        headline →  apiary name (IM Fell large)
        switcher → present only when there are 2+ apiaries */
-  var apiaryHead = h('div', { class: 'apiary-head apiary-identity apiary-identity-v2' }, [
-    h('div', { class: 'apiary-identity-text' }, [
-      siteType
-        ? h('div', { class: 'apiary-kicker', text: siteLabel })
-        : null,
-      h('h2', { class: 'apiary-name', text: apiary ? apiary.name : 'No Apiary' }),
-      polNode
-    ]),
-    switcherBtns.length
-      ? h('div', { class: 'apiary-switch' }, switcherBtns)
-      : null
-  ]);
+  /* Phase 12: kicker+name moved into the v3 hero. This residual
+     "apiary-head" only renders if there is something else to show
+     (the pollination chip, or an apiary switcher for multi-site
+     saves). Otherwise it stays empty and the main block opens
+     directly into the hive grid. */
+  var apiaryHeadChildren = [];
+  if (polNode || switcherBtns.length) {
+    if (polNode) apiaryHeadChildren.push(h('div', { class: 'apiary-head-aside' }, polNode));
+    if (switcherBtns.length) apiaryHeadChildren.push(h('div', { class: 'apiary-switch' }, switcherBtns));
+  }
+  var apiaryHead = apiaryHeadChildren.length
+    ? h('div', { class: 'apiary-head apiary-identity-trim' }, apiaryHeadChildren)
+    : null;
 
   /* ----------------------------------------------------------------
      3. Hive grid — clean grid of colony cards (no cartoon SVG). ---- */
@@ -1426,28 +1429,187 @@ function _ui_buildApiaryView() {
     apiaryHead,
     pendingSwarmAlert,
     yard
+  ].filter(Boolean));
+
+  /* Phase 12 layout — final v2 spec.
+     Structure: hero (with painted scene + paper backplate)
+                  -> board (scrolls)
+                  -> dock (collapsed by default; expands into the
+                           sheet with mentor + notes + actions).
+     The old side rail with mentor+notebook is gone; that content
+     moved into the bottom sheet. */
+  var hero = _ui_buildApiaryHeroV3({
+    apiary: apiary, season: season, scenePath: scenePath,
+    siteLabel: siteLabel, forageNote: forageNote,
+    seasonLabel: seasonLabelMap[season] || 'Season'
+  });
+  var dock = _ui_buildApiaryDock();
+
+  return h('div', { class: 'apiary-view apiary-view-v3' }, [
+    hero,
+    h('div', { class: 'apiary-scroll' }, [main]),
+    dock
+  ]);
+}
+
+/* New v3 hero — 180 px painted scene with a paper backplate gradient.
+   Kicker (site type) + apiary name (IM Fell) + seasonal line (Spectral
+   italic) all sit on the left 40% of the strip, on solid paper, so
+   contrast is honest no matter which scene plate is loaded behind. */
+function _ui_buildApiaryHeroV3(opts) {
+  var apiary = opts.apiary;
+  var scenePath = opts.scenePath;
+  var seasonLabel = opts.seasonLabel;
+  var forageNote = opts.forageNote;
+  var siteLabel = opts.siteLabel || '';
+  var name = apiary ? apiary.name : 'No Apiary';
+
+  return h('div', {
+    class: 'apiary-hero-v3',
+    style: 'background-image: url("' + scenePath + '")'
+  }, [
+    h('div', { class: 'apiary-hero-v3-text' }, [
+      siteLabel ? h('div', { class: 'apiary-hero-v3-kicker', text: siteLabel.toUpperCase() }) : null,
+      h('h2', { class: 'apiary-hero-v3-name', text: name }),
+      h('div', { class: 'apiary-hero-v3-line', text: seasonLabel + (forageNote ? ' — ' + forageNote : '') })
+    ].filter(Boolean))
+  ]);
+}
+
+/* The dock — collapsed strip at the bottom of the apiary view.
+   Holds the urgent-count pip, the italic context line, and the
+   Advance button. Click to expand into the sheet (mentor + notes
+   + actions). The sheet expand state is toggled on Game.ui.sheetOpen. */
+function _ui_buildApiaryDock() {
+  if (!Game.ui) Game.ui = {};
+  var open = !!Game.ui.sheetOpen;
+
+  var advisor = Game.advisor || [];
+  var urgent = advisor.filter(function(a) { return a.tone === 'bad'; }).length;
+  var warn   = advisor.filter(function(a) { return a.tone === 'warn'; }).length;
+  var total  = advisor.length;
+
+  /* Context line — single sentence summarising the week's mood,
+     computed from advisor state. Three modes. */
+  var contextLine;
+  if (urgent > 0) {
+    var firstUrgent = advisor.find(function(a) { return a.tone === 'bad'; });
+    contextLine = firstUrgent ? firstUrgent.text : urgent + ' urgent items this week.';
+  } else if (warn > 0) {
+    contextLine = warn + ' thing' + (warn === 1 ? '' : 's') + ' to look at this week.';
+  } else {
+    contextLine = 'Nothing pressing this week. Open a hive if you fancy, or advance.';
+  }
+
+  var pipBadge = total > 0
+    ? h('span', { class: 'dock-pip-count' + (urgent > 0 ? ' urgent' : '') }, String(total))
+    : null;
+
+  var pipChildren = ['📔 Notes'];
+  if (pipBadge) pipChildren.push(pipBadge);
+
+  var collapsedRow = h('div', { class: 'apiary-dock-row' }, [
+    h('button', {
+      class: 'apiary-dock-pip',
+      onclick: function() {
+        Game.ui.sheetOpen = !Game.ui.sheetOpen;
+        render();
+      }
+    }, pipChildren),
+    h('div', { class: 'apiary-dock-context', text: contextLine }),
+    h('button', {
+      class: 'apiary-dock-advance btn btn-primary',
+      onclick: function() {
+        if (typeof advanceWeek === 'function') advanceWeek();
+      }
+    }, 'Advance one week →')
   ]);
 
-  // Phase 10 layout — mentor + notebook stacked in the right rail.
-  // Marcus called out the old three-band layout (body + notebook
-  // band + advance) as wasteful: hero ate the fold, mentor floated
-  // alone in the rail with vast empty space below it, notebook sat
-  // below the body off-screen at common laptop heights.
-  //
-  // New structure:
-  //   body = [main (hive grid)] [side rail (mentor + notebook stacked)]
-  //   advance = bottom bar
-  //
-  // At narrow viewports the rail wraps below the main (mobile-first).
-  var rail = _ui_buildSidebar();
+  var children = [
+    h('div', {
+      class: 'apiary-dock-handle',
+      onclick: function() {
+        Game.ui.sheetOpen = !Game.ui.sheetOpen;
+        render();
+      }
+    }, h('div', { class: 'apiary-dock-grip' })),
+    collapsedRow
+  ];
 
-  var sideContents = [rail.mentor, rail.notebook].filter(Boolean);
-  var side = h('div', { class: 'apiary-side apiary-side-v2 apiary-side-pair' }, sideContents);
+  if (open) {
+    children.push(_ui_buildApiarySheet());
+  }
 
-  return h('div', { class: 'apiary-view apiary-view-v2' }, [
-    seasonBand,
-    h('div', { class: 'apiary-body' }, [main, side]),
-    rail.timeControls
+  return h('div', { class: 'apiary-dock' + (open ? ' is-open' : '') }, children);
+}
+
+/* The bottom sheet — full mentor block at top, notes by tone in the
+   middle, sticky action row at the bottom. Reused note-card styling
+   from the old notebook. */
+function _ui_buildApiarySheet() {
+  var advisor = Game.advisor || [];
+  var winterLetterBlock = (typeof _ui_buildSidebar === 'function')
+    ? _ui_buildSidebar() : null;
+  var rail = winterLetterBlock || {};
+  var mentor = rail.mentor;
+
+  var grouped = { bad: [], warn: [], info: [], ok: [] };
+  advisor.forEach(function(a) {
+    var t = a.tone || 'info';
+    if (!grouped[t]) grouped[t] = [];
+    grouped[t].push(a);
+  });
+  var sectionLabel = {
+    bad: 'Urgent — this week',
+    warn: 'Watch — look soon',
+    info: 'Notes',
+    ok:   'All good'
+  };
+  var noteSections = [];
+  ['bad','warn','info','ok'].forEach(function(tone) {
+    var list = grouped[tone] || [];
+    if (list.length === 0) return;
+    noteSections.push(h('div', { class: 'apiary-sheet-section-title', text: sectionLabel[tone] }));
+    list.forEach(function(item) {
+      noteSections.push(h('div', { class: 'apiary-sheet-note tone-' + tone }, [
+        h('div', { class: 'apiary-sheet-note-icon', text: item.icon || '·' }),
+        h('div', { class: 'apiary-sheet-note-text', text: item.text })
+      ]));
+    });
+  });
+
+  if (noteSections.length === 0) {
+    noteSections.push(h('div', { class: 'apiary-sheet-empty' },
+      'Nothing pressing this week. Advance when you are ready.'));
+  }
+
+  var sheetActions = h('div', { class: 'apiary-sheet-actions' }, [
+    h('button', {
+      class: 'apiary-sheet-collapse btn',
+      onclick: function() {
+        Game.ui.sheetOpen = false;
+        render();
+      }
+    }, '↓ Close'),
+    h('button', {
+      class: 'apiary-sheet-advance btn btn-primary',
+      onclick: function() {
+        Game.ui.sheetOpen = false;
+        if (typeof advanceWeek === 'function') advanceWeek();
+      }
+    }, 'Advance one week →')
+  ]);
+
+  return h('div', { class: 'apiary-sheet' }, [
+    h('div', { class: 'apiary-sheet-head' }, [
+      h('div', { class: 'apiary-sheet-title', text: 'Notes for this week' }),
+      h('div', { class: 'apiary-sheet-week', text: 'Week ' + (((Game.week - 1) % 52) + 1) + ' · Year ' + (Math.floor((Game.week - 1) / 52) + 1) })
+    ]),
+    h('div', { class: 'apiary-sheet-body' }, [
+      mentor || null,
+      h('div', { class: 'apiary-sheet-notes' }, noteSections)
+    ].filter(Boolean)),
+    sheetActions
   ]);
 }
 

@@ -131,6 +131,7 @@ function startNewGame(name, difficulty, region, startingSite){
       salesChannels: { gate: true }, lastWinterYear: 0,
       pendingSwarm: null, completedGoals: [], honeyShowRibbons: [],
       seenDisease: false, bestYearHoneyIncome: 0, successfulSplits: 0,
+      dismissedAdvisor: {},
     },
     stats: { honeyHarvested:0, coloniesLost:0, swarmsLost:0, swarmsCaught:0,
              wintersSurvived:0, splitsMade:0, queensReared:0, jarsSold:0, showWins:0 },

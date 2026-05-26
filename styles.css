@@ -124,30 +124,102 @@ button { font-family: var(--sans); cursor: pointer; }
 
 #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
+/* Phase 12 paper topbar — replaces the dark brown bar.
+   Sticky, slim (48 px desktop / 42 px mobile), brand + date + chips. */
 .topbar {
-  display: flex; align-items: center; gap: 18px;
-  padding: 0 18px; height: 60px; flex: none;
-  background: linear-gradient(180deg, #4a3a20, #3a2c18);
-  color: var(--wax);
-  border-bottom: 3px solid var(--honey-dk);
-  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 18px; height: 48px; flex: none;
+  background: var(--paper);
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule-soft, #c8b888);
+  box-shadow: 0 1px 0 rgba(168,138,74,0.15);
   z-index: 20;
 }
 .topbar .brand {
-  font-family: var(--serif); font-size: 20px; font-weight: 600;
-  color: var(--honey); letter-spacing: 0.3px; white-space: nowrap;
+  font-family: var(--display, 'IM Fell English', serif);
+  font-size: 17px; font-weight: 600;
+  letter-spacing: 1.0px;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
 }
-.topbar .brand .bee { filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
-.topbar-clock { display: flex; align-items: center; gap: 10px; }
-.topbar-clock .weather-ico { font-size: 24px; }
-.topbar-clock .when { line-height: 1.15; }
-.topbar-clock .when b { font-size: 15px; color: #fff; font-family: var(--serif); }
-.topbar-clock .when small { font-size: 11px; color: var(--honey); display: block; text-transform: uppercase; letter-spacing: .8px; }
+.topbar-clock { display: flex; align-items: center; gap: 8px; }
+.topbar-clock .weather-ico { font-size: 18px; opacity: 0.85; }
+.topbar-clock .when {
+  font-family: var(--serif);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.topbar-clock .when b {
+  font-weight: 500;
+  color: var(--ink);
+}
+.topbar-clock .when small {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 1.0px;
+  text-transform: uppercase;
+  color: var(--ink-faint, #8a7244);
+  margin-left: 6px;
+}
 .topbar-spacer { flex: 1; }
-.topbar-stat { text-align: right; line-height: 1.15; }
-.topbar-stat b { font-size: 16px; color: #fff; font-family: var(--serif); }
-.topbar-stat small { font-size: 10px; color: var(--honey); display: block; text-transform: uppercase; letter-spacing: .8px; }
-.topbar-stat.cash b { color: #f4d77a; }
+.topbar-stat,
+.topbar-cash {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-soft);
+  border-radius: 12px;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: var(--ink);
+}
+.topbar-stat b,
+.topbar-cash b {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--ink);
+}
+.topbar-stat small,
+.topbar-cash small {
+  display: none;
+}
+.topbar-rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 4px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-soft);
+  border-radius: 14px;
+}
+.topbar-rank-portrait {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+  object-fit: cover;
+}
+.topbar-rank-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: var(--ink);
+}
+
+@media (max-width: 720px) {
+  .topbar { height: 42px; padding: 0 12px; gap: 8px; }
+  .topbar .brand { font-size: 14px; }
+  .topbar-clock .when { font-size: 11.5px; }
+  .topbar-clock .when small { display: none; }
+  .topbar-rank-label { display: none; }
+}
 .topbar-btn {
   flex: none; width: 34px; height: 34px; border-radius: 8px;
   background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.20);
@@ -166,29 +238,63 @@ button { font-family: var(--sans); cursor: pointer; }
 .sl-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .sl-actions .btn { flex: 1; min-width: 140px; justify-content: center; }
 
-/* nav */
+/* Phase 12 responsive nav — top tab strip on desktop, bottom dock
+   on mobile. Same component, different position. */
 .navbar {
-  display: flex; gap: 4px; padding: 6px 14px; flex: none;
-  background: var(--parch-2);
-  border-bottom: 1px solid var(--line-dk);
+  display: flex;
+  flex: none;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule-soft, #c8b888);
 }
 .nav-btn {
-  border: 1px solid transparent; background: transparent;
-  color: var(--ink-soft); font-size: 13px; font-weight: 600;
-  padding: 7px 14px; border-radius: 7px 7px 0 0;
-  display: flex; align-items: center; gap: 6px;
-}
-.nav-btn:hover { background: var(--paper-2); color: var(--ink); }
-.nav-btn.active {
-  background: var(--paper); color: var(--honey-dk);
-  border-color: var(--line-dk); border-bottom-color: var(--paper);
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint, #8a7244);
+  padding: 11px 0;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  border-right: 1px solid var(--rule-soft);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
-.nav-btn .ico { font-size: 15px; }
+.nav-btn:last-child { border-right: 0; }
+.nav-btn:hover { color: var(--ink); background: var(--paper-2); }
+.nav-btn.active {
+  color: var(--ink);
+  background: var(--paper-2);
+  border-bottom-color: var(--ink);
+}
+.nav-btn .ico { font-size: 14px; }
 .nav-btn .pip {
-  background: var(--bad); color: #fff; font-size: 10px; font-weight: 700;
-  min-width: 16px; height: 16px; border-radius: 8px; padding: 0 4px;
+  background: var(--brick, #8b3a1a);
+  color: var(--paper, #f3ead0);
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 16px; height: 16px;
+  border-radius: 8px;
+  padding: 0 4px;
   display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* Mobile: nav moves to the bottom of the app, takes the thumb-zone.
+   #app is a flex column, the nav is one of its children — on mobile
+   we order it last and stick it to the bottom. */
+@media (max-width: 720px) {
+  #app { display: flex; flex-direction: column; }
+  .topbar { order: 1; }
+  .stage  { order: 2; }
+  .navbar { order: 3; }
+  .navbar {
+    border-bottom: 0;
+    border-top: 1px solid var(--rule-soft);
+    box-shadow: 0 -2px 6px rgba(168,138,74,0.10);
+  }
+  .nav-btn { font-size: 9.5px; padding: 10px 0; }
+  .nav-btn.active { border-bottom: 0; border-top: 2px solid var(--ink); padding-top: 9px; }
 }
 
 .stage { flex: 1; overflow: hidden; position: relative; }
@@ -6107,6 +6213,298 @@ button.plate-link {
                              full content width, 2-3 col grid
      .apiary-advance-bar  — sticky bottom-fixed strip, full width
    ============================================================ */
+
+/* ============================================================
+   PHASE 12 — apiary view v3 (board + sticky dock + bottom sheet)
+   ============================================================ */
+.apiary-view-v3 {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+/* Hero — painted scene background, paper backplate gradient over the
+   left 40% so the kicker / name / season line always sit on paper. */
+.apiary-hero-v3 {
+  flex: 0 0 180px;
+  position: relative;
+  background-size: cover;
+  background-position: center 60%;
+  border-bottom: 1px solid var(--rule-soft, #c8b888);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.apiary-hero-v3::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(95deg,
+    var(--paper) 0%,
+    rgba(243,234,208,0.94) 26%,
+    rgba(243,234,208,0.55) 42%,
+    rgba(243,234,208,0.05) 58%,
+    transparent 70%);
+  pointer-events: none;
+}
+.apiary-hero-v3-text {
+  position: relative;
+  z-index: 1;
+  padding: 18px 26px 22px;
+  max-width: 520px;
+}
+.apiary-hero-v3-kicker {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--ink-faint, #8a7244);
+  margin-bottom: 3px;
+}
+.apiary-hero-v3-name {
+  font-family: var(--display, 'IM Fell English', serif);
+  font-size: 34px;
+  letter-spacing: 0.4px;
+  color: var(--ink);
+  line-height: 1.05;
+  margin: 0 0 6px;
+}
+.apiary-hero-v3-line {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  max-width: 380px;
+  line-height: 1.4;
+}
+@media (max-width: 720px) {
+  .apiary-hero-v3 { flex-basis: 150px; }
+  .apiary-hero-v3-text { padding: 14px 16px 18px; }
+  .apiary-hero-v3-name { font-size: 26px; }
+  .apiary-hero-v3-line { font-size: 12.5px; max-width: 280px; }
+}
+
+.apiary-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  background: var(--paper);
+}
+
+/* Dock — collapsed by default at the bottom of the apiary view */
+.apiary-dock {
+  flex: 0 0 auto;
+  background: var(--paper);
+  border-top: 1px solid var(--rule, #a98a4a);
+  box-shadow: 0 -4px 14px rgba(42,28,10,0.10);
+  z-index: 6;
+  position: relative;
+}
+.apiary-dock-handle {
+  display: flex;
+  justify-content: center;
+  padding: 5px 0 3px;
+  cursor: pointer;
+}
+.apiary-dock-grip {
+  width: 38px; height: 3px;
+  background: var(--rule, #a98a4a);
+  border-radius: 2px;
+  opacity: 0.55;
+}
+.apiary-dock-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 18px 14px;
+}
+.apiary-dock-pip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-soft);
+  border-radius: 12px;
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.apiary-dock-pip:hover { background: var(--paper); }
+.dock-pip-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px; height: 18px;
+  padding: 0 5px;
+  background: var(--ink-faint);
+  color: var(--paper);
+  border-radius: 9px;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+}
+.dock-pip-count.urgent { background: var(--brick, #8b3a1a); }
+.apiary-dock-context {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.apiary-dock-advance {
+  padding: 9px 16px;
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .apiary-dock-row { padding: 4px 12px 10px; gap: 8px; }
+  .apiary-dock-context { font-size: 12px; }
+  .apiary-dock-advance { padding: 8px 12px; font-size: 11.5px; }
+}
+
+/* Sheet — slides up over the apiary content. Sits inside the dock
+   element so it's anchored to the bottom of the view. */
+.apiary-sheet {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  background: var(--paper);
+  border-top: 1px solid var(--rule);
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  box-shadow: 0 -12px 36px rgba(0,0,0,0.35);
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  animation: sheet-slide-up 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+@keyframes sheet-slide-up {
+  from { transform: translateY(40%); opacity: 0.4; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+.apiary-sheet-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14px 22px 12px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.apiary-sheet-title {
+  font-family: var(--display);
+  font-size: 20px;
+  letter-spacing: 0.3px;
+  color: var(--ink);
+}
+.apiary-sheet-week {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.apiary-sheet-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px 22px 18px;
+}
+.apiary-sheet-notes { margin-top: 12px; }
+.apiary-sheet-section-title {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 14px 0 8px;
+}
+.apiary-sheet-section-title:first-child { margin-top: 0; }
+.apiary-sheet-note {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-soft);
+  border-radius: 3px;
+  border-left-width: 3px;
+}
+.apiary-sheet-note.tone-bad  { border-left-color: var(--brick,   #8b3a1a); }
+.apiary-sheet-note.tone-warn { border-left-color: var(--ochre,   #a87830); }
+.apiary-sheet-note.tone-info { border-left-color: var(--moss,    #5a6a3a); }
+.apiary-sheet-note.tone-ok   { border-left-color: var(--rule-soft); }
+.apiary-sheet-note-icon {
+  font-size: 14px;
+  flex: 0 0 22px;
+  line-height: 1.4;
+}
+.apiary-sheet-note-text {
+  font-family: var(--serif);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.apiary-sheet-empty {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-soft);
+  padding: 12px 4px;
+}
+.apiary-sheet-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 22px 14px;
+  background: var(--paper-2);
+  border-top: 1px solid var(--rule-soft);
+}
+.apiary-sheet-collapse {
+  padding: 8px 14px;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  letter-spacing: 0.5px;
+}
+.apiary-sheet-advance {
+  flex: 1;
+  padding: 9px 16px;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  letter-spacing: 0.5px;
+}
+@media (max-width: 720px) {
+  .apiary-sheet { max-height: 82vh; }
+  .apiary-sheet-head { padding: 12px 16px 10px; }
+  .apiary-sheet-body { padding: 12px 16px 14px; }
+  .apiary-sheet-actions { padding: 10px 16px 12px; }
+}
+
+/* Sheet contains the existing mentor card — strip its outer margins
+   so it reads as a section header inside the sheet, not a floating
+   widget. */
+.apiary-sheet-body .apiary-side,
+.apiary-sheet-body .apiary-side-v2,
+.apiary-sheet-body .apiary-mentor-rail,
+.apiary-sheet-body .apiary-side-pair {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  width: 100%;
+  flex: 0 0 auto;
+}
+.apiary-sheet-body .mentor.mentor-card {
+  margin: 0 0 12px;
+}
 
 /* Phase 10 apiary rail — mentor + notebook stacked in the side rail.
    Replaces the old separate notebook-band that lived below the body.
