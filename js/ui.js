@@ -1428,16 +1428,25 @@ function _ui_buildApiaryView() {
     yard
   ]);
 
-  // Phase 0 layout — three rail jobs split into their own zones:
-  //   mentor card     → right rail (single ambient card)
-  //   notebook        → below the split, full content width
-  //   advance buttons → sticky bottom-fixed bar across the page
+  // Phase 10 layout — mentor + notebook stacked in the right rail.
+  // Marcus called out the old three-band layout (body + notebook
+  // band + advance) as wasteful: hero ate the fold, mentor floated
+  // alone in the rail with vast empty space below it, notebook sat
+  // below the body off-screen at common laptop heights.
+  //
+  // New structure:
+  //   body = [main (hive grid)] [side rail (mentor + notebook stacked)]
+  //   advance = bottom bar
+  //
+  // At narrow viewports the rail wraps below the main (mobile-first).
   var rail = _ui_buildSidebar();
+
+  var sideContents = [rail.mentor, rail.notebook].filter(Boolean);
+  var side = h('div', { class: 'apiary-side apiary-side-pair' }, sideContents);
 
   return h('div', { class: 'apiary-view apiary-view-v2' }, [
     seasonBand,
-    h('div', { class: 'apiary-body' }, [main, rail.mentor]),
-    rail.notebook ? h('div', { class: 'apiary-notebook-band' }, rail.notebook) : null,
+    h('div', { class: 'apiary-body' }, [main, side]),
     rail.timeControls
   ]);
 }
