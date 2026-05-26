@@ -1442,7 +1442,7 @@ function _ui_buildApiaryView() {
   var rail = _ui_buildSidebar();
 
   var sideContents = [rail.mentor, rail.notebook].filter(Boolean);
-  var side = h('div', { class: 'apiary-side apiary-side-pair' }, sideContents);
+  var side = h('div', { class: 'apiary-side apiary-side-v2 apiary-side-pair' }, sideContents);
 
   return h('div', { class: 'apiary-view apiary-view-v2' }, [
     seasonBand,
