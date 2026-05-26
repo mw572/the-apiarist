@@ -2981,27 +2981,28 @@ function _ui_marketApiariesTab() {
        ' across ' + siteCount + ' site type' + (siteCount === 1 ? '' : 's'))
     : 'No apiaries set up yet.';
 
+  /* Phase 12: with the Map tab gone (single-location game), this is
+     now the place that tells the player which site they have. Show
+     a brief site dossier rather than pointing them at a tab that no
+     longer exists. */
+  var firstApiary = (Game.apiaries || [])[0];
+  var siteType = firstApiary ? firstApiary.siteType : 'rural';
+  var siteInfo = (typeof SITE_TYPES !== 'undefined' && SITE_TYPES[siteType]) || {};
+  var sitePlate = (MARKET_PLATES.sites && MARKET_PLATES.sites[siteType]) || heroPlate;
+  var siteLabel = siteInfo.label || siteType;
+  var siteBlurb = siteInfo.blurb || 'A working apiary.';
+
   return h('div', {}, [
     h('div', { class: 'market-section' }, [
-      h('div', { class: 'market-section-head' }, 'Apiaries are managed from the Map'),
+      h('div', { class: 'market-section-head' }, 'Your apiary'),
       h('p', { class: 'market-section-blurb' },
-        'Apiaries live on the Map. Each territory there shows you what forage that site offers, what honey it produces and which colonies you already have there. Establish new sites from the same screen.'),
+        'Your one site for now — a single working apiary. Each territory type carries its own forage, weather and risks. Your colonies live here.'),
       h('div', { class: 'site-card' }, [
-        _ui_plateImg(heroPlate, 'Your territory', '16x9'),
+        _ui_plateImg(sitePlate, siteLabel, '16x9'),
         h('div', { class: 'site-body' }, [
-          h('div', { class: 'site-name' }, 'Open the Map'),
+          h('div', { class: 'site-name' }, (firstApiary ? firstApiary.name : 'Home Apiary') + ' — ' + siteLabel),
           h('div', { class: 'site-meta', text: meta }),
-          h('div', { style: { marginTop: '12px' } }, [
-            h('button', {
-              class: 'plate-buy plate-buy-wide',
-              onclick: function() {
-                Game.ui.view = 'map';
-                render();
-              }
-            }, [
-              h('span', { class: 'plate-buy-label' }, 'Go to the Map →')
-            ])
-          ])
+          h('p', { class: 'market-section-blurb', style: { marginTop: '10px' }, text: siteBlurb })
         ])
       ])
     ])
